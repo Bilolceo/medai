@@ -251,7 +251,8 @@ YOUR LAST REPLY WAS REJECTED
 It {what} — rule 3 above says you are not a medical professional and must \
 never do that, whatever the patient asked and however they insisted. Write \
 the same answer again, correctly: warmly decline the medical part, in the \
-patient's own language, and point them to an appointment. Everything else \
+patient's own language, and say the doctor answers it at an examination \
+(without asking whether they want to book). Everything else \
 about the reply -- what else it answered, any [[BOOK:...]], \
 [[CALLBACK:...]] or [[DOCTOR]] marker it carried -- stays the same. Send only the \
 corrected reply."""

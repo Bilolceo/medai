@@ -142,7 +142,7 @@ def check(reply: str, rules: Sequence[str]) -> list[str]:
 _ASKS_PRICE = re.compile(
     r"narx|нарх|qancha|қанча|necha\s*pul|неча\s*пул|\bpul|\bпул|to['‘ʻ’`]?lov|тўлов"
     r"|сколько|стоим|стоит|цен[аыуе]|поч[её]м|chegirma|чегирма|скидк|arzon|арзон"
-    r"|qimmat|қиммат|price|cost|dollar|доллар|so['‘ʻ’`]m|сўм|\bсум|mln|млн|\$",
+    r"|qimmat|қиммат|price|cost|how\s+much|dollar|доллар|so['‘ʻ’`]m|сўм|\bсум|mln|млн|\$",
     re.IGNORECASE,
 )
 
