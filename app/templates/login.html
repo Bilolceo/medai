@@ -5,94 +5,103 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="light dark" />
   <title>Kirish · Dr. Temur</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%234f46e5%27/%3E%3Cpath d=%27M9 16h3l2-4 3 8 2-4h4%27 fill=%27none%27 stroke=%27white%27 stroke-width=%272.4%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Cdefs%3E%3ClinearGradient id=%27g%27 x1=%270%27 y1=%270%27 x2=%271%27 y2=%271%27%3E%3Cstop offset=%270%27 stop-color=%27%230b63c5%27/%3E%3Cstop offset=%271%27 stop-color=%27%2312a5b8%27/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%2732%27 height=%2732%27 rx=%279%27 fill=%27url(%23g)%27/%3E%3Cg transform=%27translate(4 4)%27 stroke=%27white%27 stroke-width=%272.2%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3E%3Cpath fill=%27white%27 d=%27M15 2.5C11.6 2.5 9 5 9 8c0 1.8 2.2 2.4 2.2 4S9 14.2 9 16c0 3.1 2.6 5.5 6 5.5 4.3 0 6.5-4.6 6.5-9.5S19.3 2.5 15 2.5z%27/%3E%3Cpath fill=%27none%27 d=%27M11.2 12H7.5A2.5 2.5 0 0 0 5 14.5v7%27/%3E%3C/g%3E%3C/svg%3E" />
   <style>
     /* The dashboard's own font files, same origin: the CSP allows nothing else. */
     @font-face { font-family: "Manrope"; font-weight: 200 800; font-display: swap; src: url("/admin/fonts/manrope-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
     @font-face { font-family: "Manrope"; font-weight: 200 800; font-display: swap; src: url("/admin/fonts/manrope-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1E00-1E9F, U+2C60-2C7F, U+A720-A7FF; }
     @font-face { font-family: "Manrope"; font-weight: 200 800; font-display: swap; src: url("/admin/fonts/manrope-cyrillic.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
     :root {
-      --bg: #f3f0f7; --panel: #ffffff; --ink: #1a1c2a; --ink-2: #3a3d52; --ink-3: #5b5e73; --ink-4: #8d8fa3;
-      --rule: rgba(26, 28, 42, .08); --rule-strong: rgba(26, 28, 42, .15); --accent: #4f46e5; --accent-hover: #4338ca; --accent-ink: #fff;
-      --accent-ring: rgba(79, 70, 229, .22); --danger: #c2263d; --danger-soft: rgba(194, 38, 61, .10);
-      --cta: #1a1c2a; --cta-ink: #fff; --glass: rgba(255, 255, 255, .62); --glass-border: rgba(255, 255, 255, .9);
-      --blob-1: rgba(253, 186, 116, .6); --blob-2: rgba(196, 181, 253, .7); --blob-3: rgba(125, 211, 252, .5);
-      --shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 12px 32px -12px rgba(16, 24, 40, .16);
+      --bg: #f2f6fa; --panel: #ffffff; --ink: #0b1f33; --ink-2: #2c4157; --ink-3: #4d6177; --ink-4: #5f7387;
+      --rule: rgba(11, 37, 69, .09); --rule-strong: rgba(11, 37, 69, .17); --accent: #0b63c5; --accent-hover: #0a529f; --accent-ink: #fff;
+      --accent-ring: rgba(11, 99, 197, .24); --danger: #c2263d; --danger-soft: rgba(194, 38, 61, .10);
+      --brand-1: #0b63c5; --brand-2: #12a5b8; --aside: #0b2545; --aside-ink: #e6eef6; --aside-ink-2: #a9bfd6;
+      --cta: #0b2545; --cta-ink: #fff; --glass: rgba(255, 255, 255, .82); --glass-border: rgba(255, 255, 255, .95);
+      --glow-1: rgba(18, 165, 184, .16); --glow-2: rgba(11, 99, 197, .12);
+      --shadow: 0 1px 2px rgba(11, 37, 69, .04), 0 24px 60px -16px rgba(11, 37, 69, .22);
     }
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg: #0f1020; --panel: #1b1d33; --ink: #ecedf5; --ink-2: #c3c5d6; --ink-3: #9a9db2; --ink-4: #6f7290;
-        --rule: rgba(255, 255, 255, .09); --rule-strong: rgba(255, 255, 255, .16); --accent: #8b85ff; --accent-hover: #a5a0ff; --accent-ink: #fff;
-        --accent-ring: rgba(139, 133, 255, .32); --danger: #ff8a9b; --danger-soft: rgba(255, 138, 155, .14);
-        --cta: #ecedf5; --cta-ink: #15162a; --glass: rgba(34, 36, 60, .5); --glass-border: rgba(255, 255, 255, .10);
-        --blob-1: rgba(180, 83, 9, .28); --blob-2: rgba(109, 40, 217, .36); --blob-3: rgba(14, 116, 144, .28);
-        --shadow: 0 16px 40px -12px rgba(0, 0, 0, .6);
+        --bg: #08131f; --panel: #0f1d2e; --ink: #e6eef6; --ink-2: #b6c4d3; --ink-3: #8fa2b6; --ink-4: #7f93a8;
+        --rule: rgba(255, 255, 255, .08); --rule-strong: rgba(255, 255, 255, .15); --accent: #5aa9ff; --accent-hover: #80bdff; --accent-ink: #06182b;
+        --accent-ring: rgba(90, 169, 255, .32); --danger: #ff8a9b; --danger-soft: rgba(255, 138, 155, .13);
+        --brand-1: #2f86e8; --brand-2: #1fb8c9; --aside: #0a1828; --aside-ink: #e6eef6; --aside-ink-2: #8fa2b6;
+        --cta: #e6eef6; --cta-ink: #08131f; --glass: rgba(16, 32, 50, .72); --glass-border: rgba(255, 255, 255, .07);
+        --glow-1: rgba(31, 184, 201, .10); --glow-2: rgba(47, 134, 232, .12);
+        --shadow: 0 24px 60px -16px rgba(0, 0, 0, .7);
       }
     }
     * { box-sizing: border-box; }
     body { margin: 0; min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); background: var(--bg); color: var(--ink);
            font-family: "Manrope", "Segoe UI", system-ui, -apple-system, sans-serif; font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
     body::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-      background: radial-gradient(48vw 48vw at 6% 0%, var(--blob-1), transparent 70%),
-                  radial-gradient(50vw 50vw at 100% 10%, var(--blob-2), transparent 70%),
-                  radial-gradient(46vw 46vw at 45% 115%, var(--blob-3), transparent 70%); }
-    .aside { position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; padding: 40px 48px; color: var(--ink); }
+      background: radial-gradient(50vw 40vw at 90% -10%, var(--glow-1), transparent 70%),
+                  radial-gradient(45vw 40vw at 60% 110%, var(--glow-2), transparent 70%); }
+    .aside { position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; padding: 40px 48px; color: var(--aside-ink);
+             background: radial-gradient(70% 60% at 100% 0%, color-mix(in srgb, var(--brand-2) 35%, transparent), transparent 70%),
+                         radial-gradient(60% 50% at 0% 100%, color-mix(in srgb, var(--brand-1) 45%, transparent), transparent 70%), var(--aside); }
     .aside::before { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .5;
-             background-image: radial-gradient(circle at 1px 1px, rgba(79, 70, 229, .14) 1px, transparent 0); background-size: 22px 22px;
+             background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, .10) 1px, transparent 0); background-size: 22px 22px;
              -webkit-mask-image: linear-gradient(to bottom, #000, transparent 85%); mask-image: linear-gradient(to bottom, #000, transparent 85%); }
+    .aside .watermark { position: absolute; right: -80px; bottom: -60px; width: 420px; height: 420px; fill: none; stroke: rgba(255, 255, 255, .06); stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
     .aside > * { position: relative; }
-    .brand { display: flex; align-items: center; gap: 12px; font-weight: 800; font-size: 17px; }
-    .brand-mark { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; background: var(--accent); color: #fff; }
-    .brand-mark svg, .feat svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-    .pitch h2 { font-size: clamp(26px, 2.6vw, 34px); line-height: 1.15; letter-spacing: -.025em; margin: 0 0 14px; font-weight: 800; max-width: 460px; }
-    .pitch h2 span { color: var(--accent); }
-    .pitch p { margin: 0 0 28px; color: var(--ink-3); max-width: 440px; font-size: 15px; }
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 800; font-size: 16px; }
+    .brand-mark { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; color: #fff; background: linear-gradient(140deg, var(--brand-1), var(--brand-2)); box-shadow: 0 8px 20px -8px rgba(18, 165, 184, .6), inset 0 1px 0 rgba(255, 255, 255, .25); }
+    .brand-mark svg .k { fill: currentColor; }
+    .aside .watermark .k { fill: none; }
+    .brand small { display: block; font-size: 12px; font-weight: 600; color: var(--aside-ink-2); }
+    .brand-mark svg, .feat svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+    .pitch h2 { font-size: clamp(28px, 2.6vw, 34px); line-height: 1.15; letter-spacing: -.025em; margin: 0 0 14px; font-weight: 800; max-width: 460px; }
+    .pitch h2 { color: #fff; }
+    .pitch h2 span { color: #7fd6e2; }
+    .pitch p { margin: 0 0 28px; color: var(--aside-ink-2); max-width: 440px; font-size: 16px; }
     .feats { display: grid; gap: 14px; max-width: 440px; }
     .feat { display: flex; gap: 12px; align-items: center; font-size: 14px; font-weight: 600; }
-    .feat { color: var(--ink-2); }
-    .feat span { width: 34px; height: 34px; flex-shrink: 0; border-radius: 9px; display: grid; place-items: center; background: var(--glass); border: 1px solid var(--glass-border); color: var(--accent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+    .feat { color: var(--aside-ink); }
+    .feat span { width: 34px; height: 34px; flex-shrink: 0; border-radius: 8px; display: grid; place-items: center; background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .12); color: #7fd6e2; }
     .feat svg { width: 17px; height: 17px; }
-    .aside small { color: var(--ink-4); font-size: 12.5px; }
+    .aside > small { color: var(--aside-ink-2); font-size: 12px; }
     .main { display: grid; place-items: center; padding: 32px 20px; }
-    form { padding: 36px; border-radius: 20px; background: var(--glass); border: 1px solid var(--glass-border); box-shadow: 0 24px 60px -16px rgba(40, 20, 70, .22); -webkit-backdrop-filter: blur(24px) saturate(170%); backdrop-filter: blur(24px) saturate(170%); }
+    form { padding: 36px; border-radius: 16px; background: var(--glass); border: 1px solid var(--glass-border); box-shadow: var(--shadow); -webkit-backdrop-filter: blur(24px) saturate(170%); backdrop-filter: blur(24px) saturate(170%); }
     form { width: min(420px, 100%); }
     .mobile-brand { display: none; }
-    h1 { font-size: 26px; letter-spacing: -.02em; margin: 0 0 6px; font-weight: 800; }
+    h1 { font-size: 28px; letter-spacing: -.02em; margin: 0 0 6px; font-weight: 800; }
     .lead { color: var(--ink-3); margin: 0 0 28px; }
     .error { display: flex; gap: 10px; align-items: flex-start; background: var(--danger-soft); color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
-             padding: 10px 12px; border-radius: 10px; font-size: 13.5px; font-weight: 600; margin-bottom: 18px; }
+             padding: 10px 12px; border-radius: 12px; font-size: 13px; font-weight: 600; margin-bottom: 18px; }
     .error svg { width: 18px; height: 18px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; margin-top: 1px; }
     .field { margin-bottom: 16px; }
     label { display: block; font-size: 13px; font-weight: 600; color: var(--ink-2); margin-bottom: 6px; }
-    input { font: inherit; font-size: 15px; width: 100%; height: 44px; padding: 0 14px; border: 1px solid var(--rule-strong); border-radius: 10px; background: var(--panel); color: var(--ink);
+    input { font: inherit; font-size: 16px; width: 100%; height: 44px; padding: 0 14px; border: 1px solid var(--rule-strong); border-radius: 12px; background: var(--panel); color: var(--ink);
             box-shadow: 0 1px 2px rgba(16, 24, 40, .05); transition: border-color .12s, box-shadow .12s; }
     input:hover { border-color: var(--ink-4); }
     input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
     .pw { position: relative; }
     .pw input { padding-right: 76px; }
-    .pw button { position: absolute; right: 6px; top: 6px; height: 32px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; color: var(--ink-3); font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
-    .pw button:hover { background: rgba(100, 116, 139, .1); color: var(--ink); }
-    button[type=submit] { width: 100%; height: 46px; margin-top: 8px; border: 0; border-radius: 10px; background: var(--cta); color: var(--cta-ink);
-             font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; box-shadow: 0 1px 2px rgba(16, 24, 40, .1); transition: background .12s; }
-    button[type=submit]:hover { background: var(--accent); color: #fff; }
+    .pw button { position: absolute; right: 4px; top: 4px; height: 36px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-3); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .pw button:hover { background: rgba(11, 37, 69, .06); color: var(--ink); }
+    button[type=submit] { width: 100%; height: 48px; margin-top: 8px; border: 0; border-radius: 12px; background: var(--cta); color: var(--cta-ink);
+             font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; box-shadow: 0 1px 2px rgba(11, 37, 69, .1); transition: background .12s; }
+    button[type=submit]:hover { background: var(--accent); color: var(--accent-ink); }
     button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-    .foot { margin-top: 28px; text-align: center; color: var(--ink-3); font-size: 12.5px; }
+    .foot { margin-top: 28px; text-align: center; color: var(--ink-3); font-size: 13px; }
     @media (max-width: 880px) {
       body { grid-template-columns: minmax(0, 1fr); }
       .aside { display: none; }
       .mobile-brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 16px; margin-bottom: 32px; }
-      .mobile-brand .brand-mark { background: var(--accent); color: var(--accent-ink); border: 0; width: 36px; height: 36px; }
+      .mobile-brand .brand-mark { width: 36px; height: 36px; }
+      .mobile-brand small { display: block; font-size: 12px; font-weight: 600; color: var(--ink-3); }
     }
   </style>
 </head>
 <body>
   <aside class="aside" aria-hidden="true">
     <div class="brand">
-      <span class="brand-mark"><svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-9.3-9.6C1.5 8 3.6 4.5 7.2 4.5c2 0 3.5 1.1 4.8 2.8 1.3-1.7 2.8-2.8 4.8-2.8 3.6 0 5.7 3.5 4.5 6.9C19.5 16.4 12 21 12 21z"/><path d="M7.5 12h2.5l1.5-2.5 2 5 1.5-2.5h1.5"/></svg></span>
-      Dr. Temur
+      <span class="brand-mark"><svg viewBox="0 0 24 24"><path class="k" d="M15 2.5C11.6 2.5 9 5 9 8c0 1.8 2.2 2.4 2.2 4S9 14.2 9 16c0 3.1 2.6 5.5 6 5.5 4.3 0 6.5-4.6 6.5-9.5S19.3 2.5 15 2.5z"/><path d="M11.2 12H7.5A2.5 2.5 0 0 0 5 14.5v7"/></svg></span>
+      <span>Dr. Temur<small>Urologiya klinikasi</small></span>
     </div>
     <div class="pitch">
-      <h2>Bemorlar bilan ishlash —<br><span>bitta oynada</span></h2>
+      <h2>Har bir bemorga —<br><span>o'z vaqtida javob</span></h2>
       <p>Instagram va Telegram yozishmalari, qabullar jadvali va klinika hisobotlari bir joyda.</p>
       <div class="feats">
         <div class="feat"><span><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></span>Suhbatlar va bot javoblari nazorati</div>
@@ -100,14 +109,15 @@
         <div class="feat"><span><svg viewBox="0 0 24 24"><path d="M4 20V11M10 20V5M16 20v-6M21 20H3"/></svg></span>Murojaatlar bo'yicha tahlil</div>
       </div>
     </div>
-    <small>&copy; Dr. Temur klinikasi</small>
+    <small>&copy; Dr. Temur urologiya klinikasi</small>
+    <svg class="watermark" viewBox="0 0 24 24"><path class="k" d="M15 2.5C11.6 2.5 9 5 9 8c0 1.8 2.2 2.4 2.2 4S9 14.2 9 16c0 3.1 2.6 5.5 6 5.5 4.3 0 6.5-4.6 6.5-9.5S19.3 2.5 15 2.5z"/><path d="M11.2 12H7.5A2.5 2.5 0 0 0 5 14.5v7"/></svg>
   </aside>
 
   <main class="main">
     <form method="post" action="/login">
       <div class="mobile-brand">
-        <span class="brand-mark"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7.5-4.6-9.3-9.6C1.5 8 3.6 4.5 7.2 4.5c2 0 3.5 1.1 4.8 2.8 1.3-1.7 2.8-2.8 4.8-2.8 3.6 0 5.7 3.5 4.5 6.9C19.5 16.4 12 21 12 21z"/></svg></span>
-        Dr. Temur
+        <span class="brand-mark"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path class="k" d="M15 2.5C11.6 2.5 9 5 9 8c0 1.8 2.2 2.4 2.2 4S9 14.2 9 16c0 3.1 2.6 5.5 6 5.5 4.3 0 6.5-4.6 6.5-9.5S19.3 2.5 15 2.5z"/><path d="M11.2 12H7.5A2.5 2.5 0 0 0 5 14.5v7"/></svg></span>
+        <span>Dr. Temur<small>Urologiya klinikasi</small></span>
       </div>
       <h1>Xush kelibsiz</h1>
       <p class="lead">Boshqaruv paneliga kirish uchun login va parolingizni kiriting.</p>
