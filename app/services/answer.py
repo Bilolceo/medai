@@ -27,7 +27,7 @@ from app.repositories.appointment import AppointmentRepository
 from app.repositories.doctor import DoctorRepository
 from app.repositories.knowledge_base import KnowledgeBaseMatch
 from app.repositories.knowledge_document import ChunkMatch
-from app.services import medical_safety, price_guard
+from app.services import booking_offer, medical_safety, price_guard
 from app.services import persona as persona_service
 from app.services.language import (
     clear_script,
@@ -419,7 +419,7 @@ async def generate_answer(
         script=script,
         rules=quotable,
     )
-    return await _enforce_script(
+    reply = await _enforce_script(
         reply,
         provider=provider,
         system_prompt=system_prompt,
@@ -427,6 +427,15 @@ async def generate_answer(
         script=script,
         rules=quotable,
     )
+    # Last, so a rewrite above cannot put it back: an appointment is offered
+    # only to a patient who has asked for one (see app.services.booking_offer).
+    patient_turns = [turn["content"] for turn in history or [] if turn.get("role") == "user"]
+    if not booking_offer.wants_to_book(user_message, patient_turns):
+        stripped = booking_offer.strip(reply)
+        if stripped != reply:
+            logger.info("booking_offer_removed", extra={"reply": reply[:300]})
+        reply = stripped
+    return reply
 
 
 _PRICE_CORRECTION = """

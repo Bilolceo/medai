@@ -786,7 +786,7 @@ async def test_no_rules_no_leave_to_quote_anything(
 @pytest.mark.parametrize(
     "reply",
     [
-        "Qabul narxi 300 000 so'm. Yozib qo'yaymi?",
+        "Qabul narxi 300 000 so'm. Doktor ko'rikda hammasini tushuntiradi.",
         "Amaliyot taxminan 30 mln so'm atrofida, aniq summani shifokor ko'rikdan keyin "
         "aytadi. Telefon: +998 71 200 03 93",
         "Операция стоит примерно 30 млн сум, точную сумму врач скажет после осмотра.",
@@ -911,7 +911,7 @@ async def test_a_rules_price_is_not_said_to_a_patient_who_did_not_ask(
     """What the live model did two times in three: "do you do denervation?"
     answered with the $1000 the rule gives for when its price is asked."""
     volunteered = "Ha, qilamiz. Denervatsiya taxminan $1000 atrofida. Qachon kelasiz?"
-    fixed = "Ha, qilamiz. Qachon kelishingiz qulay?"
+    fixed = "Ha, doktor denervatsiya qiladi. Batafsilini ko'rikda aytadi."
     result, llm = await _ask(
         db_session,
         seed,
