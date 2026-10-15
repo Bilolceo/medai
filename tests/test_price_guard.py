@@ -109,6 +109,8 @@ def test_with_no_rules_every_sum_is_caught() -> None:
         "Chegirma bormi?",
         "How much is the consultation?",
         "Kansultatsiya nechpul",
+        "Shu newpul implant",
+        "Ака хамси бўлиб қанча расход кетади",
     ],
 )
 def test_a_patient_asking_a_price(message: str) -> None:
@@ -179,6 +181,7 @@ def test_left_alone_by_the_audit(reply: str) -> None:
         ("Operatsiya-chi?", "Qabul narxi qancha?", True),
         ("operatsiyachi", "Qabul narxi qancha?", True),
         ("А денервация?", "Сколько стоит приём?", True),
+        ("Имплант хақида?", "Ака хамси бўлиб қанча расход кетади", True),
         ("Rahmat", "Qabul narxi qancha?", False),
         ("Yaxshi, ertaga yozilaman", "Qabul narxi qancha?", False),
         ("Denervatsiya ham qilasizlarmi?", "Qabul narxi qancha?", False),

@@ -140,7 +140,7 @@ def check(reply: str, rules: Sequence[str]) -> list[str]:
 # although the rule said only when asked -- so a sum is let through only
 # when the message being answered asks for one.
 _ASKS_PRICE = re.compile(
-    r"narx|нарх|qancha|қанча|nech\w*\s*pul|неч\w*\s*пул|\bpul|\bпул|to['‘ʻ’`]?lov|тўлов"
+    r"narx|нарх|qancha|қанча|ne\w{0,3}\s*pul|не\w{0,3}\s*пул|\bpul|\bпул|xarajat|харажат|расход|to['‘ʻ’`]?lov|тўлов"
     r"|сколько|стоим|стоит|цен[аыуе]|поч[её]м|chegirma|чегирма|скидк|arzon|арзон"
     r"|qimmat|қиммат|price|cost|how\s+much|dollar|доллар|so['‘ʻ’`]m|сўм|\bсум|mln|млн|\$",
     re.IGNORECASE,
@@ -149,6 +149,12 @@ _ASKS_PRICE = re.compile(
 
 # "Operatsiya-chi?" / "А операция?" right after a price question asks the
 # same thing about something else, and has no price word of its own.
+# "Rahmat" after a price question closes it rather than naming a service.
+_ACK = re.compile(
+    r"^\W*(?:rahmat|рахмат|раҳмат|xop|xo['‘ʻ’`]?p|хоп|хўп|ok|ок|ha|ҳа|ха|yaxshi|яхши|mayli|майли"
+    r"|tushundim|тушундим|спасибо|понятно|хорошо|ладно)\b",
+    re.IGNORECASE,
+)
 _FOLLOW_UP = re.compile(r"chi\b|чи\b|^\s*[аa]\s", re.IGNORECASE)
 
 
@@ -160,10 +166,12 @@ def asks_price(message: str, previous: str | None = None) -> bool:
     """
     if _ASKS_PRICE.search(message):
         return True
+    # "Имплант хақида?" right after "қанча расход кетади?" names the service
+    # the patient was already asking the price of.
     return bool(
         previous
         and _ASKS_PRICE.search(previous)
-        and _FOLLOW_UP.search(message)
+        and (_FOLLOW_UP.search(message) or (len(message.split()) <= 2 and not _ACK.search(message)))
         and len(message.split()) <= 4
     )
 
