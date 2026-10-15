@@ -35,6 +35,26 @@ from app.services import booking_offer
             "Доктор бу билан шуғулланади. Қабулга ёзиб қўяйми?",
             "Доктор бу билан шуғулланади.",
         ),
+        # Live, 2026-10-15: each of these ended a reply to a patient who had
+        # not asked to come.
+        (
+            "Doktor bu bilan shug'ullanadi. Kela olasizmi yoki klinikadan qo'ng'iroq "
+            "qilishni xohlaysizmi?",
+            "Doktor bu bilan shug'ullanadi.",
+        ),
+        (
+            "Тушунаман. Доктор Темур болани кўриб чиқиши мумкин — кўриб чиқишни хоҳлайсизми?",
+            "Тушунаман. Доктор Темур болани кўриб чиқиши мумкин.",
+        ),
+        (
+            "Doktor ko'rikda tushuntiradi. Eringiz ko'rik uchun kelishini xohlaysizmi — "
+            "konsultatsiyaga yozaymi? Klinikamiz: +998 70 310 40 40.",
+            "Doktor ko'rikda tushuntiradi. Klinikamiz: +998 70 310 40 40.",
+        ),
+        (
+            "Doktor bu bilan shug'ullanadi. Siz ukangizni qabulga yozmoqchimisiz?",
+            "Doktor bu bilan shug'ullanadi.",
+        ),
     ],
 )
 def test_an_unasked_offer_is_taken_off(reply: str, expected: str) -> None:
@@ -47,6 +67,11 @@ def test_an_unasked_offer_is_taken_off(reply: str, expected: str) -> None:
         "Doktor qabuli 300 000 soʻm.",
         "Aniq sababni doktor ko'rikda aytadi.",
         "Ertaga 11:00 ga yozib qo'ydim.",
+        # Offering the doctor's Telegram is not offering a booking.
+        "Doktor bilan Telegram orqali bog'lanishni xohlaysizmi?",
+        # Live, 2026-10-15: cutting the offer left only the greeting, and the
+        # patient was sent "Men doktor Temurning administratoriman." alone.
+        "Assalomu alaykum. Men doktor Temurning administratoriman. Qabulga yozilmoqchimisiz?",
         # A reply that is nothing but the offer is left alone: silence is worse.
         "Qabulga yozilmoqchimisiz?",
     ],
@@ -67,6 +92,8 @@ def test_a_marker_survives_the_cut() -> None:
         ("Qachon kelsam bo'ladi?", (), True),
         ("Ertaga bo'sh vaqt bormi?", (), True),
         ("Хочу записаться", (), True),
+        ("Qanday qilib buyurtma berish mumkin?", (), True),
+        ("O'g'limni ko'rsatsam bo'ladimi?", (), True),
         ("11:00", ("Qabulga yozilmoqchiman",), True),
         ("Prostatitga qaysi dori ichsam bo'ladi?", (), False),
         ("Qabul narxi qancha?", (), False),

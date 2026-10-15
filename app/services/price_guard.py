@@ -140,7 +140,7 @@ def check(reply: str, rules: Sequence[str]) -> list[str]:
 # although the rule said only when asked -- so a sum is let through only
 # when the message being answered asks for one.
 _ASKS_PRICE = re.compile(
-    r"narx|нарх|qancha|қанча|necha\s*pul|неча\s*пул|\bpul|\bпул|to['‘ʻ’`]?lov|тўлов"
+    r"narx|нарх|qancha|қанча|nech\w*\s*pul|неч\w*\s*пул|\bpul|\bпул|to['‘ʻ’`]?lov|тўлов"
     r"|сколько|стоим|стоит|цен[аыуе]|поч[её]м|chegirma|чегирма|скидк|arzon|арзон"
     r"|qimmat|қиммат|price|cost|how\s+much|dollar|доллар|so['‘ʻ’`]m|сўм|\bсум|mln|млн|\$",
     re.IGNORECASE,

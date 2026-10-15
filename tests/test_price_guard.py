@@ -108,6 +108,7 @@ def test_with_no_rules_every_sum_is_caught() -> None:
         "Operatsiyani 20 mln ga qilib bering",
         "Chegirma bormi?",
         "How much is the consultation?",
+        "Kansultatsiya nechpul",
     ],
 )
 def test_a_patient_asking_a_price(message: str) -> None:
