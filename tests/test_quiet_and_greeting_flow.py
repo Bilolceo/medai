@@ -469,3 +469,62 @@ async def test_a_reel_after_an_old_conversation_is_still_greeted(
     sent = await _attachment(db_session, seed, message_labels.SHARE)
 
     assert [text for _, _, text in sent] == [ATTACHMENT_GREETINGS["uz-latn"]]
+
+
+@pytest.mark.parametrize("switched_off", ["clinic", "conversation"])
+async def test_a_photo_is_not_acknowledged_while_the_assistant_is_off(
+    db_session: AsyncSession,
+    seed: Seed,
+    as_tenant: AsTenant,
+    monkeypatch: pytest.MonkeyPatch,
+    switched_off: str,
+) -> None:
+    """Live, 2026-10-15: with the assistant switched off for the clinic, a
+    photo was still answered "Rasmingiz qabul qilindi…". The photo is kept
+    and the doctor told; the patient hears nothing from the bot."""
+    from app.models.tenant import Tenant
+    from app.workers import tasks
+
+    if switched_off == "clinic":
+        tenant = await db_session.get(Tenant, seed.tenant_a.id)
+        assert tenant is not None
+        tenant.settings = {**(tenant.settings or {}), "bot_replies_enabled": False}
+    else:
+        conversation = await db_session.get(Conversation, seed.a.conversation.id)
+        assert conversation is not None
+        conversation.is_bot_enabled = False
+    await db_session.flush()
+
+    stored: list[list[str]] = []
+    acknowledged: list[str] = []
+    told: list[int] = []
+
+    async def fake_store(session: AsyncSession, **kwargs: Any) -> list[str]:
+        stored.append(kwargs["urls"])
+        return kwargs["urls"]
+
+    async def fake_ack(*args: Any, **kwargs: Any) -> None:
+        acknowledged.append(kwargs["recipient_external_id"])
+
+    async def fake_notify(session: AsyncSession, tenant_id: UUID, media: Any, caption: str) -> None:
+        told.append(len(media))
+
+    monkeypatch.setattr(tasks, "db_session", _factory(db_session))
+    monkeypatch.setattr(tasks.patient_media, "store", fake_store)
+    monkeypatch.setattr(tasks.patient_media, "acknowledge", fake_ack)
+    monkeypatch.setattr(tasks.doctor_telegram, "notify_patient_media", fake_notify)
+
+    await tasks.handle_patient_media(
+        {"redis": FakeRedis()},
+        str(seed.tenant_a.id),
+        str(seed.a.channel.id),
+        str(seed.a.conversation.user_id),
+        str(seed.a.conversation.id),
+        SENDER,
+        None,
+        ["https://example.com/a.jpg"],
+    )
+
+    assert stored == [["https://example.com/a.jpg"]]
+    assert acknowledged == []
+    assert told == [1]

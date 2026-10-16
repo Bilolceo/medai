@@ -950,6 +950,17 @@ async def handle_patient_media(
             # Only a person can look at a photo; the conversation waits on one.
             await handoff.flag(session, uuid.UUID(conversation_id))
             await session.commit()
+            # The photo is stored and the doctor told either way; only the
+            # acknowledgement is the assistant speaking, and a clinic that has
+            # switched it off -- for everyone or for this patient -- hears
+            # nothing from it, as with a voice note or a reel.
+            conversation = await session.get(Conversation, uuid.UUID(conversation_id))
+            muted = not await bot_replies_enabled(session, tenant_uuid) or (
+                conversation is not None and not conversation.is_bot_enabled
+            )
+            if muted:
+                await _notify_doctor_of_media(session, tenant_uuid, user_id, media)
+                return
             if not await _may_answer(
                 session, channel_id=uuid.UUID(channel_id), user_id=uuid.UUID(user_id)
             ):
@@ -965,18 +976,24 @@ async def handle_patient_media(
             except Exception:  # noqa: BLE001 - the doctor must still be told
                 await session.rollback()
                 logger.exception("patient_media_ack_failed")
-            try:
-                patient = await session.get(User, uuid.UUID(user_id))
-                await doctor_telegram.notify_patient_media(
-                    session, tenant_uuid, media, patient_media.caption(patient, len(media))
-                )
-            except Exception:  # noqa: BLE001
-                logger.exception("patient_media_notify_failed")
+            await _notify_doctor_of_media(session, tenant_uuid, user_id, media)
             logger.info(
                 "patient_media_handled", extra={"tenant_id": tenant_id, "count": len(media)}
             )
     finally:
         reset_current_tenant(token)
+
+
+async def _notify_doctor_of_media(
+    session: AsyncSession, tenant_id: uuid.UUID, user_id: str, media: Any
+) -> None:
+    try:
+        patient = await session.get(User, uuid.UUID(user_id))
+        await doctor_telegram.notify_patient_media(
+            session, tenant_id, media, patient_media.caption(patient, len(media))
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("patient_media_notify_failed")
 
 
 async def _said_today(
