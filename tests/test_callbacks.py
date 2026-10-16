@@ -20,7 +20,7 @@ def test_the_marker_is_removed_and_read() -> None:
 
     assert text == "Yaxshi, administrator sizga qo'ng'iroq qiladi."
     assert request is not None
-    assert request.phone == "998901234567"
+    assert request.phone == "+998901234567"
     assert request.reason == "buyrak og'rig'i bo'yicha maslahat"
 
 

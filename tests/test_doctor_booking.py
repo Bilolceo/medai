@@ -62,7 +62,7 @@ def test_the_marker_carries_name_phone_and_reason() -> None:
     assert "[[" not in text
     assert slot == _at(FRIDAY, 9, 20)
     assert name == "Ali Valiyev"
-    assert phone == "+998 90 123 45 67"
+    assert phone == "+998901234567"
     assert reason == "siydik yo'lida og'riq"
 
 

@@ -58,6 +58,7 @@ from app.services.appointment import (
     days_off,
     is_within_working_hours,
 )
+from app.services.patient_profile import looks_like_a_name, normalise_phone
 
 logger = logging.getLogger(__name__)
 
@@ -253,7 +254,9 @@ def extract(reply: str) -> tuple[str, datetime | None, str | None]:
     # itself. A row in the clinic's diary reading "Name" is worse than one
     # with no name at all: the front desk cannot tell it is a placeholder.
     candidate = " ".join(name.lower().strip("<>[]{}()").replace("_", " ").split())
-    if candidate in PLACEHOLDER_NAMES:
+    if candidate in PLACEHOLDER_NAMES or (name and not looks_like_a_name(name)):
+        # A placeholder, or "Hop" -- the patient's "xo'p" taken for a name
+        # (seen live 2026-10-15). No name beats a wrong one on the booking.
         name = ""
     return cleaned, naive.replace(tzinfo=CLINIC_TIMEZONE), name or None
 
@@ -269,6 +272,9 @@ def marker_details(reply: str) -> tuple[str | None, str | None]:
     # placeholder words themselves.
     if phone is not None and not any(ch.isdigit() for ch in phone):
         phone = None
+    if phone is not None:
+        # "998772882" and "+998 99 877 28 82" are one patient; keep one shape.
+        phone = normalise_phone(phone) or phone
     if reason is not None and reason.lower() in {"reason", "sabab", "shikoyat", "причина"}:
         reason = None
     return phone, reason

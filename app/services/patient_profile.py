@@ -60,6 +60,10 @@ def normalise_phone(text: str) -> str | None:
     if run is None:
         return None
     digits = "".join(_DIGITS.findall(run.group(0)))
+    # Nine digits on their own are a subscriber number even when they begin
+    # 998: "998772882" is "99 877 28 82", not a country code with six left.
+    if len(digits) == 9 and digits[:2] in _UZ_OPERATOR_CODES:
+        return f"+998{digits}"
     if digits.startswith("998"):
         digits = digits[3:]
     elif digits.startswith("00998"):
@@ -101,6 +105,8 @@ _NOT_A_NAME = frozenset(
         "rahmat", "raxmat", "tushunarli", "bo'ldi", "boldi", "zor", "yaxshi",
         "qabul", "narx", "uzi", "tekshiruv", "shifokor", "doktor", "salom",
         "aka", "uka", "opa", "singlim", "hurmatli", "iltimos", "assalom",
+        "hop", "xop", "xo'p", "ho'p", "xopmi", "okay", "albatta", "tushundim", "chundim",
+        "майли", "хоп", "хўп", "ҳа", "раҳмат", "рахмат", "ок",
         "да", "нет", "хорошо", "спасибо", "приём", "прием", "врач",
     }
 )  # fmt: skip
@@ -134,7 +140,8 @@ def looks_like_a_name(text: str) -> bool:
         return False
     if not stripped or len(stripped) > _MAX_NAME_LENGTH:
         return False
-    if stripped.lower() in _NOT_A_NAME or looks_like_a_greeting(stripped):
+    plain = re.sub(r"[‘’ʻʼ`]", "'", stripped.lower())
+    if plain in _NOT_A_NAME or looks_like_a_greeting(stripped):
         return False
     if normalise_phone(stripped) is not None or any(ch.isdigit() for ch in stripped):
         return False

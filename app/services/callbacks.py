@@ -30,6 +30,7 @@ from app.models.lead import Lead, LeadStatus
 from app.models.user import User
 from app.repositories.lead import LeadRepository
 from app.services.conversation_signals import find_phone_number
+from app.services.patient_profile import normalise_phone
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,9 @@ def extract(reply: str) -> tuple[str, CallbackRequest | None]:
     cleaned = MALFORMED_MARKER.sub("", CALLBACK_MARKER.sub("", reply)).strip()
     if match is None:
         return cleaned, None
-    phone = find_phone_number(match.group("phone")) or match.group("phone").strip()
+    raw = match.group("phone")
+    # One shape, +998XXXXXXXXX, as the appointment book and the sheet keep it.
+    phone = normalise_phone(raw) or find_phone_number(raw) or raw.strip()
     if not any(ch.isdigit() for ch in phone):
         return cleaned, None
     reason = (match.group("reason") or "").strip() or None
@@ -83,7 +86,14 @@ def from_patient_words(patient_said: list[str]) -> CallbackRequest | None:
     gave a number somewhere in the conversation."""
     if not any(CALLBACK_INTENT.search(text) for text in patient_said):
         return None
-    phone = next((found for text in patient_said if (found := find_phone_number(text))), None)
+    phone = next(
+        (
+            found
+            for text in patient_said
+            if (found := normalise_phone(text) or find_phone_number(text))
+        ),
+        None,
+    )
     return CallbackRequest(phone=phone, reason=None) if phone else None
 
 

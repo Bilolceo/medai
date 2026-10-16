@@ -132,3 +132,22 @@ def test_the_assistants_last_question_decides_what_a_bare_reply_is() -> None:
 )
 def test_a_language_request_is_read_with_its_negation(message: str, language: str | None) -> None:
     assert asks_for_language(message) == language
+
+
+@pytest.mark.parametrize(
+    ("text", "number"),
+    [
+        # Live, 2026-10-15: nine digits that happen to begin 998.
+        ("998772882", "+998998772882"),
+        ("998931209810", "+998931209810"),
+        ("90 111 22 33", "+998901112233"),
+    ],
+)
+def test_one_shape_for_every_number(text: str, number: str) -> None:
+    assert normalise_phone(text) == number
+
+
+@pytest.mark.parametrize("word", ["Hop", "Ho‘p", "xo'p", "Ok", "Albatta", "Хоп"])
+def test_an_acknowledgement_is_not_a_name(word: str) -> None:
+    """Live, 2026-10-15: "Hop" (xo'p) was booked as the patient's name."""
+    assert not looks_like_a_name(word)
