@@ -67,6 +67,11 @@ class ConversationSummary(BaseModel):
     updated_at: datetime
     # Set while a person owes this patient a reply; the list pins these.
     needs_doctor_since: datetime | None = None
+    # For a pinned conversation: what the patient actually asked -- their
+    # newest message with something in it, not the "Rahmat!" that usually
+    # comes last. The task list shows this so nobody has to open the chat
+    # to know what it is about.
+    waiting_reason: str | None = None
 
 
 class MessageOut(BaseModel):

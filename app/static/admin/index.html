@@ -175,7 +175,7 @@
   .who .me { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(140deg, var(--brand-1), var(--brand-2)); color: #fff; font-weight: 700; font-size: var(--fs-xs); display: grid; place-items: center; flex-shrink: 0; }
   .who-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
   .who-text b { font-size: var(--fs-sm); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .who-text span { font-size: var(--fs-xs); color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .who-text span { font-size: var(--fs-xs); color: var(--ink-3); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 
   .icon-btn { font: inherit; width: var(--ctl); height: var(--ctl); flex-shrink: 0; display: grid; place-items: center; padding: 0; border: 1px solid transparent; border-radius: var(--r-sm); background: transparent; color: var(--ink-3); cursor: pointer; transition: background .12s, color .12s, border-color .12s; }
   .icon-btn:hover { background: var(--panel-2); color: var(--ink); }
@@ -228,6 +228,10 @@
   tr.pinned td { background: var(--danger-soft); }
   tr.pinned td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
   tr.pinned.sel td { background: var(--accent-soft); }
+  tr.pinned.stale td { background: var(--warn-soft, var(--surface-sunk)); }
+  tr.pinned.stale td:first-child { box-shadow: inset 3px 0 0 var(--ink-4); }
+  tr.pinned.stale .pin-tag { color: var(--ink-3); }
+  tr.pinned.stale .pin-tag::before { background: var(--ink-4); box-shadow: none; animation: none; }
   @keyframes fresh-row { from { background: var(--accent-soft); } to { background: transparent; } }
   tr.fresh:not(.sel) td { animation: fresh-row 2.5s ease-out; }
 
@@ -337,6 +341,14 @@
   .empty-ic .ic { width: 20px; height: 20px; }
   .empty b { font-size: var(--fs-md); color: var(--ink); }
   .empty span:last-child:not(.empty-ic) { font-size: var(--fs-sm); max-width: 320px; }
+  .empty-acts { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 12px; }
+  .empty-acts:empty { display: none; }
+  .day-off { display: flex; align-items: center; gap: 12px; padding: 16px; border-top: 1px solid var(--rule); }
+  .day-off .empty-ic { margin: 0; flex-shrink: 0; }
+  .day-off-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .day-off-text b { font-size: var(--fs-md); color: var(--ink); }
+  .day-off-text span { font-size: var(--fs-sm); color: var(--ink-3); }
+  .day-off-text .more-link { margin-top: 4px; align-self: flex-start; }
   .agenda-empty, .report-empty { color: var(--ink-3); font-size: var(--fs-sm); padding: 36px 16px; text-align: center; margin: 0; }
 
   /* ==== dialogs ========================================================= */
@@ -403,6 +415,9 @@
   .attn .body span { display: block; font-size: var(--fs-sm); color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .attn .kind { font-size: var(--fs-xs); font-weight: 600; white-space: nowrap; height: 22px; padding: 0 8px; border-radius: var(--r-pill); display: inline-flex; align-items: center; }
   .attn.doctor .kind { color: var(--danger); background: var(--danger-soft); }
+  /* Over two days old: still owed an answer, no longer an alarm. */
+  .attn.doctor.stale .dot { background: var(--ink-4); box-shadow: 0 0 0 4px var(--surface-sunk); }
+  .attn.doctor.stale .kind { color: var(--ink-2); background: var(--surface-sunk); }
   .attn.lead .kind { color: var(--warn); background: var(--warn-soft); }
   .attn.media .kind { color: var(--accent); background: var(--accent-soft); }
   .attn .when { font-size: var(--fs-xs); font-weight: 500; color: var(--ink-3); white-space: nowrap; min-width: 80px; text-align: right; }
@@ -764,7 +779,15 @@
   @media (pointer: coarse), (max-width: 720px) {
     :root { --ctl: 44px; --ctl-sm: 40px; }
     nav#tabs button { height: 44px; }
-    .seg button, .chip, .suggest-chips button, .view-chip, .view-add, .view-clear { min-height: 40px; }
+    .seg button, .chip, .suggest-chips button, .view-chip, .view-add, .view-clear { min-height: 44px; }
+    .view-chip .view-x { min-width: 44px; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; }
+    .more-link { min-height: 44px; padding: 0 4px; }
+    input[type="checkbox"], input[type="radio"] { width: 22px; height: 22px; }
+    label:has(> input[type="checkbox"]) { min-height: 44px; display: inline-flex; align-items: center; gap: 8px; }
+    .seg button { min-width: 44px; }
+    .view-chip { box-sizing: content-box; min-height: 44px; }
+    .view-chip button { min-height: 44px; }
+    a.tel { display: inline-flex; align-items: center; min-height: 44px; }
     .subtabs button { height: 48px; }
     .btn-lg { height: 44px; }
     #threadClose { width: 44px; height: 44px; }
@@ -788,8 +811,11 @@
     .stat { padding: 12px; gap: 8px; flex-direction: column; }
     .stat-ic { width: 32px; height: 32px; }
     .stat b { font-size: var(--fs-xl); }
-    #attnFilter { width: 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
-    #attnFilter button { flex: 1 0 auto; padding: 0 10px; }
+    #attnFilter { width: 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity;
+      -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
+    #attnFilter.at-end { -webkit-mask-image: none; mask-image: none; }
+    #attnFilter::-webkit-scrollbar { display: none; }
+    #attnFilter button { flex: 1 0 auto; padding: 0 12px; scroll-snap-align: start; }
     .attn .kind { display: none; }
     .attn .when { min-width: 0; }
     .toolbar .tb-search { max-width: none; flex-basis: 100%; }
@@ -1101,7 +1127,7 @@
             <h3 id="rpChartTitle">Kunlar bo'yicha</h3>
             <div class="legend" aria-hidden="true">
               <span><i class="k-line s1"></i>Yozgan bemorlar</span>
-              <span><i class="k-line s2"></i>Yaratilgan qabullar</span>
+              <span><i class="k-line s2"></i>Qabulga yozildi</span>
             </div>
           </div>
           <div class="rp-line" id="reportDaily" role="img" aria-label="Bemorlar va qabullar grafigi"></div>
@@ -1626,7 +1652,15 @@ async function loadAppointments() {
   markRange();
   const rows = await api(`/appointments?${query}`);
   if (!rows.length) {
-    fill("apptRows", [el("p", { class: "agenda-empty" }, "Bu davrda qabul yo'q")]);
+    fill("apptRows", [el("div", { class: "empty" },
+      el("span", { class: "empty-ic" }, icon("calendar")),
+      el("b", {}, "Bu davrda qabul yo'q"),
+      el("span", {}, "Boshqa kunni tanlang yoki yangi qabul qo'shing"),
+      el("span", { class: "empty-acts" },
+        params.days == 1
+          ? el("button", { class: "act", type: "button", onclick: () => document.querySelector('#apptRange [data-range="week"]').click() }, "Shu haftani ko'rish")
+          : null,
+        canManage() ? el("button", { class: "act primary", type: "button", onclick: () => document.getElementById("newAppt").click() }, "Yangi qabul") : null))]);
     return;
   }
   const next = nextAppointment(rows);
@@ -1713,6 +1747,22 @@ function attentionItem(kind, label, title, detail, when, onclick) {
     el("span", { class: "when" }, when));
 }
 
+// "3 daqiqa", "5 soat", "2 kun": how long a patient has been waiting, which
+// is what decides who is answered first.
+function waitedFor(iso) {
+  if (!iso) return "";
+  const minutes = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (minutes < 60) return `${minutes} daqiqa`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} soat`;
+  return `${Math.floor(hours / 24)} kun`;
+}
+// Waiting longer than two days: still owed an answer, but no longer the
+// emergency the red row was made for.
+function isStale(iso) {
+  return Boolean(iso) && Date.now() - new Date(iso).getTime() > 48 * 3600 * 1000;
+}
+
 function renderNext(next) {
   const card = document.getElementById("homeNext");
   card.classList.toggle("empty", !next);
@@ -1775,6 +1825,15 @@ function applyAttnFilter() {
   }
 }
 document.getElementById("attnMore").addEventListener("click", () => { ATTN_ALL = true; applyAttnFilter(); });
+// On a phone the filter scrolls sideways; the fade on its right edge says
+// so, and goes away once the last option is in view.
+function markFilterEnd() {
+  const f = document.getElementById("attnFilter");
+  f.classList.toggle("at-end", f.scrollLeft + f.clientWidth >= f.scrollWidth - 4);
+}
+document.getElementById("attnFilter").addEventListener("scroll", markFilterEnd, { passive: true });
+window.addEventListener("resize", markFilterEnd);
+requestAnimationFrame(markFilterEnd);
 document.getElementById("attnFilter").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-kind]");
   if (!b) return;
@@ -1795,12 +1854,14 @@ function statCard(go, label, value, hint, tone, iconName) {
 async function loadHome() {
   paintGreeting();
   const now = new Date();
-  const [todayRows, waiting, leads, media, settings] = await Promise.all([
+  const tomorrowDate = new Date(now.getTime() + 24 * 3600 * 1000);
+  const [todayRows, waiting, leads, media, settings, tomorrowRows] = await Promise.all([
     settle(api(`/appointments?date=${isoDay(now)}&days=1`), []),
     settle(api("/conversations?needs_doctor=true&limit=20"), []),
     settle(api("/leads?status=new"), []),
     settle(api("/media?only_unseen=true"), []),
     settle(api("/settings"), null),
+    settle(api(`/appointments?date=${isoDay(tomorrowDate)}&days=1`), []),
   ]);
 
   const bot = document.getElementById("homeBot");
@@ -1828,7 +1889,8 @@ async function loadHome() {
   document.getElementById("homeSummary").textContent = sentence.charAt(0).toUpperCase() + sentence.slice(1) + ".";
 
   const stats = [
-    statCard("today", "Bugungi qabullar", booked.length, ahead ? `${ahead} tasi oldinda` : "hammasi o'tdi", "", "calendar"),
+    statCard("today", "Bugungi qabullar", booked.length,
+      !booked.length ? "bugun qabul yo'q" : ahead ? `${ahead} tasi oldinda` : "hammasi o'tdi", "", "calendar"),
     statCard("chats", "Javob kutmoqda", waiting.length, waiting.length ? "doktor javobi kerak" : "hammasiga javob berilgan", waiting.length ? "hot" : "", "chat"),
     statCard("leads", "Qo'ng'iroq kutmoqda", newLeads.length, newLeads.length ? "qo'ng'iroq qiling" : "hammasi bilan gaplashildi", newLeads.length ? "warm" : "", "phone"),
     statCard("media", "Ko'rilmagan rasmlar", unseenPhotos, unseenPhotos ? `${unseenPeople.length} bemordan` : "hammasi ko'rilgan", "", "image"),
@@ -1838,8 +1900,13 @@ async function loadHome() {
   // Most urgent first: a patient waiting on the doctor, then somebody who
   // asked to be rung, then photos nobody has looked at.
   const items = [
-    ...waiting.map((c) => attentionItem("doctor", "Doktor javobi kerak", patientLabel(c),
-      c.last_message_preview || "—", relativeWhen(c.needs_doctor_since || c.updated_at), () => openPatientChat(c.id))),
+    ...waiting.map((c) => {
+      const item = attentionItem("doctor", "Doktor javobi kerak", patientLabel(c),
+        c.waiting_reason || c.last_message_preview || "—",
+        `${waitedFor(c.needs_doctor_since || c.updated_at)} kutmoqda`, () => openPatientChat(c.id));
+      if (isStale(c.needs_doctor_since)) item.classList.add("stale");
+      return item;
+    }),
     ...newLeads.map((l) => attentionItem("lead", "Qo'ng'iroq qiling", l.patient_name || (l.username ? "@" + l.username : l.phone || "—"),
       [l.phone, l.topic].filter(Boolean).join(" · ") || "—", relativeWhen(l.created_at), () => showTab("leads").catch((e) => toast(e.message, true)))),
     ...unseenPeople.map((p) => attentionItem("media", "Rasm ko'rilmagan", patientTitle(p),
@@ -1863,8 +1930,22 @@ async function loadHome() {
           el("span", { class: "n" }, a.patient_name || "Ismi ko'rsatilmagan"),
           el("span", { class: "pill " + tone }, label));
       }).concat(booked.length > 7 ? [el("div", { class: "mini-more" }, `yana ${booked.length - 7} ta`)] : [])
-    : [emptyState("calendar", "Bugun qabul yo'q", "")]);
-  renderNext(nextAppointment(todayRows));
+    : [dayOffNote(tomorrowRows)]);
+  const next = nextAppointment(todayRows);
+  // Nothing next today: the schedule card already says so, once.
+  document.getElementById("homeNext").hidden = !next;
+  if (next) renderNext(next);
+}
+
+// A day with no bookings says it once, and says what comes next.
+function dayOffNote(tomorrowRows) {
+  const tomorrow = tomorrowRows.filter((a) => a.status !== "cancelled").length;
+  return el("div", { class: "day-off" },
+    el("span", { class: "empty-ic" }, icon("calendar")),
+    el("span", { class: "day-off-text" },
+      el("b", {}, "Bugun qabul yo'q"),
+      el("span", {}, tomorrow ? `Ertaga ${tomorrow} ta qabul bor` : "Ertaga ham hozircha qabul yo'q"),
+      el("a", { class: "more-link inline", href: "#today", "data-go": "today" }, tomorrow ? "Ko'rish →" : "Qabul qo'shish →")));
 }
 
 // The same empty state everywhere: an icon, what is missing, and what to do.
@@ -2004,17 +2085,17 @@ async function loadChats(options = {}) {
     // that land on a control are left to that control.
     el("tr", {
       "data-id": c.id,
-      class: "clickable" + (c.needs_doctor_since ? " pinned" : "") + (CURRENT_CHAT === c.id ? " sel" : "") + (isFresh(c) ? " fresh" : ""),
+      class: "clickable" + (c.needs_doctor_since ? " pinned" : "") + (isStale(c.needs_doctor_since) ? " stale" : "") + (CURRENT_CHAT === c.id ? " sel" : "") + (isFresh(c) ? " fresh" : ""),
       onclick: (e) => { if (!e.target.closest("button, select, a, input")) openThread(c.id); },
     },
       el("td", {}, patientLabel(c), c.patient_name && c.patient_username
         ? el("small", { class: "muted" }, el("br"), c.patient_name)
         : null,
         c.needs_doctor_since
-          ? [el("br"), el("span", { class: "pin-tag", title: "Bemor shifokor javobini kutmoqda" }, "Doktor javobi kerak · " + relativeWhen(c.needs_doctor_since))]
+          ? [el("br"), el("span", { class: "pin-tag", title: "Bemor shifokor javobini kutmoqda" }, `Javob kutmoqda · ${waitedFor(c.needs_doctor_since)}`)]
           : null),
       el("td", {}, el("span", { class: "pill " + c.channel }, c.channel || "—")),
-      el("td", {}, c.last_message_preview || "—", el("br"), el("small", { class: "muted" }, c.last_message_at ? localDateTime(c.last_message_at) : "")),
+      el("td", {}, (c.needs_doctor_since && c.waiting_reason) || c.last_message_preview || "—", el("br"), el("small", { class: "muted" }, c.last_message_at ? localDateTime(c.last_message_at) : "")),
       el("td", {}, el("span", { class: "pill " + (c.is_bot_enabled ? "ok" : "bad") }, c.is_bot_enabled ? "yoqilgan" : "operatorda")),
       el("td", {}, el("span", { class: "row" },
         canManage()
@@ -2245,7 +2326,7 @@ async function loadLeads() {
     const title = l.patient_name || (l.username ? "@" + l.username : "Ismi ko'rsatilmagan");
     const phone = l.phone
       ? el("span", { class: "lead-phone" },
-          el("a", { href: "tel:" + l.phone.replace(/[^+\d]/g, "") }, l.phone),
+          el("a", { class: "tel", href: "tel:" + l.phone.replace(/[^+\d]/g, "") }, l.phone),
           el("button", { class: "icon-btn", type: "button", title: "Nusxalash", "aria-label": "Raqamni nusxalash", onclick: () => copyText(l.phone) }, icon("copy")))
       : "—";
     return el("tr", { class: l.status === "new" ? "is-new" : "" },
@@ -3280,7 +3361,7 @@ function delta(kpi, lowerIsBetter) {
   if (Math.abs(change) < 0.5) return el("span", { class: "rp-delta" }, el("b", {}, "o'zgarmadi"));
   const better = lowerIsBetter ? change < 0 : change > 0;
   return el("span", { class: "rp-delta" },
-    el("b", { class: better ? "up" : "down" }, `${change > 0 ? "▲" : "▼"} ${fmtNumber(Math.abs(change))}%`),
+    el("b", { class: better ? "up" : "down" }, `${change > 0 ? "▲" : "▼"} ${Math.round(Math.abs(change))}%`),
     "oldingi davrga nisbatan");
 }
 
@@ -3421,7 +3502,7 @@ function bucketDaily(daily, days) {
     patients: rows.reduce((n, r) => n + r.patients, 0),
     appointments: rows.reduce((n, r) => n + r.appointments, 0),
   });
-  if (days <= 31) {
+  if (days <= 14) {
     return { unit: "Kun", title: "Kunlar bo'yicha", points: daily.map((d) => point(d.day, fmtDay(d.day), fmtDay(d.day), [d])) };
   }
   if (days <= 120) {
@@ -3540,11 +3621,11 @@ async function loadReport() {
 
   const pct = r.conversion_percent.value;
   const booked = Math.round((active * pct) / 100);
-  document.getElementById("rpBooked").textContent = active ? `${fmtNumber(pct)}%` : "—";
+  document.getElementById("rpBooked").textContent = active ? `${Math.round(pct)}%` : "—";
   const before = r.conversion_percent.previous;
   document.getElementById("rpBookedOf").replaceChildren(
     active ? `${fmtNumber(active)} tadan ${fmtNumber(booked)} tasi` : "bu davrda bemor yozmagan",
-    active && before ? el("small", {}, ` · oldin ${fmtNumber(before)}%`) : "");
+    active && before ? el("small", {}, ` · oldin ${Math.round(before)}%`) : "");
 
   // Of the visits whose day has come and that somebody marked, how many
   // came. Unmarked ones are left out rather than counted as no-shows.

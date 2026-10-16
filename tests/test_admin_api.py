@@ -1561,3 +1561,39 @@ async def test_an_unknown_visit_is_not_found(client: httpx.AsyncClient, manager:
         await client.post(_outcome_url(missing, "complete"), headers=headers)
     ).status_code == 404
     assert (await client.post(_outcome_url("nope", "complete"), headers=headers)).status_code == 422
+
+
+async def test_a_waiting_conversation_says_what_the_patient_asked(
+    client: httpx.AsyncClient, db_session: AsyncSession, seed: Seed
+) -> None:
+    """UX audit, 2026-10-16: the task list showed the last message, usually
+    "Rahmat!", so nobody could tell what a pinned conversation was about."""
+    from app.models.conversation import Conversation
+    from app.models.message import Message
+
+    _login_as(client, seed.a.operator.id)
+    conversation = await db_session.get(Conversation, seed.a.conversation.id)
+    assert conversation is not None
+    conversation.needs_doctor_since = datetime.now(UTC)
+    base = datetime.now(UTC) + timedelta(minutes=1)
+    for i, (sender, text) in enumerate(
+        [
+            ("patient", "PSA natijam 8.5 chiqdi, bu xavflimi?"),
+            ("bot", "Doktor javob beradi."),
+            ("patient", "Rahmat!"),
+        ]
+    ):
+        db_session.add(
+            Message(
+                conversation_id=conversation.id,
+                sender=sender,
+                content=text,
+                channel="instagram",
+                created_at=base + timedelta(seconds=i),
+            )
+        )
+    await db_session.flush()
+
+    response = await client.get("/api/admin/conversations?needs_doctor=true")
+    row = next(r for r in response.json() if r["id"] == str(conversation.id))
+    assert row["waiting_reason"].startswith("PSA natijam")

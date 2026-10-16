@@ -6,6 +6,7 @@ both inbound edges now check it before answering, and this is where a human
 turns it off and starts replying themselves.
 """
 
+import re
 import uuid
 from datetime import UTC, datetime
 
@@ -33,7 +34,7 @@ from app.models.operator import Operator
 from app.models.user import User
 from app.repositories.conversation import ConversationRepository
 from app.repositories.message import MessageRepository
-from app.services import handoff, search
+from app.services import handoff, message_labels, search
 from app.services.conversation import (
     record_outbound_message,
     reply_context_for,
@@ -94,6 +95,10 @@ async def _summaries(
         ).scalars()
     }
 
+    reasons = await _waiting_reasons(
+        session, [c.id for c in conversations if c.needs_doctor_since is not None]
+    )
+
     rows = []
     for conversation in conversations:
         user = users.get(conversation.user_id)
@@ -115,9 +120,53 @@ async def _summaries(
                 last_message_preview=preview(last.content) if last is not None else None,
                 updated_at=conversation.updated_at,
                 needs_doctor_since=conversation.needs_doctor_since,
+                waiting_reason=reasons.get(conversation.id),
             )
         )
     return rows
+
+
+# What a patient says when they are done, not when they are asking: these
+# are skipped when looking for why a conversation is waiting on a person.
+_CLOSING_WORDS = frozenset(
+    {
+        "rahmat", "raxmat", "rahmat aka", "katta rahmat", "xop", "xo'p", "hop", "ho'p", "ok",
+        "okey", "ha", "xa", "mayli", "yaxshi", "tushundim", "chundim", "rahmat sizga",
+        "раҳмат", "рахмат", "хоп", "хўп", "ха", "ҳа", "майли", "спасибо", "хорошо", "ок",
+    }
+)  # fmt: skip
+
+
+def _says_something(text: str) -> bool:
+    if text.startswith((message_labels.REACTION, message_labels.SHARE)):
+        return False
+    plain = " ".join(re.sub(r"[^\w' ]", " ", text.lower().replace("’", "'")).split())
+    letters = sum(ch.isalpha() for ch in plain)
+    return letters >= 3 and plain not in _CLOSING_WORDS
+
+
+async def _waiting_reasons(
+    session: AsyncSession, conversation_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, str]:
+    """Each pinned conversation's newest patient message with substance."""
+    if not conversation_ids:
+        return {}
+    recent = (
+        await session.execute(
+            select(Message.conversation_id, Message.content)
+            .where(
+                Message.conversation_id.in_(conversation_ids),
+                Message.sender == MessageSender.PATIENT,
+            )
+            .order_by(Message.created_at.desc())
+            .limit(40 * len(conversation_ids))
+        )
+    ).all()
+    reasons: dict[uuid.UUID, str] = {}
+    for conversation_id, content in recent:
+        if conversation_id not in reasons and _says_something(content or ""):
+            reasons[conversation_id] = preview(content)
+    return reasons
 
 
 @router.get("", response_model=list[ConversationSummary])
