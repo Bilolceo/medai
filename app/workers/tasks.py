@@ -1189,12 +1189,13 @@ async def _patient_typed_since(
 
 
 # What the clinic says to anything sent without words: the assistant cannot
-# open it, so it greets the patient and invites the question -- the way a
-# person on the front desk would, not "how may I help you".
+# open it, so it greets the patient and invites the question -- the way an
+# operator would, plainly: no "bemalol", no "how may I help you" (the owner,
+# 2026-10-16: write like operators talk, without courtesies).
 ATTACHMENT_GREETINGS = {
-    "uz-latn": "Assalomu alaykum! Savolingiz bo'lsa, bemalol yozing.",
-    "uz-cyrl": "Ассалому алайкум! Саволингиз бўлса, бемалол ёзинг.",
-    "ru": "Здравствуйте! Если есть вопрос, напишите, пожалуйста.",
+    "uz-latn": "Assalomu alaykum. Savolingiz bo'lsa yozing.",
+    "uz-cyrl": "Ассалому алайкум. Саволингиз бўлса ёзинг.",
+    "ru": "Здравствуйте. Если есть вопрос, напишите.",
 }
 
 

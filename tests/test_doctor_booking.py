@@ -84,7 +84,7 @@ def test_the_book_tells_the_model_how_long_an_appointment_is() -> None:
 
 def test_the_photo_acknowledgement_exists_in_every_script() -> None:
     assert ACKNOWLEDGEMENTS["uz-latn"] == (
-        "Rasmingiz qabul qilindi. Doktor ko'rib chiqib, shu yerda javob beradi."
+        "Rasmingiz keldi. Doktor ko'rib, shu yerda javob beradi."
     )
     # Never a promise the assistant cannot keep: nobody looks "at once".
     promises = ("hozir", "ҳозир", "сейчас")

@@ -19,12 +19,12 @@ from app.services.language import reply_script
 
 REPLIES = {
     "uz-latn": (
-        "Ovozli xabaringiz qabul qilindi, klinika xodimi eshitib, shu yerda javob beradi. "
-        "Savolingizni yozib yuborsangiz, men darhol javob bera olaman."
+        "Ovozli xabaringiz keldi, xodimimiz eshitib shu yerda javob beradi. "
+        "Savolni yozib yuborsangiz, darrov javob beraman."
     ),
     "uz-cyrl": (
-        "Овозли хабарингиз қабул қилинди, клиника ходими эшитиб, шу ерда жавоб беради. "
-        "Саволингизни ёзиб юборсангиз, мен дарҳол жавоб бера оламан."
+        "Овозли хабарингиз келди, ходимимиз эшитиб шу ерда жавоб беради. "
+        "Саволни ёзиб юборсангиз, дарров жавоб бераман."
     ),
     "ru": (
         "Голосовое сообщение получили, сотрудник клиники прослушает и ответит здесь. "

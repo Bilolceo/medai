@@ -177,9 +177,7 @@ def asks_price(message: str, previous: str | Sequence[str] | None = None) -> boo
 
 
 SAFE_REPLIES = {
-    "uz-latn": (
-        "Narx bo'yicha aniq ma'lumotni klinikamizga qo'ng'iroq qilib bilib olishingiz mumkin."
-    ),
-    "uz-cyrl": "Нарх бўйича аниқ маълумотни клиникамизга қўнғироқ қилиб билиб олишингиз мумкин.",
-    "ru": "Точную стоимость можно узнать, позвонив в нашу клинику.",
+    "uz-latn": "Aniq narxni klinikaga qo'ng'iroq qilib bilsangiz bo'ladi.",
+    "uz-cyrl": "Аниқ нархни клиникага қўнғироқ қилиб билсангиз бўлади.",
+    "ru": "Точную цену скажут по телефону клиники.",
 }

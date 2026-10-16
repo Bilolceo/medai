@@ -50,8 +50,8 @@ ACK_WINDOW_SECONDS = 120
 # the assistant cannot come back to say so -- the photo waits on the doctor,
 # who answers in this conversation.
 ACKNOWLEDGEMENTS = {
-    "uz-latn": "Rasmingiz qabul qilindi. Doktor ko'rib chiqib, shu yerda javob beradi.",
-    "uz-cyrl": "Расмингиз қабул қилинди. Доктор кўриб чиқиб, шу ерда жавоб беради.",
+    "uz-latn": "Rasmingiz keldi. Doktor ko'rib, shu yerda javob beradi.",
+    "uz-cyrl": "Расмингиз келди. Доктор кўриб, шу ерда жавоб беради.",
     "ru": "Фото получили. Врач посмотрит и ответит здесь.",
 }
 
