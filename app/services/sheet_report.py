@@ -25,6 +25,8 @@ from app.models.appointment import Appointment, AppointmentStatus
 from app.models.lead import Lead
 from app.services.appointment import CLINIC_TIMEZONE
 from app.services.sheets import (
+    _BAND_COLOUR,
+    _HEADER_COLOUR,
     TIMEOUT_SECONDS,
     WEEKDAYS_UZ,
     SheetsError,
@@ -115,7 +117,45 @@ async def report_cells(session: AsyncSession, tenant_id: uuid.UUID, day: date) -
     ]
 
 
-def _layout(gid: int) -> list[dict[str, Any]]:
+# Which columns hold what, for their number formats.
+_COUNT_COLUMNS = (2, 3, 4, 5, 6, 8, 9, 10)
+_PERCENT_COLUMNS = (7, 12)
+_MINUTES_COLUMN = 11
+
+
+def report_layout(gid: int) -> list[dict[str, Any]]:
+    """The tab in the book's colours: teal header, banded lines, a filter.
+
+    Every line below the header is formatted explicitly, so a line appended
+    later looks like the ones before it rather than like the header.
+    """
+    ink = _rgb("#1F2937")
+    white = _rgb("#FFFFFF")
+    width = len(REPORT_HEADER)
+    full = {"sheetId": gid, "startColumnIndex": 0, "endColumnIndex": width}
+
+    def column(index: int) -> dict[str, int]:
+        return {
+            "sheetId": gid,
+            "startRowIndex": 1,
+            "startColumnIndex": index,
+            "endColumnIndex": index + 1,
+        }
+
+    def number(index: int, pattern: str) -> dict[str, Any]:
+        return {
+            "repeatCell": {
+                "range": column(index),
+                "cell": {
+                    "userEnteredFormat": {
+                        "numberFormat": {"type": "NUMBER", "pattern": pattern},
+                        "horizontalAlignment": "CENTER",
+                    }
+                },
+                "fields": "userEnteredFormat(numberFormat,horizontalAlignment)",
+            }
+        }
+
     requests: list[dict[str, Any]] = [
         {
             "updateSheetProperties": {
@@ -125,33 +165,74 @@ def _layout(gid: int) -> list[dict[str, Any]]:
         },
         {
             "repeatCell": {
-                "range": {"sheetId": gid, "startRowIndex": 0, "endRowIndex": 1},
+                "range": {**full, "startRowIndex": 0, "endRowIndex": 1},
                 "cell": {
                     "userEnteredFormat": {
-                        "backgroundColor": _rgb("#0B2545"),
-                        "textFormat": {"bold": True, "foregroundColor": _rgb("#FFFFFF")},
+                        "backgroundColor": _rgb(_HEADER_COLOUR),
+                        "textFormat": {"bold": True, "fontSize": 11, "foregroundColor": white},
                         "wrapStrategy": "WRAP",
                         "verticalAlignment": "MIDDLE",
+                        "horizontalAlignment": "LEFT",
+                        "padding": {"left": 10, "right": 10, "top": 6, "bottom": 6},
                     }
                 },
                 "fields": (
-                    "userEnteredFormat"
-                    "(backgroundColor,textFormat,wrapStrategy,verticalAlignment)"
+                    "userEnteredFormat(backgroundColor,textFormat,wrapStrategy,"
+                    "verticalAlignment,horizontalAlignment,padding)"
                 ),
             }
         },
         {
             "repeatCell": {
-                "range": {
-                    "sheetId": gid,
-                    "startRowIndex": 1,
-                    "startColumnIndex": 0,
-                    "endColumnIndex": 1,
-                },
+                "range": {**full, "startRowIndex": 1},
                 "cell": {
-                    "userEnteredFormat": {"numberFormat": {"type": "DATE", "pattern": "dd.MM.yyyy"}}
+                    "userEnteredFormat": {
+                        "backgroundColor": white,
+                        "textFormat": {"bold": False, "fontSize": 10, "foregroundColor": ink},
+                        "wrapStrategy": "WRAP",
+                        "verticalAlignment": "MIDDLE",
+                        "padding": {"left": 10, "right": 10, "top": 6, "bottom": 6},
+                    }
                 },
-                "fields": "userEnteredFormat.numberFormat",
+                "fields": (
+                    "userEnteredFormat(backgroundColor,textFormat,wrapStrategy,"
+                    "verticalAlignment,padding)"
+                ),
+            }
+        },
+        {
+            "repeatCell": {
+                "range": column(0),
+                "cell": {
+                    "userEnteredFormat": {
+                        "numberFormat": {"type": "DATE", "pattern": "dd.MM.yyyy"},
+                        "horizontalAlignment": "RIGHT",
+                    }
+                },
+                "fields": "userEnteredFormat(numberFormat,horizontalAlignment)",
+            }
+        },
+        *(number(index, "#,##0") for index in _COUNT_COLUMNS),
+        # Stored as 12.5 for 12.5 %, as the dashboard shows it.
+        *(number(index, '0.0"%"') for index in _PERCENT_COLUMNS),
+        number(_MINUTES_COLUMN, "0.0"),
+        {
+            "updateDimensionProperties": {
+                "range": {"sheetId": gid, "dimension": "ROWS", "startIndex": 0, "endIndex": 1},
+                "properties": {"pixelSize": 40},
+                "fields": "pixelSize",
+            }
+        },
+        {"setBasicFilter": {"filter": {"range": {**full, "startRowIndex": 0}}}},
+        {
+            "addBanding": {
+                "bandedRange": {
+                    "range": {**full, "startRowIndex": 1},
+                    "rowProperties": {
+                        "firstBandColor": white,
+                        "secondBandColor": _rgb(_BAND_COLOUR),
+                    },
+                }
             }
         },
     ]
@@ -185,7 +266,9 @@ async def _ensure(mirror: SheetsMirror, client: httpx.AsyncClient) -> None:
             json={"values": [list(REPORT_HEADER)]},
         )
         try:
-            await mirror._call(client, "POST", ":batchUpdate", json={"requests": _layout(gid)})
+            await mirror._call(
+                client, "POST", ":batchUpdate", json={"requests": report_layout(gid)}
+            )
         except SheetsError as exc:
             logger.warning("sheets_report_styling_skipped error=%s", exc)
 

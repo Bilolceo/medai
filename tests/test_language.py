@@ -90,3 +90,18 @@ def test_a_word_spelled_in_both_alphabets_does_not_pass() -> None:
     assert not reply_fits("Да, доктор принимает. Қай соатда келishingiz қулай?", "ru")
     assert not reply_fits("Ёзувингиз тасдиқланди, уролог Темуr", "uz-cyrl")
     assert reply_fits("Ва алайкум ассалом. Қачон келишингиз қулай?", "uz-cyrl")
+
+
+def test_an_age_written_with_da_is_uzbek_not_russian() -> None:
+    """Live, 2026-10-16: "Ешим 38 да" was answered "Я — администратор..."."""
+    assert reply_script("Ешим 38 да") == "uz-cyrl"
+    history: list[ChatMessage] = [
+        {"role": "user", "content": "Сахр бор"},
+        {"role": "assistant", "content": "Нима масалада эдингиз?"},
+        {"role": "user", "content": "Уруг чикмеди умуман"},
+    ]
+    assert conversation_script(history, "Ешим 38 да") == "uz-cyrl"
+
+
+def test_russian_da_is_still_russian() -> None:
+    assert reply_script("Да, давайте запишусь на завтра") == "ru"

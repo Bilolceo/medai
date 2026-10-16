@@ -203,7 +203,16 @@ def line_requests(gid: int, number: int, year: int, month: int) -> list[dict[str
         }
     ]
     cells += [{"userEnteredFormat": {"backgroundColor": LINE_FILL}}] * (_LINE_COLUMNS - 1)
-    cells.append({"userEnteredValue": {"stringValue": MARKER}})
+    cells.append(
+        {
+            "userEnteredValue": {"stringValue": MARKER},
+            "userEnteredFormat": {
+                "backgroundColor": LINE_FILL,
+                "textFormat": {"bold": True, "foregroundColor": LINE_INK},
+                "verticalAlignment": "MIDDLE",
+            },
+        }
+    )
     return [
         {
             "updateCells": {

@@ -43,7 +43,10 @@ _UZBEK_WORDS = frozenset(
         "дохтир булади булдими буладими килиш килса килиб эди экан "
         "ва лекин учун билан кейин хозир эртага бугун кеча соат манзил "
         "хам мумкин мумкинми шунга ухшаш ухшаган дори узи узим кандай канака "
-        "духтир духтур доктор салом солом асалому саволим бор еди эди керакми",
+        "духтир духтур доктор салом солом асалому саволим бор еди эди керакми "
+        # Typed on a Russian keyboard: "Ешим 38 да", "Уруг чикмеди умуман".
+        "ешим ёшим ешимда ёшимда ёшда ешда умуман чикмеди чикмади чикади "
+        "оғрияпти огрияпти огрийапти куриб курсатинг беринг бериниг",
     )
 )
 _UZBEK_SUFFIX = re.compile(r"(лар|ларни|ларга|дан|даги|нинг|миз|сиз|ман|ган|япти|ябди|мокда)$")
@@ -54,9 +57,17 @@ _RUSSIAN_SUFFIX = re.compile(r"(ться|тся|ает|яет|ует|ите|ет
 _WORD = re.compile(r"[^\W\d_]+", re.UNICODE)
 
 
+# "38 да", "10 да": the Uzbek locative written apart from its number, not
+# the Russian "yes". Seen live 2026-10-16: "Ешим 38 да" was answered in Russian.
+_NUMBER_LOCATIVE = re.compile(r"\d\s*-?\s*да\b")
+
+
 def _cyrillic_scores(lowered: str) -> tuple[int, int]:
     """Points for Uzbek and for Russian in a Cyrillic message."""
     uzbek = russian = 0
+    if _NUMBER_LOCATIVE.search(lowered):
+        uzbek += 2
+        lowered = _NUMBER_LOCATIVE.sub(" ", lowered)
     for word in _WORD.findall(lowered):
         if word in _UZBEK_WORDS:
             uzbek += 2

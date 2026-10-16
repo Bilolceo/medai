@@ -21,3 +21,10 @@ def test_ekkan_meaning_planted_is_left_alone() -> None:
 def test_a_reply_without_mistakes_is_unchanged() -> None:
     text = "Assalomu alaykum. Men doktor Temurning administratoriman."
     assert spelling.fix(text) == text
+
+
+def test_the_introduction_split_in_two_is_joined() -> None:
+    assert (
+        spelling.fix("Мен доктор Темурнинг администратори ман — нима масалада эдингиз?")
+        == "Мен доктор Темурнинг администраториман — нима масалада эдингиз?"
+    )

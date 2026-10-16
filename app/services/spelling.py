@@ -9,6 +9,8 @@ import re
 
 # Seen live, 2026-10-16.
 _FIXES: dict[str, str] = {
+    "администратори ман": "администраториман",
+    "administratori man": "administratoriman",
     "администраториаман": "администраториман",
     "administratoriaman": "administratoriman",
     "ekkan": "ekan",
@@ -21,9 +23,14 @@ _DESCRIBING = re.compile(r"(?:li|siz|shi|ri|da|dan|gan|kan|qan|ham)$", re.IGNORE
 
 _WORD = re.compile(r"\w+", re.UNICODE)
 
+# Misspellings that split one word in two: matched as a phrase.
+_PHRASES = {wrong: right for wrong, right in _FIXES.items() if " " in wrong}
+
 
 def fix(text: str) -> str:
     """`text` with the known misspellings corrected, keeping capitalisation."""
+    for wrong, joined in _PHRASES.items():
+        text = re.sub(rf"\b{re.escape(wrong)}\b", joined, text, flags=re.IGNORECASE)
     out: list[str] = []
     last = 0
     previous = ""
