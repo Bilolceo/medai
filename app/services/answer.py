@@ -27,7 +27,7 @@ from app.repositories.appointment import AppointmentRepository
 from app.repositories.doctor import DoctorRepository
 from app.repositories.knowledge_base import KnowledgeBaseMatch
 from app.repositories.knowledge_document import ChunkMatch
-from app.services import booking_offer, medical_safety, price_guard, repetition
+from app.services import booking_offer, medical_safety, price_guard, repetition, spelling
 from app.services import persona as persona_service
 from app.services.language import (
     clear_script,
@@ -437,6 +437,7 @@ async def generate_answer(
         script=script,
         rules=quotable,
         earlier=[turn["content"] for turn in history or [] if turn.get("role") == "assistant"],
+        asked=user_message,
     )
     # Last, so a rewrite above cannot put it back: the offer to book is made
     # once a conversation and never after a no (see app.services.booking_offer).
@@ -446,6 +447,8 @@ async def generate_answer(
     # administratoriman" in the same conversation reads as a machine.
     if booking_offer.introduced_before(own_turns):
         reply = booking_offer.drop_intro(reply)
+    reply = repetition.drop_echoed_opening(reply, own_turns)
+    reply = spelling.fix(reply)
     if not booking_offer.wants_to_book(user_message, patient_turns) and (
         booking_offer.offered_before(own_turns)
         or booking_offer.declined([*patient_turns, user_message])
@@ -565,6 +568,7 @@ async def _enforce_fresh(
     script: str,
     rules: Sequence[str],
     earlier: Sequence[str],
+    asked: str = "",
 ) -> str:
     """The reply, rewritten once if it says again what was already said.
 
@@ -572,7 +576,7 @@ async def _enforce_fresh(
     alphabet rule, or still repeats, is dropped and the first reply sent: a
     repeat is a smaller fault than any of those.
     """
-    lines = repetition.repeated(reply, earlier)
+    lines = repetition.repeated(reply, earlier, asked)
     if not lines:
         return reply
     logger.info("reply_repeated", extra={"lines": lines[:3]})
@@ -586,7 +590,7 @@ async def _enforce_fresh(
         medical_safety.check(second) is not None
         or price_guard.check(second, rules)
         or (script in _SCRIPT_NAMES and not reply_fits(second, script))
-        or repetition.repeated(second, earlier)
+        or repetition.repeated(second, earlier, asked)
     ):
         return reply
     return second
