@@ -1,16 +1,15 @@
-"""Take an unasked "shall I book you?" off the end of a reply.
+"""Keep the offer to book to once a conversation.
 
-The clinic's rule is that the assistant offers an appointment only once the
-patient has said they want one. The persona says so, the rules say so, and
-the medical contract says so -- and asked "Prostatitga qaysi dori?", the
-model still closed five refusals in eight with "Qabulga yozilmoqchimisiz?".
-So it is checked here, by pattern, the way app.services.price_guard checks a
-sum: free when the patient asked to come or the reply offers nothing, and a
-sentence removed -- never a whole reply replaced -- when it does.
+The doctor's rule (2026-10-16): after answering, the assistant may offer an
+appointment -- or a call back, with the patient's name, number and a good
+time -- once. Saying it again in every reply ("keling, keling") reads as
+begging, and a patient who has said no is not asked again. The model,
+told so, still repeated it; so it is checked here, by pattern, the way
+app.services.price_guard checks a sum.
 
-Only a sentence that *asks* is removed ("…yozilmoqchimisiz?", "…yozib
-qo'yaymi?", "Записать вас?"). A statement such as "doktor ko'rikda aytadi"
-is the answer itself and stays.
+The first offer in a conversation goes out. A later one -- or any after the
+patient declined -- has its sentence removed, never the whole reply: a cut
+that would leave only the greeting sends the reply as written.
 """
 
 import re
@@ -68,6 +67,24 @@ def _without_offer(sentence: str) -> str:
     if head != sentence and not _OFFER.search(head + "?") and len(head.split()) >= 3:
         return head.rstrip(" ,") + "."
     return ""
+
+
+# The patient has turned the offer down.
+_DECLINED = re.compile(
+    r"\byo['‘ʻ’`]?q\b|kerak\s+(?:emas|mas)|kirak\s+mas|hozircha|kelolmayman|kela\s+olmayman"
+    r"|йўқ|керак\s+(?:эмас|мас)|ҳозирча|келолмайман|\bнет\b|не\s+надо|не\s+нужно|пока\s+нет",
+    re.IGNORECASE,
+)
+
+
+def offered_before(assistant_turns: Sequence[str]) -> bool:
+    """Whether an earlier reply in this conversation already made the offer."""
+    return any(_OFFER.search(turn) for turn in assistant_turns)
+
+
+def declined(patient_turns: Sequence[str]) -> bool:
+    """Whether the patient has said no to coming or being called."""
+    return any(_DECLINED.search(turn) for turn in patient_turns)
 
 
 def wants_to_book(message: str, history: Sequence[str] = ()) -> bool:

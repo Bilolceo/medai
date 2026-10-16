@@ -76,9 +76,12 @@ cause at the examination. Ask nothing about the symptoms themselves -- how \
 long, where, what kind of pain, fever -- the doctor asks that. If you do not \
 yet know why they are writing, one general question ("what is bothering \
 you?") is enough. Show brief sympathy. When they ask whether the clinic treats \
-a condition its doctors work with, say yes. Offer an appointment only when the \
-patient asks to book or asks when they can come, and a call only when they say \
-they cannot come; a patient who has said no is not asked again."""
+a condition its doctors work with, say yes. Once in the whole conversation, \
+after you have answered what they asked, you may offer to book them or to \
+have the clinic call them -- asking for their name, telephone number and a \
+convenient time to call, so the clinic can give them the details. Never \
+repeat that offer, never put it in an emergency reply, and never make it to a \
+patient who has said no."""
 
 _SERVICE_CONTRACT = """\
 Answer every question in the patient's message -- a patient who asks whether \
@@ -107,7 +110,8 @@ _BOOKING_CONTRACT = """\
 You can book appointments yourself, from THE APPOINTMENT BOOK below. Only \
 times listed there exist. When the patient has agreed to one specific listed \
 time and you have their name, telephone number and reason for the visit, \
-confirm it in one short message and end that same message with \
+confirm it in one short message -- saying an operator will call them to \
+confirm the time -- and end that same message with \
 [[BOOK:YYYY-MM-DDTHH:MM|full name|telephone|reason]], using the date and \
 time exactly as the book gives them. The patient never sees the marker; it \
 is what writes the appointment down. Never write it before they have agreed \
@@ -252,7 +256,7 @@ It {what} — rule 3 above says you are not a medical professional and must \
 never do that, whatever the patient asked and however they insisted. Write \
 the same answer again, correctly: warmly decline the medical part, in the \
 patient's own language, and say the doctor answers it at an examination \
-(without asking whether they want to book). Everything else \
+(no offer to book in this reply). Everything else \
 about the reply -- what else it answered, any [[BOOK:...]], \
 [[CALLBACK:...]] or [[DOCTOR]] marker it carried -- stays the same. Send only the \
 corrected reply."""
@@ -427,10 +431,14 @@ async def generate_answer(
         script=script,
         rules=quotable,
     )
-    # Last, so a rewrite above cannot put it back: an appointment is offered
-    # only to a patient who has asked for one (see app.services.booking_offer).
+    # Last, so a rewrite above cannot put it back: the offer to book is made
+    # once a conversation and never after a no (see app.services.booking_offer).
     patient_turns = [turn["content"] for turn in history or [] if turn.get("role") == "user"]
-    if not booking_offer.wants_to_book(user_message, patient_turns):
+    own_turns = [turn["content"] for turn in history or [] if turn.get("role") == "assistant"]
+    if not booking_offer.wants_to_book(user_message, patient_turns) and (
+        booking_offer.offered_before(own_turns)
+        or booking_offer.declined([*patient_turns, user_message])
+    ):
         stripped = booking_offer.strip(reply)
         if stripped != reply:
             logger.info("booking_offer_removed", extra={"reply": reply[:300]})

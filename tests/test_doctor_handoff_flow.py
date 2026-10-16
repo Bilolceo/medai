@@ -184,14 +184,47 @@ async def test_a_photo_from_the_app_unpins_it(
         assert await _flag_state(db_session, seed) is None
 
 
-async def test_an_echo_for_an_unpinned_conversation_changes_nothing(
+async def test_a_person_writing_in_the_app_takes_the_conversation_off_the_bot(
     db_session: AsyncSession,
     seed: Seed,
     as_tenant: Callable[[uuid.UUID], AbstractContextManager[None]],
 ) -> None:
+    """The doctor (2026-10-16): when I write to a patient myself, the bot
+    should stop on its own. The message is kept in the transcript too."""
     with as_tenant(seed.tenant_a.id):
-        await _echo(db_session, seed, "Salom")
+        await _echo(db_session, seed, "Salom, men doktor Temur. Ertaga kelavering.")
+        conversation = await db_session.get(Conversation, seed.a.conversation.id)
+        assert conversation is not None
+        await db_session.refresh(conversation)
+        assert conversation.is_bot_enabled is False
         assert await _flag_state(db_session, seed) is None
+        messages = await MessageRepository(db_session).list_for_conversation(seed.a.conversation.id)
+        assert any(
+            m.sender == MessageSender.OPERATOR and m.content.startswith("Salom, men doktor")
+            for m in messages
+        )
+
+
+async def test_the_bots_own_echo_leaves_it_answering(
+    db_session: AsyncSession,
+    seed: Seed,
+    as_tenant: Callable[[uuid.UUID], AbstractContextManager[None]],
+) -> None:
+    from app.services.conversation import record_outbound_message
+
+    with as_tenant(seed.tenant_a.id):
+        await record_outbound_message(
+            db_session,
+            conversation_id=seed.a.conversation.id,
+            channel_type="instagram",
+            text="Doktor qabuli 300 000 soʻm.",
+        )
+        await db_session.flush()
+        await _echo(db_session, seed, "Doktor qabuli  300 000 soʻm.")
+        conversation = await db_session.get(Conversation, seed.a.conversation.id)
+        assert conversation is not None
+        await db_session.refresh(conversation)
+        assert conversation.is_bot_enabled is True
 
 
 async def test_an_echo_to_somebody_who_never_wrote_is_ignored(

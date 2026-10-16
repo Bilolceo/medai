@@ -344,6 +344,11 @@ async def reply_as_operator(
         sender=MessageSender.OPERATOR,
     )
     await handoff.clear(session, conversation.id)
+    # A person has answered: the assistant steps back from this conversation
+    # until someone presses "Botga qaytarish", so it never talks over them.
+    if conversation.is_bot_enabled:
+        conversation.is_bot_enabled = False
+        await session.flush()
     await session.commit()
     return MessageOut(
         id=message.id,

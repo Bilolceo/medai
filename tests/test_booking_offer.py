@@ -1,4 +1,4 @@
-"""app.services.booking_offer: an appointment is offered only when asked for.
+"""app.services.booking_offer: the offer to book is made once a conversation.
 
 The replies below are the model's own, from dry runs against the live
 prompt on 2026-10-14.
@@ -102,3 +102,25 @@ def test_a_marker_survives_the_cut() -> None:
 )
 def test_who_has_asked_to_book(message: str, history: tuple[str, ...], wants: bool) -> None:
     assert booking_offer.wants_to_book(message, history) is wants
+
+
+def test_an_offer_already_made_is_seen() -> None:
+    assert booking_offer.offered_before(
+        ["Va alaykum assalom.", "Doktor ko'rikda aytadi. Qabulga yozilmoqchimisiz?"]
+    )
+    assert not booking_offer.offered_before(["Doktor qabuli 300 000 soʻm."])
+
+
+@pytest.mark.parametrize(
+    ("turns", "no"),
+    [
+        (["Yo'q, rahmat"], True),
+        (["Kirak mas"], True),
+        (["Hozircha bormayman"], True),
+        (["Нет, не надо"], True),
+        (["Qabul narxi qancha?"], False),
+        (["Rahmat"], False),
+    ],
+)
+def test_a_patient_who_said_no(turns: list[str], no: bool) -> None:
+    assert booking_offer.declined(turns) is no

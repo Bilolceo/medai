@@ -781,13 +781,19 @@ async def note_clinic_reply(
     session_factory: Callable[[], AbstractAsyncContextManager[AsyncSession]] = db_session,
 ) -> None:
     """ARQ job: the clinic's account sent this patient a message; if a person
-    typed it in the Instagram app, the patient is no longer waiting on one.
+    typed it in the Instagram app, that person has the conversation now.
 
     Instagram echoes every message the account sends, the assistant's too,
     with nothing that says who sent it. Run a little after the echo, so the
     assistant's own send has been recorded by then: an echo whose text is one
     of the messages recorded in the last few minutes is ours, and anything
     else -- including a photo, which the assistant never sends -- a person's.
+
+    A person's message unpins the conversation, is written into the
+    transcript so the dashboard shows what was said, and takes the assistant
+    off this conversation: the doctor asked that the bot stop by itself the
+    moment somebody from the clinic writes, rather than talk over them. It
+    comes back with "Botga qaytarish" on the dashboard.
     """
     token = set_current_tenant(uuid.UUID(tenant_id))
     try:
@@ -798,7 +804,7 @@ async def note_clinic_reply(
             if user is None:
                 return
             conversation = await ConversationRepository(session).get_open_for_user(user.id)
-            if conversation is None or conversation.needs_doctor_since is None:
+            if conversation is None:
                 return
             if (text or "").strip():
                 since = datetime.now(UTC) - timedelta(minutes=10)
@@ -814,8 +820,23 @@ async def note_clinic_reply(
                 if any(handoff.same_message(text, content) for content in recent):
                     return
             await handoff.clear(session, conversation.id)
+            if (text or "").strip():
+                await record_outbound_message(
+                    session,
+                    conversation_id=conversation.id,
+                    channel_type="instagram",
+                    text=text or "",
+                    sender=MessageSender.OPERATOR,
+                )
+            paused = conversation.is_bot_enabled
+            if paused:
+                conversation.is_bot_enabled = False
+                await session.flush()
             await session.commit()
-            logger.info("clinic_replied_in_app", extra={"conversation_id": str(conversation.id)})
+            logger.info(
+                "clinic_replied_in_app",
+                extra={"conversation_id": str(conversation.id), "bot_paused": paused},
+            )
     finally:
         reset_current_tenant(token)
 
