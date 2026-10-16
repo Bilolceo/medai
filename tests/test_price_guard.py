@@ -182,6 +182,8 @@ def test_left_alone_by_the_audit(reply: str) -> None:
         ("operatsiyachi", "Qabul narxi qancha?", True),
         ("А денервация?", "Сколько стоит приём?", True),
         ("Имплант хақида?", "Ака хамси бўлиб қанча расход кетади", True),
+        # Simulation, 2026-10-16: a five-word Russian follow-up.
+        ("а операция при раннем семяизвержении?", "сколько стоит консультация", True),
         ("Rahmat", "Qabul narxi qancha?", False),
         ("Yaxshi, ertaga yozilaman", "Qabul narxi qancha?", False),
         ("Denervatsiya ham qilasizlarmi?", "Qabul narxi qancha?", False),
@@ -193,3 +195,12 @@ def test_a_short_follow_up_to_a_price_question_asks_one_too(
     message: str, previous: str | None, asks: bool
 ) -> None:
     assert price_guard.asks_price(message, previous) is asks
+
+
+def test_a_follow_up_to_a_follow_up_still_asks_the_price() -> None:
+    """Simulation, 2026-10-16: "narxi qancha" / "qabul" / "operatsiyachi" --
+    the third message was answered without the rule's price because only the
+    message right before it ("qabul") was looked at."""
+    assert price_guard.asks_price("operatsiyachi", ["narxi qancha", "qabul"])
+    assert price_guard.asks_price("implant-chi", ["narxi qancha", "qabul", "operatsiyachi"])
+    assert not price_guard.asks_price("rahmat", ["narxi qancha", "qabul"])

@@ -158,21 +158,21 @@ _ACK = re.compile(
 _FOLLOW_UP = re.compile(r"chi\b|чи\b|^\s*[аa]\s", re.IGNORECASE)
 
 
-def asks_price(message: str, previous: str | None = None) -> bool:
+def asks_price(message: str, previous: str | Sequence[str] | None = None) -> bool:
     """Whether the patient's message asks what something costs.
 
-    `previous` is the patient's message before it: a short follow-up to a
-    price question ("Operatsiya-chi?") asks one too.
+    `previous` is the patient's message before it, or the last few: a short
+    follow-up to a price question ("Operatsiya-chi?") asks one too -- and so
+    does a follow-up to a follow-up ("narxi qancha" / "qabul" /
+    "operatsiyachi"), which is why it looks back up to three messages.
     """
     if _ASKS_PRICE.search(message):
         return True
-    # "Имплант хақида?" right after "қанча расход кетади?" names the service
-    # the patient was already asking the price of.
+    earlier = [previous] if isinstance(previous, str) else list(previous or [])[-3:]
+    words = len(message.split())
+    short_follow_up = _FOLLOW_UP.search(message) or (words <= 2 and not _ACK.search(message))
     return bool(
-        previous
-        and _ASKS_PRICE.search(previous)
-        and (_FOLLOW_UP.search(message) or (len(message.split()) <= 2 and not _ACK.search(message)))
-        and len(message.split()) <= 4
+        words <= 6 and short_follow_up and any(_ASKS_PRICE.search(text) for text in earlier)
     )
 
 

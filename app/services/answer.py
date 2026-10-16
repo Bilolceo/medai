@@ -411,9 +411,7 @@ async def generate_answer(
     )
     # The rules' prices are said only to a patient asking one; any other
     # message is answered with no sum at all.
-    previous = next(
-        (turn["content"] for turn in reversed(history or []) if turn.get("role") == "user"), None
-    )
+    previous = [turn["content"] for turn in history or [] if turn.get("role") == "user"]
     quotable = rules if price_guard.asks_price(user_message, previous) else []
     reply = await _enforce_price(
         reply,

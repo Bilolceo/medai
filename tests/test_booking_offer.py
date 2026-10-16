@@ -112,6 +112,19 @@ def test_who_has_asked_to_book(message: str, history: tuple[str, ...], wants: bo
     assert booking_offer.wants_to_book(message, history) is wants
 
 
+@pytest.mark.parametrize(
+    "turn",
+    [
+        "Ismingiz va telefoningizni qoldiring, operator qulay vaqtda qo‘ng‘iroq qiladi.",
+        "Исм ва телефонингизни қолдирсангиз, оператор қўнғироқ қилади.",
+        "Если хотите записаться, оставьте имя, номер телефона — оператор свяжется.",
+    ],
+)
+def test_the_call_back_offer_in_its_other_wordings_is_seen(turn: str) -> None:
+    """Simulation, 2026-10-16: each of these went out twice in one chat."""
+    assert booking_offer.offered_before([turn])
+
+
 def test_an_offer_already_made_is_seen() -> None:
     assert booking_offer.offered_before(
         ["Va alaykum assalom.", "Doktor ko'rikda aytadi. Qabulga yozilmoqchimisiz?"]
