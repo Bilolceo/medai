@@ -1305,6 +1305,12 @@ async def answer_comment(
                     sender_external_id=author_external_id,
                     text=f"💬 Izoh: {text}",
                 )
+                # The comment arrives with the author's handle, and nothing
+                # else will ever tell us it: without it the dashboard lists
+                # them by Instagram's 16-digit id (seen 2026-10-16).
+                author = await session.get(User, inbound.user_id)
+                if author is not None and username and not author.username:
+                    author.username = username.lstrip("@")
                 await session.commit()
 
             reply = await generate_answer(

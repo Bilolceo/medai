@@ -5,6 +5,7 @@ and a comment everyone can read.
 import json
 from collections.abc import Callable
 from contextlib import AbstractContextManager
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -155,3 +156,48 @@ def test_a_voice_message_parses_as_an_audio_attachment() -> None:
     assert event.message is not None
     assert event.message.text is None
     assert [a.type for a in event.message.attachments] == ["audio"]
+
+
+async def test_a_comment_author_is_kept_under_their_instagram_handle(
+    db_session: Any, seed: Any
+) -> None:
+    """Live, 2026-10-16: comment authors were listed on the dashboard by
+    Instagram's 16-digit id. The handle comes with the comment; it is kept."""
+    from contextlib import asynccontextmanager
+
+    from sqlalchemy import select
+
+    from app.core.tenant_context import reset_current_tenant, set_current_tenant
+    from app.models.user import User
+    from app.workers.tasks import answer_comment
+    from tests.test_conversation_memory import NoEmbeddings, ScriptedLLM
+    from tests.test_worker_tasks import FakeInstagramClient
+
+    @asynccontextmanager
+    async def sessions() -> Any:
+        yield db_session
+
+    llm = ScriptedLLM()
+    llm.say("Doktor qabuli 300 000 so'm.")
+    await answer_comment(
+        {},
+        str(seed.tenant_a.id),
+        str(seed.a.channel.id),
+        "comment-1",
+        "1106997565421640",
+        "dilnoza_88",
+        "Qabul narxi qancha?",
+        session_factory=sessions,
+        embedding_provider=NoEmbeddings(),
+        llm_provider=llm,
+        client=FakeInstagramClient(),
+    )
+
+    token = set_current_tenant(seed.tenant_a.id)
+    try:
+        user = (
+            await db_session.execute(select(User).where(User.external_id == "1106997565421640"))
+        ).scalar_one()
+    finally:
+        reset_current_tenant(token)
+    assert user.username == "dilnoza_88"
