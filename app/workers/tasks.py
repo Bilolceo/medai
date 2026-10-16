@@ -1201,6 +1201,10 @@ async def answer_voice_note(
             if not await bot_replies_enabled(session, tenant_uuid):
                 return
             conversation = await session.get(Conversation, conversation_uuid)
+            # Staff who have taken the conversation over hear the recording
+            # themselves; the bot says nothing, as with a photo or a reel.
+            if conversation is not None and not conversation.is_bot_enabled:
+                return
             if conversation is not None and not await _may_answer(
                 session, channel_id=uuid.UUID(channel_id), user_id=conversation.user_id
             ):

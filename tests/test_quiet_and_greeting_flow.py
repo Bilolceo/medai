@@ -528,3 +528,29 @@ async def test_a_photo_is_not_acknowledged_while_the_assistant_is_off(
     assert stored == [["https://example.com/a.jpg"]]
     assert acknowledged == []
     assert told == [1]
+
+
+async def test_a_voice_note_gets_no_bot_line_where_staff_have_taken_over(
+    db_session: AsyncSession, seed: Seed, as_tenant: AsTenant
+) -> None:
+    """Live, 2026-10-16: after an operator answered from the Instagram app
+    and the conversation was taken off the bot, a voice note was still met
+    with "Ovozli xabaringiz qabul qilindi…"."""
+    conversation = await db_session.get(Conversation, seed.a.conversation.id)
+    assert conversation is not None
+    conversation.is_bot_enabled = False
+    await db_session.flush()
+    adapter, client = _fake_adapter()
+
+    await answer_voice_note(
+        {},
+        str(seed.tenant_a.id),
+        str(seed.a.channel.id),
+        str(seed.a.conversation.id),
+        SENDER,
+        session_factory=_factory(db_session),
+        adapter=adapter,
+    )
+
+    assert client.calls == []
+    assert conversation.needs_doctor_since is not None
