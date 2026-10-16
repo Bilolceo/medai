@@ -1918,7 +1918,11 @@ document.getElementById("botToggle").addEventListener("click", async () => {
 function patientLabel(c) {
   if (c.patient_username) return "@" + c.patient_username;
   if (c.patient_name) return c.patient_name;
-  return c.patient_external_id || "—";
+  // A long run of digits is Instagram's internal id -- someone who only
+  // commented before handles were kept. The last four tell two apart.
+  const id = c.patient_external_id || "";
+  if (/^\d{10,}$/.test(id)) return "Instagram foydalanuvchisi ·" + id.slice(-4);
+  return id || "—";
 }
 
 // The search runs on the server (see the `q` parameter), because the list is
