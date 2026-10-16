@@ -182,6 +182,49 @@ async def test_process_inbound_message_records_the_reply_in_the_transcript(
     assert bot_messages[0].channel == "instagram"
 
 
+async def test_no_reply_goes_out_once_an_operator_has_answered_meanwhile(
+    db_session: AsyncSession,
+    seed: Seed,
+    as_tenant: Callable[[UUID], AbstractContextManager[None]],
+) -> None:
+    """Live, 2026-10-16: the operator wrote "Qabulga yozilish uchun: ☎..."
+    while the model was still thinking, and the bot's own offer went out
+    under it. Whoever answers while the reply is being written has the
+    conversation; the bot keeps quiet."""
+    from sqlalchemy import update
+
+    from app.models.conversation import Conversation
+
+    adapter, client = _fake_adapter()
+
+    class OperatorAnswersWhileThinking(FakeLLMProvider):
+        async def generate(self, system_prompt: str, messages: list[ChatMessage]) -> str:
+            await db_session.execute(
+                update(Conversation)
+                .where(Conversation.id == seed.a.conversation.id)
+                .values(is_bot_enabled=False)
+            )
+            return await super().generate(system_prompt, messages)
+
+    await process_inbound_message(
+        {},
+        str(seed.tenant_a.id),
+        str(seed.a.channel.id),
+        str(seed.a.conversation.id),
+        SENDER,
+        "Qabulga qanday yozilsam bo'ladi?",
+        session_factory=_session_factory(db_session),
+        embedding_provider=FakeEmbeddingProvider(QUERY_VECTOR),
+        llm_provider=OperatorAnswersWhileThinking(reply=MODEL_REPLY),
+        adapter=adapter,
+    )
+
+    assert client.calls == []
+    with as_tenant(seed.tenant_a.id):
+        messages = await MessageRepository(db_session).list_recent(seed.a.conversation.id, 10)
+    assert [m for m in messages if m.sender == MessageSender.BOT] == []
+
+
 async def test_process_inbound_message_passes_prior_turns_to_the_llm(
     db_session: AsyncSession,
     seed: Seed,

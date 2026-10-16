@@ -319,6 +319,19 @@ async def process_inbound_message(
                 else None
             )
 
+            # The model can think for most of a minute, and an operator who
+            # answers in that minute has taken the conversation (seen
+            # 2026-10-16: "Qabulga yozilish uchun: ☎..." and then the bot's
+            # own offer under it). What the turn wrote down -- a booking, a
+            # callback -- stays; only the second voice is held back.
+            await session.refresh(conversation, ["is_bot_enabled"])
+            if not conversation.is_bot_enabled:
+                await session.commit()
+                logger.info(
+                    "reply_dropped_clinic_took_over", extra={"conversation_id": conversation_id}
+                )
+                return
+
             delivery_error: str | None = None
             try:
                 delivered_over = await send_reply(
