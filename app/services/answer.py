@@ -27,7 +27,7 @@ from app.repositories.appointment import AppointmentRepository
 from app.repositories.doctor import DoctorRepository
 from app.repositories.knowledge_base import KnowledgeBaseMatch
 from app.repositories.knowledge_document import ChunkMatch
-from app.services import booking_offer, medical_safety, price_guard
+from app.services import booking_offer, medical_safety, price_guard, repetition
 from app.services import persona as persona_service
 from app.services.language import (
     clear_script,
@@ -429,6 +429,15 @@ async def generate_answer(
         script=script,
         rules=quotable,
     )
+    reply = await _enforce_fresh(
+        reply,
+        provider=provider,
+        system_prompt=system_prompt,
+        conversation=conversation,
+        script=script,
+        rules=quotable,
+        earlier=[turn["content"] for turn in history or [] if turn.get("role") == "assistant"],
+    )
     # Last, so a rewrite above cannot put it back: the offer to book is made
     # once a conversation and never after a no (see app.services.booking_offer).
     patient_turns = [turn["content"] for turn in history or [] if turn.get("role") == "user"]
@@ -534,3 +543,50 @@ async def _enforce_script(
             return second
     logger.warning("reply_wrong_script_again", extra={"script": script})
     return best
+
+
+_SAID_BEFORE = """
+
+YOUR LAST REPLY REPEATED WHAT YOU HAD ALREADY SAID
+These were already sent to this patient earlier in the conversation:
+{lines}
+Think again about what they are asking now, and answer that -- in new words, \
+with something they have not been told yet, or by asking what they mean if \
+the question is the same as before. Keep any [[...]] marker as it was. Send \
+only the new reply."""
+
+
+async def _enforce_fresh(
+    reply: str,
+    *,
+    provider: LLMProvider,
+    system_prompt: str,
+    conversation: Sequence[ChatMessage],
+    script: str,
+    rules: Sequence[str],
+    earlier: Sequence[str],
+) -> str:
+    """The reply, rewritten once if it says again what was already said.
+
+    See app.services.repetition. A rewrite that breaks a medical, price or
+    alphabet rule, or still repeats, is dropped and the first reply sent: a
+    repeat is a smaller fault than any of those.
+    """
+    lines = repetition.repeated(reply, earlier)
+    if not lines:
+        return reply
+    logger.info("reply_repeated", extra={"lines": lines[:3]})
+    instruction = _SAID_BEFORE.format(lines="\n".join(f"- {line}" for line in lines[:4]))
+    try:
+        second = await provider.generate(system_prompt + instruction, list(conversation))
+    except Exception:
+        logger.exception("reply_fresh_rewrite_failed")
+        return reply
+    if (
+        medical_safety.check(second) is not None
+        or price_guard.check(second, rules)
+        or (script in _SCRIPT_NAMES and not reply_fits(second, script))
+        or repetition.repeated(second, earlier)
+    ):
+        return reply
+    return second
