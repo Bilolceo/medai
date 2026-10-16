@@ -841,6 +841,30 @@ async def note_clinic_reply(
         reset_current_tenant(token)
 
 
+async def mirror_daily_report(
+    ctx: dict[str, Any],
+    *,
+    session_factory: Callable[[], AbstractAsyncContextManager[AsyncSession]] = db_session,
+) -> None:
+    """ARQ cron: the dashboard's report, today's and yesterday's line, into
+    the clinic's sheet (see app.services.sheet_report). Nothing when no
+    sheet is configured."""
+    from app.services.sheet_report import mirror_report
+    from app.services.sheets import get_mirror
+
+    if get_mirror() is None:
+        return
+    today = datetime.now(CLINIC_TIMEZONE).date()
+    async with session_factory() as session:
+        tenant_ids = list((await session.execute(select(Tenant.id))).scalars())
+        for tid in tenant_ids:
+            token = set_current_tenant(tid)
+            try:
+                await mirror_report(session, tid, [today - timedelta(days=1), today])
+            finally:
+                reset_current_tenant(token)
+
+
 async def label_booking_weekdays(ctx: dict[str, Any]) -> None:
     """ARQ cron: the weekday in front of each date in the appointment book."""
     await label_appointment_weekdays()
@@ -1361,6 +1385,9 @@ class WorkerSettings:
         # Hourly, so a date someone changed by hand catches up. The startup
         # refresh is in _start_doctor_telegram.
         cron(label_booking_weekdays, minute={15}),
+        # Hourly: today's report line fills in as the day goes, and
+        # yesterday's gets its last hours once more after midnight.
+        cron(mirror_daily_report, minute={25}),
         # 02:30 in Tashkent: the day's conversations are over and the
         # suggestions are waiting when the clinic opens.
         cron(review_conversations, hour={21}, minute={30}),

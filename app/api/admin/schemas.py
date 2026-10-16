@@ -42,6 +42,10 @@ class SessionInfo(BaseModel):
     permissions: list[Permission]
     # The token every mutating request must echo back in X-CSRF-Token.
     csrf_token: str
+    # The clinic's Google Sheet, when one is configured: the report, the
+    # leads and the appointment book are mirrored there, and the dashboard
+    # links to it. None when no sheet is set up.
+    sheet_url: str | None = None
 
 
 # --- conversations ---------------------------------------------------------

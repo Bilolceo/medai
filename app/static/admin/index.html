@@ -646,7 +646,9 @@
 
   .rp-toolbar { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
   .report-period { font-size: var(--fs-sm); color: var(--ink-3); font-weight: 500; }
-  #reportPrint { margin-left: auto; }
+  #reportSheet { margin-left: auto; }
+  #reportSheet[hidden] + #reportPrint { margin-left: auto; }
+  #reportSheet svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
   #reportPrint svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
   /* A refetch keeps the old picture, dimmed, instead of flashing empty. */
   .rp-body { transition: opacity .15s; }
@@ -1063,6 +1065,7 @@
         <button class="chip" data-days="365" aria-pressed="false">1 yil</button>
       </div>
       <span class="report-period" id="reportPeriod"></span>
+      <a class="act" id="reportSheet" target="_blank" rel="noopener" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h10l4 4v14H5zM15 3v4h4M8 12h8M8 16h8M12 10v8"/></svg>Google Sheets</a>
       <button class="act" id="reportPrint" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2M6 14h12v7H6z"/></svg>Chop etish</button>
     </div>
 
@@ -3776,6 +3779,12 @@ document.getElementById("staffForm").addEventListener("submit", async (e) => {
     const me = await api("/session");
     CSRF = me.csrf_token;
     ROLE = me.role;
+    // The same report, kept day by day in the clinic's own sheet.
+    if (me.sheet_url) {
+      const sheet = document.getElementById("reportSheet");
+      sheet.href = me.sheet_url;
+      sheet.hidden = false;
+    }
     PERMISSIONS = new Set(me.permissions || []);
     applyPermissions();
     refreshSuggestBadge().catch(() => {});

@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.admin.schemas import SessionInfo
 from app.api.auth import get_current_operator, get_current_session
+from app.core.config import get_settings
 from app.core.db import get_db_session
 from app.core.roles import permissions_for
 from app.core.session import Session
@@ -43,4 +44,9 @@ async def current_session(
         tenant_id=tenant.id,
         tenant_name=tenant.name,
         csrf_token=session.csrf_token,
+        sheet_url=(
+            f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit"
+            if (sheet_id := get_settings().google_sheets_spreadsheet_id)
+            else None
+        ),
     )
