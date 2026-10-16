@@ -40,3 +40,17 @@ def test_an_address_or_a_goodbye_may_be_said_again() -> None:
 
 def test_the_first_reply_has_nothing_to_repeat() -> None:
     assert repetition.repeated(EARLIER[0], []) == []
+
+
+def test_the_same_advice_with_one_word_swapped_is_a_repeat() -> None:
+    """Simulation, 2026-10-16: "Eng to'g'ri yo'l" then "Eng to'g'ri chora",
+    the rest of the reply the same."""
+    first = (
+        "Eng toʻgʻri yoʻl — shifokorga koʻrinish: doktor koʻrik va tekshiruv oʻtkazadi, kerak "
+        "boʻlsa tahlil yoki UZI belgilaydi."
+    )
+    second = (
+        "Eng toʻgʻri chora — shifokorga koʻrinish: doktor koʻrik oʻtkazadi va kerak boʻlsa "
+        "tahlil yoki UZI belgilaydi."
+    )
+    assert repetition.repeated(second, [first])

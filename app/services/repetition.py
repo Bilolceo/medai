@@ -16,7 +16,7 @@ import re
 from collections.abc import Sequence
 
 _MIN_SENTENCE = 30
-_SAME_WORDS = 0.6
+_SAME_WORDS = 0.5
 
 # Lines that are fine to say again: a goodbye, a thank-you, the address or a
 # number the patient asked for twice.
