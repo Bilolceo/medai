@@ -222,7 +222,10 @@ async def upsert_day(mirror: SheetsMirror, cells: list[Any], day: date) -> None:
             client,
             "POST",
             f"/values/{REPORT_SHEET}!A:{_LAST_COLUMN}:append",
-            params={"valueInputOption": "RAW", "insertDataOption": "INSERT_ROWS"},
+            # No INSERT_ROWS: an inserted row takes the header's format and
+            # the date shows as 46311. The default fills the blank rows the
+            # layout already formatted as dates (see app.services.sheets).
+            params={"valueInputOption": "RAW"},
             json={"values": [cells]},
         )
 
