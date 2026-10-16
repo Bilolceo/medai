@@ -491,6 +491,18 @@ async def fire_debounce_window(
                 sender_external_id,
                 exc,
             )
+            # And on the dashboard: a log line is read by nobody, while a
+            # conversation pinned "Doktor javobi kerak" is answered by a
+            # person the same day. Best effort -- a failure here must not
+            # hide the one above.
+            with suppress(Exception):
+                token = set_current_tenant(uuid.UUID(tenant_id))
+                try:
+                    async with session_factory() as session:
+                        await handoff.flag(session, uuid.UUID(conversation_id))
+                        await session.commit()
+                finally:
+                    reset_current_tenant(token)
             raise
         logger.warning(
             "debounce_batch_deferred attempt=%d defer=%ds messages=%d error=%s",

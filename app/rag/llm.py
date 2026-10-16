@@ -37,7 +37,9 @@ class OpenAILLMProvider(LLMProvider):
         # something to ship code for.
         self._model = model or resolved.openai_model
         self._reasoning_effort = resolved.openai_reasoning_effort
-        self._client = AsyncOpenAI(api_key=api_key)
+        # A minute, not the SDK's ten: a hung call holds a patient's answer,
+        # and the job's own retry ladder is the better place to wait.
+        self._client = AsyncOpenAI(api_key=api_key, timeout=90.0, max_retries=1)
 
     async def generate(self, system_prompt: str, messages: list[ChatMessage]) -> str:
         # ChatMessage is deliberately narrower than the SDK's message union

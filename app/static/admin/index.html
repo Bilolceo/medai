@@ -1376,7 +1376,14 @@ async function api(path, options) {
     opts.headers["Content-Type"] = "application/json";
     opts.body = JSON.stringify(opts.body);
   }
-  const response = await fetch(API + path, opts);
+  let response;
+  try {
+    response = await fetch(API + path, opts);
+  } catch (_) {
+    // Offline, or the server restarting mid-deploy: say so in the
+    // operator's language rather than the browser's "Failed to fetch".
+    throw new Error("Internet aloqasi yo'q yoki server qayta ishga tushmoqda. Birozdan keyin qayta urinib ko'ring.");
+  }
 
   // The API redirects an unauthenticated call to the login page rather than
   // answering it, so a 200 from /login is what an expired session looks like
@@ -1388,7 +1395,13 @@ async function api(path, options) {
   if (response.status === 204) return null;
   const body = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error((body && body.detail) || ("Xatolik: " + response.status));
+    // FastAPI answers a validation error with a list of problems, which
+    // printed as "[object Object]"; show the first one's message instead.
+    const detail = body && body.detail;
+    const message = Array.isArray(detail)
+      ? detail.map((d) => (d && d.msg) || String(d)).join("; ")
+      : detail;
+    throw new Error(message || ("Xatolik: " + response.status));
   }
   return body;
 }
@@ -3205,7 +3218,9 @@ document.getElementById("mediaUnseen").addEventListener("change", () => {
   loadMedia().catch((err) => toast(err.message, true));
 });
 refreshMediaBadge();
-setInterval(refreshMediaBadge, 30000);
+// Only while the tab is in front: a dashboard left open all night in a
+// background tab asked the server every 30 seconds for nobody.
+setInterval(() => { if (!document.hidden) refreshMediaBadge(); }, 30000);
 
 // --- hisobot ------------------------------------------------------------------
 //

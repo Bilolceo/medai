@@ -53,7 +53,7 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
         if api_key is None:
             raise ValueError("OPENAI_API_KEY is required to use OpenAIEmbeddingProvider")
         self._model = model
-        self._client = AsyncOpenAI(api_key=api_key)
+        self._client = AsyncOpenAI(api_key=api_key, timeout=30.0, max_retries=1)
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         if not texts:

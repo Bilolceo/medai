@@ -9,7 +9,7 @@ WORKDIR /app
 
 RUN groupadd --system app && useradd --system --gid app --create-home app
 
-COPY pyproject.toml ./
+COPY pyproject.toml constraints.txt ./
 COPY app ./app
 # alembic.ini and migrations/ are runtime assets, not just dev tooling: the
 # deploy runs `alembic upgrade head` as a pre-deploy step, which executes
@@ -29,7 +29,9 @@ COPY scripts ./scripts
 COPY data ./data
 COPY migrations ./migrations
 
-RUN pip install --no-cache-dir .
+# Pinned to the versions production is known to run (constraints.txt): an
+# unpinned rebuild pulled whatever was newest that day.
+RUN pip install --no-cache-dir -c constraints.txt .
 
 USER app
 
