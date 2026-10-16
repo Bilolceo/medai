@@ -55,6 +55,14 @@ from app.services import booking_offer
             "Doktor bu bilan shug'ullanadi. Siz ukangizni qabulga yozmoqchimisiz?",
             "Doktor bu bilan shug'ullanadi.",
         ),
+        # Dry run, 2026-10-16: the call-back offer made a second time.
+        (
+            "Bu operatsiya taxminan 1000 dollar atrofida. Aniq summani doktor ko'rikdan keyin "
+            "aytadi. Xohlasangiz ism va telefon raqamingizni qoldiring, operator qulay vaqtda "
+            "qo'ng'iroq qiladi.",
+            "Bu operatsiya taxminan 1000 dollar atrofida. Aniq summani doktor ko'rikdan keyin "
+            "aytadi.",
+        ),
     ],
 )
 def test_an_unasked_offer_is_taken_off(reply: str, expected: str) -> None:
@@ -107,6 +115,13 @@ def test_who_has_asked_to_book(message: str, history: tuple[str, ...], wants: bo
 def test_an_offer_already_made_is_seen() -> None:
     assert booking_offer.offered_before(
         ["Va alaykum assalom.", "Doktor ko'rikda aytadi. Qabulga yozilmoqchimisiz?"]
+    )
+    # The doctor's own wording, as a statement rather than a question.
+    assert booking_offer.offered_before(
+        [
+            "Batafsil ma'lumot kerak bo'lsa, ismingiz va raqamingizni qoldiring — operator "
+            "qulay vaqtda qo'ng'iroq qiladi."
+        ]
     )
     assert not booking_offer.offered_before(["Doktor qabuli 300 000 soʻm."])
 
