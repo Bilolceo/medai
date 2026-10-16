@@ -17,7 +17,7 @@ from collections.abc import Sequence
 
 # The patient has said they want to come, be booked, or know when they can.
 _WANTS_TO_BOOK = re.compile(
-    r"yozil|yozib|yozdir|ёзил|ёзиб|ёздир|запиш|записа|запись"
+    r"yozil|yozib\s+qo['‘ʻ’`]?y|yozdir|ёзил|ёзиб\s+қўй|ёздир|запиш|записа|запись"
     r"|qachon\s+(?:kel|bor)|қачон\s+(?:кел|бор)|когда\s+(?:можно\s+)?(?:прий|подой|зайт)"
     r"|bo['‘ʻ’`]?sh\s+vaqt|бўш\s+вақт|свободн"
     r"|qabulga\s+(?:kel|bor)|қабулга\s+(?:кел|бор)|kelmoqchi|келмоқчи|borsam|борсам"
@@ -107,3 +107,41 @@ def strip(reply: str) -> str:
         return reply
     text = "".join(kept).strip()
     return " ".join([text, *markers]) if markers else text
+
+
+# The administrator introducing themselves -- "Men doktor Temurning
+# administratoriman" -- which the persona allows once a conversation.
+_INTRO = re.compile(
+    r"(?:men|мен)\s+(?:doktor|доктор)\s+\w+\s+(?:administrator|администратор)\w*"
+    r"|я\s+администратор\s+доктора\s+\w+",
+    re.IGNORECASE,
+)
+
+
+_GREETING_LEAD = re.compile(
+    r"^\W*(?:va\s+alaykum\s+assalom|assalomu\s+alaykum|salom|ва\s+алайкум\s+ассалом"
+    r"|ассалому\s+алайкум|салом|здравствуйте|добрый\s+\w+)\W*",
+    re.IGNORECASE,
+)
+
+
+def introduced_before(assistant_turns: Sequence[str]) -> bool:
+    return any(_INTRO.search(turn) for turn in assistant_turns)
+
+
+def drop_intro(reply: str) -> str:
+    """The reply without the self-introduction, for a conversation that has
+    already had it. A sentence that was only the introduction (and perhaps a
+    greeting) goes; one with more in it keeps the rest."""
+    if not _INTRO.search(reply):
+        return reply
+    kept: list[str] = []
+    for sentence in _SENTENCE.findall(reply):
+        if not _INTRO.search(sentence):
+            kept.append(sentence)
+            continue
+        rest = _GREETING_LEAD.sub("", _INTRO.sub("", sentence)).strip(" ,.;:—–-\n")
+        if len(re.findall(r"\w+", rest)) >= 2:
+            kept.append(" " + rest[0].upper() + rest[1:] + ("" if rest[-1] in ".!?" else "."))
+    text = "".join(kept).strip()
+    return text or reply

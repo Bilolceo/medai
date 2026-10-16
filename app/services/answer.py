@@ -435,6 +435,10 @@ async def generate_answer(
     # once a conversation and never after a no (see app.services.booking_offer).
     patient_turns = [turn["content"] for turn in history or [] if turn.get("role") == "user"]
     own_turns = [turn["content"] for turn in history or [] if turn.get("role") == "assistant"]
+    # The introduction is made once; a second "Men doktor Temurning
+    # administratoriman" in the same conversation reads as a machine.
+    if booking_offer.introduced_before(own_turns):
+        reply = booking_offer.drop_intro(reply)
     if not booking_offer.wants_to_book(user_message, patient_turns) and (
         booking_offer.offered_before(own_turns)
         or booking_offer.declined([*patient_turns, user_message])

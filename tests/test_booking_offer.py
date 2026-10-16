@@ -139,3 +139,43 @@ def test_an_offer_already_made_is_seen() -> None:
 )
 def test_a_patient_who_said_no(turns: list[str], no: bool) -> None:
     assert booking_offer.declined(turns) is no
+
+
+def test_a_prescription_written_before_is_not_asking_to_book() -> None:
+    """Live, 2026-10-16: "dori yozib bergandi" (the doctor wrote a
+    prescription) was read as "yozib qo'ying" (book me), and the call-back
+    offer went out a second time."""
+    assert not booking_offer.wants_to_book(
+        "Hozirgi vaziyatda nima qilsam buladi",
+        ["2 oychala bulib woldi duxtirga borgandim ukkol dori yozib bergandi"],
+    )
+    assert booking_offer.wants_to_book("Qabulga yozib qo'ying")
+
+
+@pytest.mark.parametrize(
+    ("reply", "expected"),
+    [
+        (
+            "Tushundim, noxush holat. Men doktor Temurning administratoriman. Doktor qayta "
+            "ko‘rishi kerak.",
+            "Tushundim, noxush holat. Doktor qayta ko‘rishi kerak.",
+        ),
+        (
+            "Salom, men doktor Temurning administratoriman — qanday yordam kerak?",
+            "Qanday yordam kerak?",
+        ),
+        (
+            "Здравствуйте. Я администратор доктора Темура. Доктор занимается этим.",
+            "Здравствуйте. Доктор занимается этим.",
+        ),
+        # Nothing but the introduction: sent as it is rather than nothing.
+        ("Men doktor Temurning administratoriman.", "Men doktor Temurning administratoriman."),
+    ],
+)
+def test_a_second_introduction_is_taken_out(reply: str, expected: str) -> None:
+    assert booking_offer.drop_intro(reply) == expected
+
+
+def test_an_introduction_already_made_is_seen() -> None:
+    assert booking_offer.introduced_before(["Salom, men doktor Temurning administratoriman."])
+    assert not booking_offer.introduced_before(["Doktor qabuli 300 000 soʻm."])
