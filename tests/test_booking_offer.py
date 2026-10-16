@@ -192,3 +192,20 @@ def test_a_second_introduction_is_taken_out(reply: str, expected: str) -> None:
 def test_an_introduction_already_made_is_seen() -> None:
     assert booking_offer.introduced_before(["Salom, men doktor Temurning administratoriman."])
     assert not booking_offer.introduced_before(["Doktor qabuli 300 000 soʻm."])
+
+
+@pytest.mark.parametrize(
+    ("message", "hello"),
+    [
+        ("Salom", True),
+        ("Assalomu alaykum aka yaxshimisiz", True),
+        ("Здравствуйте", True),
+        ("Ассалому алайкум", True),
+        ("salom narxi qancha", False),
+        ("prostatit davolaysizlarmi", False),
+    ],
+)
+def test_a_bare_hello_has_asked_nothing_yet(message: str, hello: bool) -> None:
+    """Simulation, 2026-10-16: "Salom" was answered with the call-back offer;
+    the doctor's rule is to answer first, then offer."""
+    assert booking_offer.only_hello(message) is hello

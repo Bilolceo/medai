@@ -146,3 +146,17 @@ def drop_intro(reply: str) -> str:
             kept.append(" " + rest[0].upper() + rest[1:] + ("" if rest[-1] in ".!?" else "."))
     text = "".join(kept).strip()
     return text or reply
+
+
+# A message that only says hello -- nothing has been asked yet, so there is
+# nothing to have answered before the one offer is made.
+_ONLY_HELLO = re.compile(
+    r"^\W*(?:assalomu?\s*alaykum|assalom\s*aleykum|salom(?:\s*alaykum)?|ассалому?\s*алайкум|салом"
+    r"|здравствуйте|привет|добрый\s+\w+|hello|hi)\W*(?:aka|opa|doktor|доктор|ака)?\W*"
+    r"(?:yaxshimisiz|qalaysiz|яхшимисиз|қалайсиз)?\W*$",
+    re.IGNORECASE,
+)
+
+
+def only_hello(message: str) -> bool:
+    return bool(_ONLY_HELLO.match(message.strip()))

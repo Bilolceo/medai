@@ -440,6 +440,8 @@ async def generate_answer(
     if not booking_offer.wants_to_book(user_message, patient_turns) and (
         booking_offer.offered_before(own_turns)
         or booking_offer.declined([*patient_turns, user_message])
+        # The doctor: answer first, then offer. A bare hello has asked nothing.
+        or booking_offer.only_hello(user_message)
     ):
         stripped = booking_offer.strip(reply)
         if stripped != reply:
