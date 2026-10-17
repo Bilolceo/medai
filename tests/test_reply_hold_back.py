@@ -169,7 +169,7 @@ async def test_an_automatic_reply_does_not_switch_the_assistant_off(
     db_session: AsyncSession, seed: Seed, as_tenant: AsTenant
 ) -> None:
     auto = "Murojaat uchun: / ☎️+998-93-051-25-96"
-    asked = datetime.now(UTC) - timedelta(seconds=5)
+    asked = datetime.now(UTC) + timedelta(minutes=1)  # after the seeded messages
     with as_tenant(seed.tenant_a.id):
         await _message(
             db_session, seed, MessageSender.PATIENT, "Siz bilan qanday bog'lansam bo'ladi?", asked
@@ -196,7 +196,7 @@ async def test_an_automatic_reply_does_not_switch_the_assistant_off(
 async def test_a_person_answering_still_switches_the_assistant_off(
     db_session: AsyncSession, seed: Seed, as_tenant: AsTenant
 ) -> None:
-    asked = datetime.now(UTC) - timedelta(minutes=3)
+    asked = datetime.now(UTC) + timedelta(minutes=1)  # after the seeded messages
     with as_tenant(seed.tenant_a.id):
         await _message(db_session, seed, MessageSender.PATIENT, "Qachon kelay?", asked)
 
@@ -238,3 +238,54 @@ async def _same_words_elsewhere(
                 channel="instagram",
             )
         await session.flush()
+
+
+async def test_a_wordless_echo_seconds_after_the_patient_is_automation(
+    db_session: AsyncSession, seed: Seed, as_tenant: AsTenant
+) -> None:
+    """Live, 2026-10-17: off after "Murojaat uchun: ..." with nothing else
+    from the clinic in the transcript -- the reply's wordless part."""
+    asked = datetime.now(UTC) + timedelta(minutes=1)  # after the seeded messages
+    with as_tenant(seed.tenant_a.id):
+        await _message(
+            db_session, seed, MessageSender.PATIENT, "Siz bilan qanday bog'lansam?", asked
+        )
+
+    await note_clinic_reply(
+        {},
+        str(seed.tenant_a.id),
+        str(seed.a.channel.id),
+        seed.a.user.external_id,
+        None,
+        sent_at=(asked + timedelta(seconds=2)).isoformat(),
+        session_factory=_session_factory(db_session),
+    )
+
+    conversation = await db_session.get(Conversation, seed.a.conversation.id)
+    assert conversation is not None
+    await db_session.refresh(conversation)
+    assert conversation.is_bot_enabled is True
+
+
+async def test_a_wordless_message_minutes_later_is_a_person(
+    db_session: AsyncSession, seed: Seed, as_tenant: AsTenant
+) -> None:
+    """A voice note or a photo from the Instagram app, sent by somebody."""
+    asked = datetime.now(UTC) + timedelta(minutes=1)  # after the seeded messages
+    with as_tenant(seed.tenant_a.id):
+        await _message(db_session, seed, MessageSender.PATIENT, "Qachon kelay?", asked)
+
+    await note_clinic_reply(
+        {},
+        str(seed.tenant_a.id),
+        str(seed.a.channel.id),
+        seed.a.user.external_id,
+        None,
+        sent_at=(asked + timedelta(minutes=8)).isoformat(),
+        session_factory=_session_factory(db_session),
+    )
+
+    conversation = await db_session.get(Conversation, seed.a.conversation.id)
+    assert conversation is not None
+    await db_session.refresh(conversation)
+    assert conversation.is_bot_enabled is False

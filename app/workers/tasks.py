@@ -897,15 +897,30 @@ _AUTO_REPLY_SEEN_IN = 2
 async def _is_automatic_reply(
     session: AsyncSession, conversation_id: uuid.UUID, text: str | None, sent_at: str | None
 ) -> bool:
-    if not (text or "").strip() or sent_at is None:
+    if sent_at is None:
         return False
     try:
         sent = datetime.fromisoformat(sent_at)
     except ValueError:
         return False
-    patient_wrote = await last_inbound_at(session, conversation_id)
+    # The patient's message this echo answered: the last one before it, not
+    # one they sent in the twenty seconds this job waited.
+    patient_wrote = await session.scalar(
+        select(sql.max(Message.created_at)).where(
+            Message.conversation_id == conversation_id,
+            Message.sender == MessageSender.PATIENT,
+            Message.created_at <= sent,
+        )
+    )
     if patient_wrote is None or (sent - patient_wrote).total_seconds() > _AUTO_REPLY_SECONDS:
         return False
+    if not (text or "").strip():
+        # Something with no words, seconds after the patient wrote: the part
+        # of an automatic reply that is not text. A person does not answer
+        # with a sticker or a voice note that fast (live, 2026-10-17: the
+        # assistant switched off after "Murojaat uchun: ...", with nothing
+        # else from the clinic in the transcript).
+        return True
     elsewhere = await session.scalar(
         select(sql.count(sql.distinct(Message.conversation_id))).where(
             Message.sender == MessageSender.OPERATOR,
@@ -973,14 +988,15 @@ async def note_clinic_reply(
                 if any(handoff.same_message(text, content) for content in recent):
                     return
             if await _is_automatic_reply(session, conversation.id, text, sent_at):
-                await record_outbound_message(
-                    session,
-                    conversation_id=conversation.id,
-                    channel_type="instagram",
-                    text=text or "",
-                    sender=MessageSender.OPERATOR,
-                )
-                await session.commit()
+                if (text or "").strip():
+                    await record_outbound_message(
+                        session,
+                        conversation_id=conversation.id,
+                        channel_type="instagram",
+                        text=text or "",
+                        sender=MessageSender.OPERATOR,
+                    )
+                    await session.commit()
                 logger.info(
                     "clinic_auto_reply_noted", extra={"conversation_id": str(conversation.id)}
                 )
@@ -1001,7 +1017,13 @@ async def note_clinic_reply(
             await session.commit()
             logger.info(
                 "clinic_replied_in_app",
-                extra={"conversation_id": str(conversation.id), "bot_paused": paused},
+                extra={
+                    "conversation_id": str(conversation.id),
+                    "bot_paused": paused,
+                    # Enough to tell a person from automation afterwards.
+                    "has_text": bool((text or "").strip()),
+                    "sent_at": sent_at,
+                },
             )
     finally:
         reset_current_tenant(token)
