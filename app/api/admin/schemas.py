@@ -54,6 +54,7 @@ class SessionInfo(BaseModel):
 class ConversationCounts(BaseModel):
     taken_over: int
     needs_doctor: int
+    comments: int = 0
 
 
 class ConversationSummary(BaseModel):

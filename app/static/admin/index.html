@@ -1090,6 +1090,7 @@
         <div class="seg" role="group" aria-label="Qaysi suhbatlar" id="chatScope">
           <button type="button" data-scope="all" aria-pressed="true">Hammasi</button>
           <button type="button" data-scope="operator" aria-pressed="false" title="Operator yoki doktor olgan, bot javob bermayotgan suhbatlar">Operatorga o'tganlar <span class="seg-n" id="chatOperatorCount" hidden></span></button>
+          <button type="button" data-scope="comments" aria-pressed="false" title="Instagram postlari ostiga yozilgan izohlardan kelgan suhbatlar">Izohlar <span class="seg-n" id="chatCommentCount" hidden></span></button>
         </div>
         <span class="tb-spacer"></span>
         <span id="chatLiveHint" class="muted"></span>
@@ -2115,8 +2116,12 @@ let CHATS_LAST_SEEN = new Map();
 // "Operatorga o'tganlar": the conversations a person from the clinic has --
 // the assistant is off in them, because somebody wrote or switched it off --
 // so the operators can work through their own list without the bot's.
+// "Izohlar": the people who wrote under a post, so somebody can answer the
+// comments the assistant could not reach in Direct.
+const CHAT_SCOPES = { operator: "only_taken_over", comments: "from_comments" };
 function chatScope() {
-  return LIST_PARAMS.conversations.only_taken_over === "true" ? "operator" : "all";
+  const params = LIST_PARAMS.conversations;
+  return Object.keys(CHAT_SCOPES).find((scope) => params[CHAT_SCOPES[scope]] === "true") || "all";
 }
 function markChatScope() {
   for (const b of document.querySelectorAll("#chatScope button")) {
@@ -2126,8 +2131,10 @@ function markChatScope() {
 document.getElementById("chatScope").addEventListener("click", (e) => {
   const button = e.target.closest("button[data-scope]");
   if (!button || button.dataset.scope === chatScope()) return;
-  const { only_taken_over, ...rest } = LIST_PARAMS.conversations;
-  LIST_PARAMS.conversations = button.dataset.scope === "operator" ? { ...rest, only_taken_over: "true" } : rest;
+  const rest = { ...LIST_PARAMS.conversations };
+  for (const key of Object.values(CHAT_SCOPES)) delete rest[key];
+  const key = CHAT_SCOPES[button.dataset.scope];
+  LIST_PARAMS.conversations = key ? { ...rest, [key]: "true" } : rest;
   CHATS_LIMIT = PAGE;
   forgetActiveView("conversations");
   markChatScope();
@@ -2146,13 +2153,18 @@ async function loadChats(options = {}) {
     settle(api("/conversations/counts"), null),
   ]);
   if (seq !== CHATS_SEQ) return;
-  const badge = document.getElementById("chatOperatorCount");
-  badge.textContent = counts ? String(counts.taken_over) : "";
-  badge.hidden = !counts || !counts.taken_over;
-  if (!rows.length && chatScope() === "operator" && !CHAT_SEARCH) {
+  for (const [id, field] of [["chatOperatorCount", "taken_over"], ["chatCommentCount", "comments"]]) {
+    const badge = document.getElementById(id);
+    badge.textContent = counts ? String(counts[field] || 0) : "";
+    badge.hidden = !counts || !counts[field];
+  }
+  const emptyScope = {
+    operator: "Operatorga o'tgan suhbat yo'q — hammasiga bot javob beryapti",
+    comments: "Izohdan kelgan suhbat yo'q",
+  }[chatScope()];
+  if (!rows.length && emptyScope && !CHAT_SEARCH) {
     CHATS_SIGNATURE = "";
-    fill("chatRows", [el("tr", {}, el("td", { colspan: "5", class: "muted", style: "text-align:center;padding:28px" },
-      "Operatorga o'tgan suhbat yo'q — hammasiga bot javob beryapti"))]);
+    fill("chatRows", [el("tr", {}, el("td", { colspan: "5", class: "muted", style: "text-align:center;padding:28px" }, emptyScope))]);
     return;
   }
   // A full page may have more behind it.

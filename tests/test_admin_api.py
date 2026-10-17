@@ -1623,3 +1623,30 @@ async def test_the_inbox_counts_the_conversations_staff_have(
     assert counts["taken_over"] == len(rows)
     assert str(conversation.id) in {r["id"] for r in rows}
     assert str(other.id) not in {r["id"] for r in rows}
+
+
+async def test_the_inbox_finds_the_conversations_that_began_as_comments(
+    client: httpx.AsyncClient, db_session: AsyncSession, seed: Seed
+) -> None:
+    """The "Izohlar" filter: people who wrote under a post, counted and listed."""
+    from app.models.message import Message
+    from app.services.message_labels import COMMENT_PREFIX
+
+    _login_as(client, seed.a.operator.id)
+    before = (await client.get("/api/admin/conversations/counts")).json()
+    db_session.add(
+        Message(
+            conversation_id=seed.a.conversation.id,
+            sender="patient",
+            content=f"{COMMENT_PREFIX}Narxi qancha?",
+            channel="instagram",
+        )
+    )
+    await db_session.flush()
+
+    counts = (await client.get("/api/admin/conversations/counts")).json()
+    rows = (await client.get("/api/admin/conversations?from_comments=true")).json()
+
+    assert counts["comments"] == before["comments"] + 1
+    assert counts["comments"] == len(rows)
+    assert {r["id"] for r in rows} == {str(seed.a.conversation.id)}

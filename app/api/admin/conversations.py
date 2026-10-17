@@ -9,6 +9,7 @@ turns it off and starts replying themselves.
 import re
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import exists, func, or_, select
@@ -195,7 +196,22 @@ async def conversation_counts(
         .select_from(Conversation)
         .where(*open_here, Conversation.needs_doctor_since.is_not(None))
     )
-    return ConversationCounts(taken_over=taken_over or 0, needs_doctor=waiting or 0)
+    commented = await session.scalar(
+        select(func.count()).select_from(Conversation).where(*open_here, _commented())
+    )
+    return ConversationCounts(
+        taken_over=taken_over or 0, needs_doctor=waiting or 0, comments=commented or 0
+    )
+
+
+def _commented() -> Any:
+    """The conversation has an Instagram comment from the patient in it --
+    somebody who wrote under a post, whether or not they went on to Direct."""
+    return exists().where(
+        Message.conversation_id == Conversation.id,
+        Message.sender == MessageSender.PATIENT,
+        Message.content.startswith(message_labels.COMMENT_PREFIX),
+    )
 
 
 @router.get("", response_model=list[ConversationSummary])
@@ -205,6 +221,7 @@ async def list_conversations(
     status_filter: str | None = Query(default=None, alias="status"),
     only_taken_over: bool = Query(default=False),
     needs_doctor: bool = Query(default=False),
+    from_comments: bool = Query(default=False),
     q: str | None = Query(default=None, max_length=100),
     limit: int = Query(default=50, ge=1, le=500),
 ) -> list[ConversationSummary]:
@@ -239,6 +256,8 @@ async def list_conversations(
         stmt = stmt.where(Conversation.is_bot_enabled.is_(False))
     if needs_doctor:
         stmt = stmt.where(Conversation.needs_doctor_since.is_not(None))
+    if from_comments:
+        stmt = stmt.where(_commented())
     if q and q.strip():
         # Matched in the database rather than in the dashboard, because the
         # list is capped at `limit`: filtering what was already fetched would

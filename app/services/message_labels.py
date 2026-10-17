@@ -18,6 +18,9 @@ SHARE = "🔗"
 STORY = "📣"
 STICKER = "🏷"
 REACTION = "💟"
+# An Instagram comment, kept in the conversation with the commenter's own
+# words after it -- the patient writing, so not one of the labels below.
+COMMENT_PREFIX = "💬 Izoh: "
 
 _PREFIXES = (PHOTO, VOICE, VIDEO, FILE, SHARE, STORY, STICKER, REACTION)
 

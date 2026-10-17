@@ -1470,7 +1470,7 @@ async def answer_comment(
                     channel_id=uuid.UUID(channel_id),
                     channel_type=str(channel.type),
                     sender_external_id=author_external_id,
-                    text=f"💬 Izoh: {text}",
+                    text=f"{message_labels.COMMENT_PREFIX}{text}",
                 )
                 # The comment arrives with the author's handle, and nothing
                 # else will ever tell us it: without it the dashboard lists
