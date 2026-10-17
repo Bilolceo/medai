@@ -27,7 +27,8 @@ _RUSSIAN_WORDS = frozenset(
         # has a "ы" or "ь", so without them "Понятно" or "Да, давайте" in the
         # middle of a Russian chat tied, the tie went to Uzbek, and the
         # assistant answered a Russian patient in Uzbek.
-        "да давайте давай понятно поняла понял ясно ладно ок окей адрес врач "
+        # Not "да": Uzbeks writing Cyrillic say it too ("Да имплант", 2026-10-17).
+        "давайте давай понятно поняла понял ясно ладно ок окей адрес врач "
         "врача врачу доктора доктору принимает принимаете урологу уролог "
         "скок скиньте пришлите напишите позвоните перезвоните подойти прийти "
         "приду придти записали запишусь можете могу буду будет было был "

@@ -417,7 +417,7 @@ async def process_inbound_message(
                 answering_up_to=answering_up_to,
                 # A booking or a callback the patient must hear about goes
                 # out even when they have written more since.
-                may_wait=appointment is None and callback is None,
+                may_wait=appointment is None,
             )
             if held is not None:
                 await session.commit()
