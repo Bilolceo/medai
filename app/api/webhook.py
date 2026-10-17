@@ -13,6 +13,8 @@ mirror rather than duplicate.
 import hashlib
 import hmac
 import logging
+from contextlib import suppress
+from datetime import UTC, datetime
 
 from arq.connections import ArqRedis
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -24,7 +26,7 @@ from app.core.db import get_db_session
 from app.core.queue import get_arq_pool
 from app.core.redaction import preview
 from app.core.tenant_context import reset_current_tenant, set_current_tenant
-from app.services import message_labels
+from app.services import clinic_echoes, message_labels
 from app.services.admin_commands import parse_rule
 from app.services.conversation import register_inbound_message
 from app.services.debounce import handle_inbound_message
@@ -222,12 +224,20 @@ async def _handle_event(
         # It may be the doctor answering from the Instagram app, which is what
         # unpins a conversation waiting on them. Deferred so the assistant's
         # own sends are recorded first and can be told apart from a person's.
+        sent_at = datetime.now(UTC)
+        # Noted at once as well: the assistant looks here before it sends,
+        # so it does not answer under somebody who already has.
+        with suppress(Exception):
+            await clinic_echoes.note(
+                pool, str(channel.channel_id), event.recipient.id, text, sent_at
+            )
         await pool.enqueue_job(
             "note_clinic_reply",
             str(channel.tenant_id),
             str(channel.channel_id),
             event.recipient.id,
             text,
+            sent_at=sent_at.isoformat(),
             _defer_by=20,
         )
         return

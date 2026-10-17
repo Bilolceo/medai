@@ -18,6 +18,7 @@ from typing import Any
 from arq import Retry, cron
 from arq.connections import RedisSettings
 from arq.worker import func
+from sqlalchemy import func as sql
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,11 +47,13 @@ from app.repositories.conversation import ConversationRepository
 from app.repositories.user import UserRepository
 from app.services import (
     callbacks,
+    clinic_echoes,
     comments,
     doctor_telegram,
     handoff,
     message_labels,
     patient_media,
+    small_talk,
     turn,
     voice_notes,
 )
@@ -126,6 +129,72 @@ async def _may_answer(session: AsyncSession, *, channel_id: uuid.UUID, user_id: 
     return False
 
 
+async def _held_back(
+    session: AsyncSession,
+    redis: Any,
+    *,
+    conversation: Conversation,
+    channel_id: str,
+    patient_id: str,
+    answering_up_to: datetime | None,
+    may_wait: bool,
+) -> str | None:
+    """Why a written reply should not go out now, or None to send it.
+
+    The model can think for most of a minute. In that minute somebody from
+    the clinic may answer -- a person, or the account's own automatic reply
+    -- and the patient may write again. Live, 2026-10-16: two answers to
+    one question, and the assistant's reply landing under the operator's.
+    """
+    await session.refresh(conversation, ["is_bot_enabled"])
+    if not conversation.is_bot_enabled:
+        return "reply_dropped_clinic_took_over"
+    if answering_up_to is None:
+        return None
+    later = (
+        await session.execute(
+            select(Message.sender, Message.content).where(
+                Message.conversation_id == conversation.id,
+                Message.created_at > answering_up_to,
+            )
+        )
+    ).all()
+    if any(sender == MessageSender.OPERATOR for sender, _ in later):
+        return "reply_dropped_clinic_took_over"
+    if redis is not None:
+        try:
+            sent = await clinic_echoes.since(redis, channel_id, patient_id, answering_up_to)
+        except Exception:  # noqa: BLE001 - without the note, send as before
+            logger.exception("clinic_echo_read_failed")
+            sent = []
+        if sent:
+            ours = (
+                (
+                    await session.execute(
+                        select(Message.content).where(
+                            Message.conversation_id == conversation.id,
+                            Message.sender == MessageSender.BOT,
+                            Message.created_at >= datetime.now(UTC) - timedelta(minutes=15),
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            if any(not any(handoff.same_message(t, o) for o in ours) for t in sent):
+                return "reply_dropped_clinic_took_over"
+    if may_wait and any(
+        sender == MessageSender.PATIENT
+        and not message_labels.is_label(content)
+        and not small_talk.is_acknowledgement(content)
+        for sender, content in later
+    ):
+        # The next batch is queued behind this one and sees both messages:
+        # one answer to all of it, not two.
+        return "reply_superseded_patient_wrote_more"
+    return None
+
+
 async def process_inbound_message(
     ctx: dict[str, Any],
     tenant_id: str,
@@ -196,6 +265,10 @@ async def process_inbound_message(
             if conversation is None:  # pragma: no cover - defensive
                 logger.error("conversation_missing", extra={"conversation_id": conversation_id})
                 return
+
+            # The newest patient message this reply answers: anything after it
+            # -- from the clinic or the patient -- is checked before sending.
+            answering_up_to = await last_inbound_at(session, conversation_uuid)
 
             # One turn: the model writes the reply and any booking it made is
             # written down. See app.services.turn.
@@ -324,12 +397,20 @@ async def process_inbound_message(
             # 2026-10-16: "Qabulga yozilish uchun: ☎..." and then the bot's
             # own offer under it). What the turn wrote down -- a booking, a
             # callback -- stays; only the second voice is held back.
-            await session.refresh(conversation, ["is_bot_enabled"])
-            if not conversation.is_bot_enabled:
+            held = await _held_back(
+                session,
+                ctx.get("redis"),
+                conversation=conversation,
+                channel_id=channel_id,
+                patient_id=sender_external_id,
+                answering_up_to=answering_up_to,
+                # A booking or a callback the patient must hear about goes
+                # out even when they have written more since.
+                may_wait=appointment is None and callback is None,
+            )
+            if held is not None:
                 await session.commit()
-                logger.info(
-                    "reply_dropped_clinic_took_over", extra={"conversation_id": conversation_id}
-                )
+                logger.info(held, extra={"conversation_id": conversation_id})
                 return
 
             delivery_error: str | None = None
@@ -796,6 +877,35 @@ async def resolve_username(
 configure_logging()
 
 
+# An automatic reply lands within seconds of the message it answers and says
+# the same words to everybody; a person typing a saved reply is slower.
+_AUTO_REPLY_SECONDS = 15
+_AUTO_REPLY_SEEN_IN = 2
+
+
+async def _is_automatic_reply(
+    session: AsyncSession, conversation_id: uuid.UUID, text: str | None, sent_at: str | None
+) -> bool:
+    if not (text or "").strip() or sent_at is None:
+        return False
+    try:
+        sent = datetime.fromisoformat(sent_at)
+    except ValueError:
+        return False
+    patient_wrote = await last_inbound_at(session, conversation_id)
+    if patient_wrote is None or (sent - patient_wrote).total_seconds() > _AUTO_REPLY_SECONDS:
+        return False
+    elsewhere = await session.scalar(
+        select(sql.count(sql.distinct(Message.conversation_id))).where(
+            Message.sender == MessageSender.OPERATOR,
+            Message.content == text,
+            Message.conversation_id != conversation_id,
+            Message.created_at >= datetime.now(UTC) - timedelta(days=30),
+        )
+    )
+    return (elsewhere or 0) >= _AUTO_REPLY_SEEN_IN
+
+
 async def note_clinic_reply(
     ctx: dict[str, Any],
     tenant_id: str,
@@ -803,10 +913,17 @@ async def note_clinic_reply(
     patient_external_id: str,
     text: str | None,
     *,
+    sent_at: str | None = None,
     session_factory: Callable[[], AbstractAsyncContextManager[AsyncSession]] = db_session,
 ) -> None:
     """ARQ job: the clinic's account sent this patient a message; if a person
     typed it in the Instagram app, that person has the conversation now.
+
+    Not the account's automatic reply, though: the same "Murojaat uchun:
+    ☎️..." a few seconds after every "Siz bilan qanday bog'lansam bo'ladi?"
+    is Instagram answering, not somebody taking the conversation, and it was
+    switching the assistant off for every patient who tapped that button
+    (live, 2026-10-16). It is written into the transcript and nothing more.
 
     Instagram echoes every message the account sends, the assistant's too,
     with nothing that says who sent it. Run a little after the echo, so the
@@ -844,6 +961,19 @@ async def note_clinic_reply(
                 ).scalars()
                 if any(handoff.same_message(text, content) for content in recent):
                     return
+            if await _is_automatic_reply(session, conversation.id, text, sent_at):
+                await record_outbound_message(
+                    session,
+                    conversation_id=conversation.id,
+                    channel_type="instagram",
+                    text=text or "",
+                    sender=MessageSender.OPERATOR,
+                )
+                await session.commit()
+                logger.info(
+                    "clinic_auto_reply_noted", extra={"conversation_id": str(conversation.id)}
+                )
+                return
             await handoff.clear(session, conversation.id)
             if (text or "").strip():
                 await record_outbound_message(
