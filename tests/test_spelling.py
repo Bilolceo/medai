@@ -28,3 +28,7 @@ def test_the_introduction_split_in_two_is_joined() -> None:
         spelling.fix("Мен доктор Темурнинг администратори ман — нима масалада эдингиз?")
         == "Мен доктор Темурнинг администраториман — нима масалада эдингиз?"
     )
+
+
+def test_yozilmoqchi_in_cyrillic_is_spelled_right() -> None:
+    assert spelling.fix("Язилмоқчи бўлсангиз, ёзинг.") == "Ёзилмоқчи бўлсангиз, ёзинг."

@@ -1597,3 +1597,29 @@ async def test_a_waiting_conversation_says_what_the_patient_asked(
     response = await client.get("/api/admin/conversations?needs_doctor=true")
     row = next(r for r in response.json() if r["id"] == str(conversation.id))
     assert row["waiting_reason"].startswith("PSA natijam")
+
+
+async def test_the_inbox_counts_the_conversations_staff_have(
+    client: httpx.AsyncClient, db_session: AsyncSession, seed: Seed
+) -> None:
+    """The "Operatorga o'tganlar" filter: its count and its rows agree, and
+    another clinic's conversations are in neither."""
+    from app.models.conversation import Conversation
+
+    _login_as(client, seed.a.operator.id)
+    before = (await client.get("/api/admin/conversations/counts")).json()
+    conversation = await db_session.get(Conversation, seed.a.conversation.id)
+    assert conversation is not None
+    conversation.is_bot_enabled = False
+    other = await db_session.get(Conversation, seed.b.conversation.id)
+    assert other is not None
+    other.is_bot_enabled = False
+    await db_session.flush()
+
+    counts = (await client.get("/api/admin/conversations/counts")).json()
+    rows = (await client.get("/api/admin/conversations?only_taken_over=true")).json()
+
+    assert counts["taken_over"] == before["taken_over"] + 1
+    assert counts["taken_over"] == len(rows)
+    assert str(conversation.id) in {r["id"] for r in rows}
+    assert str(other.id) not in {r["id"] for r in rows}

@@ -46,6 +46,7 @@ from app.repositories.channel import ChannelRepository
 from app.repositories.conversation import ConversationRepository
 from app.repositories.user import UserRepository
 from app.services import (
+    booking_offer,
     callbacks,
     clinic_echoes,
     comments,
@@ -1493,6 +1494,9 @@ async def answer_comment(
             )
             reply, _ = callbacks.extract(reply)
             reply, needs_doctor = handoff.extract(reply)
+            # No offer to book under a comment: the doctor's rule, and the
+            # model still made one there (live, 2026-10-17).
+            reply = booking_offer.strip(reply) or reply
             if needs_doctor and inbound is not None:
                 await handoff.flag(session, inbound.conversation_id)
                 await session.commit()

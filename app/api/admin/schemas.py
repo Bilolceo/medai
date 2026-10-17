@@ -51,6 +51,11 @@ class SessionInfo(BaseModel):
 # --- conversations ---------------------------------------------------------
 
 
+class ConversationCounts(BaseModel):
+    taken_over: int
+    needs_doctor: int
+
+
 class ConversationSummary(BaseModel):
     id: uuid.UUID
     status: str

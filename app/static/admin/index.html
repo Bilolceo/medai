@@ -816,6 +816,8 @@
     .stat { padding: 12px; gap: 8px; flex-direction: column; }
     .stat-ic { width: 32px; height: 32px; }
     .stat b { font-size: var(--fs-xl); }
+    #chatScope { width: 100%; }
+    #chatScope button { flex: 1 0 auto; }
     #attnFilter { width: 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity;
       -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
     #attnFilter.at-end { -webkit-mask-image: none; mask-image: none; }
@@ -1043,6 +1045,10 @@
         <input id="chatSearch" type="search" class="tb-search" placeholder="Ism, @username yoki telefon bo'yicha qidirish" autocomplete="off">
         <button id="chatSearchClear" class="act" hidden>Tozalash</button>
         <span id="chatSearchHint" class="muted"></span>
+        <div class="seg" role="group" aria-label="Qaysi suhbatlar" id="chatScope">
+          <button type="button" data-scope="all" aria-pressed="true">Hammasi</button>
+          <button type="button" data-scope="operator" aria-pressed="false" title="Operator yoki doktor olgan, bot javob bermayotgan suhbatlar">Operatorga o'tganlar <span class="seg-n" id="chatOperatorCount" hidden></span></button>
+        </div>
         <span class="tb-spacer"></span>
         <span id="chatLiveHint" class="muted"></span>
         <span id="botStatePill" class="pill">—</span>
@@ -2063,14 +2069,49 @@ let CHATS_SIGNATURE = "";
 // row that moves because a patient just wrote can be marked as new.
 let CHATS_LAST_SEEN = new Map();
 
+// "Operatorga o'tganlar": the conversations a person from the clinic has --
+// the assistant is off in them, because somebody wrote or switched it off --
+// so the operators can work through their own list without the bot's.
+function chatScope() {
+  return LIST_PARAMS.conversations.only_taken_over === "true" ? "operator" : "all";
+}
+function markChatScope() {
+  for (const b of document.querySelectorAll("#chatScope button")) {
+    b.setAttribute("aria-pressed", String(b.dataset.scope === chatScope()));
+  }
+}
+document.getElementById("chatScope").addEventListener("click", (e) => {
+  const button = e.target.closest("button[data-scope]");
+  if (!button || button.dataset.scope === chatScope()) return;
+  const { only_taken_over, ...rest } = LIST_PARAMS.conversations;
+  LIST_PARAMS.conversations = button.dataset.scope === "operator" ? { ...rest, only_taken_over: "true" } : rest;
+  CHATS_LIMIT = PAGE;
+  forgetActiveView("conversations");
+  markChatScope();
+  loadChats().catch((err) => toast(err.message, true));
+});
+
 async function loadChats(options = {}) {
   const seq = ++CHATS_SEQ;
   await loadBotSwitch();
+  markChatScope();
   const params = new URLSearchParams(LIST_PARAMS.conversations);
   if (CHAT_SEARCH) params.set("q", CHAT_SEARCH);
   params.set("limit", String(CHATS_LIMIT));
-  const rows = await api("/conversations?" + params);
+  const [rows, counts] = await Promise.all([
+    api("/conversations?" + params),
+    settle(api("/conversations/counts"), null),
+  ]);
   if (seq !== CHATS_SEQ) return;
+  const badge = document.getElementById("chatOperatorCount");
+  badge.textContent = counts ? String(counts.taken_over) : "";
+  badge.hidden = !counts || !counts.taken_over;
+  if (!rows.length && chatScope() === "operator" && !CHAT_SEARCH) {
+    CHATS_SIGNATURE = "";
+    fill("chatRows", [el("tr", {}, el("td", { colspan: "5", class: "muted", style: "text-align:center;padding:28px" },
+      "Operatorga o'tgan suhbat yo'q — hammasiga bot javob beryapti"))]);
+    return;
+  }
   // A full page may have more behind it.
   document.getElementById("chatMore").hidden = rows.length < CHATS_LIMIT || CHATS_LIMIT >= LIST_MAX;
   document.getElementById("chatSearchHint").textContent =

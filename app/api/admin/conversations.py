@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.admin.deps import require_patient_access, verify_csrf_header
 from app.api.admin.schemas import (
     BotToggle,
+    ConversationCounts,
     ConversationDetail,
     ConversationSummary,
     MessageOut,
@@ -167,6 +168,34 @@ async def _waiting_reasons(
         if conversation_id not in reasons and _says_something(content or ""):
             reasons[conversation_id] = preview(content)
     return reasons
+
+
+@router.get("/counts", response_model=ConversationCounts)
+async def conversation_counts(
+    operator: Operator = Depends(get_current_operator),
+    session: AsyncSession = Depends(get_db_session),
+) -> ConversationCounts:
+    """How many conversations staff have, for the filter on the inbox.
+
+    Counted here rather than by fetching the filtered list: the inbox polls
+    every few seconds, and a list of five hundred summaries to read one
+    number off it would be the most expensive request on the page.
+    """
+    tenant_id = get_current_tenant()
+    # Every status, as the list counts them: the badge and the rows it opens
+    # must agree.
+    open_here = (Conversation.tenant_id == tenant_id,)
+    taken_over = await session.scalar(
+        select(func.count())
+        .select_from(Conversation)
+        .where(*open_here, Conversation.is_bot_enabled.is_(False))
+    )
+    waiting = await session.scalar(
+        select(func.count())
+        .select_from(Conversation)
+        .where(*open_here, Conversation.needs_doctor_since.is_not(None))
+    )
+    return ConversationCounts(taken_over=taken_over or 0, needs_doctor=waiting or 0)
 
 
 @router.get("", response_model=list[ConversationSummary])

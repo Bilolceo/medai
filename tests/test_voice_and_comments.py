@@ -201,3 +201,41 @@ async def test_a_comment_author_is_kept_under_their_instagram_handle(
     finally:
         reset_current_tenant(token)
     assert user.username == "dilnoza_88"
+
+
+async def test_a_comment_is_answered_without_an_offer_to_book(db_session: Any, seed: Any) -> None:
+    """Live, 2026-10-17: a comment answer ended "ismingiz va telefon raqamingizni
+    yozing -- operator qo'ng'iroq qiladi". The doctor's rule: no offer there."""
+    from contextlib import asynccontextmanager
+
+    from app.workers.tasks import answer_comment
+    from tests.test_conversation_memory import NoEmbeddings, ScriptedLLM
+    from tests.test_worker_tasks import FakeInstagramClient
+
+    @asynccontextmanager
+    async def sessions() -> Any:
+        yield db_session
+
+    llm = ScriptedLLM()
+    llm.say(
+        "Postdagi bemor haqida shaxsiy ma'lumot bera olmaymiz. "
+        "Ismingiz va telefon raqamingizni yozing — operator qo'ng'iroq qiladi."
+    )
+    client = FakeInstagramClient()
+    await answer_comment(
+        {},
+        str(seed.tenant_a.id),
+        str(seed.a.channel.id),
+        "comment-2",
+        "1106997565421641",
+        "master_00",
+        "U o'zini qanday his qilgan?",
+        session_factory=sessions,
+        embedding_provider=NoEmbeddings(),
+        llm_provider=llm,
+        client=client,
+    )
+
+    [(_, text)] = client.private_replies
+    assert "shaxsiy ma'lumot" in text
+    assert "telefon" not in text

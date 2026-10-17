@@ -14,6 +14,8 @@ _FIXES: dict[str, str] = {
     "администраториаман": "администраториман",
     "administratoriaman": "administratoriman",
     "ekkan": "ekan",
+    "язилмоқчи": "ёзилмоқчи",
+    "язилмокчи": "ёзилмоқчи",
 }
 
 # "ekkan" is also a real word ("planted"); it is a typo only after a word
