@@ -8,11 +8,11 @@ turns it off and starts replying themselves.
 
 import re
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import exists, func, or_, select
+from sqlalchemy import case, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.admin.deps import require_patient_access, verify_csrf_header
@@ -42,6 +42,10 @@ from app.services.conversation import (
     reply_context_for,
 )
 from app.services.delivery import send_reply
+
+# Waiting on a person for longer than this: still owed an answer, no longer
+# the alarm at the top (the dashboard greys it after the same two days).
+STALE_PIN = timedelta(hours=48)
 
 router = APIRouter(prefix="/api/admin/conversations", tags=["Admin — Conversations"])
 
@@ -296,10 +300,15 @@ async def list_conversations(
     # the id breaks exact ties so a refresh never shuffles two rows that
     # arrived in the same instant -- the dashboard polls this, and rows that
     # swap places on every poll read as the screen twitching.
-    # Conversations waiting on a person are pinned above everything else,
-    # the longest-waiting first.
+    # Two groups, each newest first. On top, the red rows: waiting on a
+    # person since less than two days ago. Below them everything else, by
+    # its last message. Pinned rows used to go first oldest-first, and with
+    # forty of them the inbox opened on day-old "Rahmat!" while the patient
+    # writing now sat a page down (owner, 2026-10-17). A pin older than two
+    # days is shown grey on the dashboard and takes its place in time.
+    fresh_pin = Conversation.needs_doctor_since >= datetime.now(UTC) - STALE_PIN
     stmt = stmt.order_by(
-        Conversation.needs_doctor_since.asc().nulls_last(),
+        case((fresh_pin, 0), else_=1),
         func.coalesce(last_activity.c.last_at, Conversation.created_at).desc(),
         Conversation.id.desc(),
     ).limit(limit)

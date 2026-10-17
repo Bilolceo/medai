@@ -1650,3 +1650,48 @@ async def test_the_inbox_finds_the_conversations_that_began_as_comments(
     assert counts["comments"] == before["comments"] + 1
     assert counts["comments"] == len(rows)
     assert {r["id"] for r in rows} == {str(seed.a.conversation.id)}
+
+
+async def test_the_inbox_reads_fresh_red_rows_first_then_everything_by_time(
+    client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    seed: Seed,
+    as_tenant: Callable[[UUID], AbstractContextManager[None]],
+) -> None:
+    """Owner, 2026-10-17: the list was "bardak" -- forty pins oldest-first
+    above the patients writing now. Fresh pins newest first, then the rest,
+    stale pins included, by their last message."""
+    from app.models.message import Message
+    from app.repositories.conversation import ConversationRepository
+    from app.repositories.user import UserRepository
+
+    now = datetime.now(UTC)
+
+    async def conversation(name: str, last: datetime, pinned: datetime | None) -> str:
+        with as_tenant(seed.tenant_a.id):
+            user = await UserRepository(db_session).create(
+                channel_id=seed.a.channel.id, external_id=name
+            )
+            c = await ConversationRepository(db_session).create(user_id=user.id, status="open")
+            c.needs_doctor_since = pinned
+            db_session.add(
+                Message(
+                    conversation_id=c.id,
+                    sender="patient",
+                    content=name,
+                    channel="instagram",
+                    created_at=last,
+                )
+            )
+            await db_session.flush()
+            return str(c.id)
+
+    old_pin = await conversation("old-pin", now + timedelta(hours=1), now - timedelta(days=3))
+    pin_a = await conversation("pin-a", now + timedelta(hours=2), now - timedelta(hours=5))
+    pin_b = await conversation("pin-b", now + timedelta(hours=3), now - timedelta(hours=1))
+    recent = await conversation("recent", now + timedelta(hours=4), None)
+    _login_as(client, seed.a.operator.id)
+
+    ids = [r["id"] for r in (await client.get("/api/admin/conversations?limit=500")).json()]
+    mine = [i for i in ids if i in {old_pin, pin_a, pin_b, recent}]
+    assert mine == [pin_b, pin_a, recent, old_pin]
