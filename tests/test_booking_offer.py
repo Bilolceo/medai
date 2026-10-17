@@ -209,3 +209,17 @@ def test_a_bare_hello_has_asked_nothing_yet(message: str, hello: bool) -> None:
     """Simulation, 2026-10-16: "Salom" was answered with the call-back offer;
     the doctor's rule is to answer first, then offer."""
     assert booking_offer.only_hello(message) is hello
+
+
+def test_the_plain_offer_asking_name_number_and_time_counts_as_the_offer() -> None:
+    offer = (
+        "Mutaxassisimiz qo'ng'iroq qilib batafsil aytib beradi -- ismingiz, raqamingiz va "
+        "qaysi vaqtda qo'ng'iroq qilsak qulay ekanini yozing."
+    )
+    assert booking_offer.offered_before([offer])
+
+
+def test_asking_the_time_after_a_number_is_kept() -> None:
+    """Once they gave a number, "when shall we ring?" is the follow-up, not a second offer."""
+    follow_up = "Rahmat, Jasur. Qaysi vaqtda qo'ng'iroq qilsak qulay?"
+    assert booking_offer.strip(follow_up) == follow_up

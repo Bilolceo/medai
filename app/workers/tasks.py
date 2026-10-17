@@ -376,7 +376,17 @@ async def process_inbound_message(
                     name=appointment.patient_name if appointment is not None else None,
                     phone=phone,
                     source=str(channel.type) if channel is not None else "bot",
-                    comment=(callback.reason if callback else None) or visit_reason,
+                    # The time they asked to be rung goes with it: it is the
+                    # first thing the operator needs from the row (the owner,
+                    # 2026-10-17: "soat nechida telefon qilish kerak").
+                    comment=" · ".join(
+                        part
+                        for part in (
+                            (callback.reason if callback else None) or visit_reason,
+                            f"Qo'ng'iroq: {callback.when}" if callback and callback.when else "",
+                        )
+                        if part
+                    ),
                     # The day of the visit, not the day they wrote. Somebody
                     # who messages on the 28th to be seen on the 31st belongs
                     # in the 31st's list, because that is the list the front

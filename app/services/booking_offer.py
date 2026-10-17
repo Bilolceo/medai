@@ -36,8 +36,9 @@ _OFFER = re.compile(
     r"|(?:raqam|telefon)\w*ni\s+qoldir\w*|(?:рақам|телефон)\w*ни\s+қолдир\w*"
     # The plain style says "yozing" where it said "qoldiring", and asks again
     # as "telefon raqamingizni yozasizmi?" / "raqamingiz yo'qmi?" (2026-10-16).
-    r"|(?:ism\w*\s+(?:va|,)\s+)(?:telefon|raqam)\w*(?:\s+raqam\w*)?(?:ni)?\s+yoz\w*"
-    r"|(?:исм\w*\s+(?:ва|,)\s+)(?:телефон|рақам)\w*(?:\s+рақам\w*)?(?:ни)?\s+ёз\w*"
+    # Name and number asked for together is the offer; "Qaysi vaqtda qo'ng'iroq
+    # qilsak qulay?" after they gave a number is not, and must not be stripped.
+    r"|ism\w*\s*(?:,|va)\s*(?:telefon|raqam)\w*|исм\w*\s*(?:,|ва)\s*(?:телефон|рақам)\w*"
     r"|(?:telefon|raqam)\w*\s+(?:\w+\s+)?(?:yozasizmi|yo['‘ʻ’`]?qmi)"
     r"|(?:оставьте|напишите)[^.!?]*(?:номер|телефон)"
     r"|yozilmoqchi\s+bo['‘ʻ’`]?l(?:sangiz|angiz)|ёзилмоқчи\s+бўлсангиз|если\s+хотите\s+записаться"

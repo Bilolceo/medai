@@ -47,9 +47,10 @@ If the patient asks to be called and gives a number, end your reply with \
 they said to call, in their words, or nothing>]]. The patient never sees it; \
 it puts them on the list of people to ring, with the time they asked for. \
 Write it once per request, and again with the time if they give one later. \
-Say that the clinic will call; never promise an exact time as certain -- \
-somebody from the clinic rings, and the patient hears from you only that \
-their wish is noted."""
+Say that the clinic will call. When they gave a time, say that time back \
+("ertaga 14:30 larda qo'ng'iroq qilishadi") -- the operators ring at the time \
+on the list; when they gave none, ask once when suits them. Never choose a \
+time yourself."""
 
 _DOCTOR_CONTRACT = """\
 When a person from the clinic has to answer this patient themselves -- you \

@@ -630,6 +630,10 @@
   .lead-phone a:hover { color: var(--accent); }
   .lead-reason { max-width: 420px; }
   .lead-when { white-space: nowrap; font-size: var(--fs-sm); color: var(--ink-2); }
+  .lead-call { white-space: nowrap; }
+  .call-time-wrap { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .call-time { font-weight: 700; color: var(--ink); }
+  .call-time.late { color: var(--danger); }
   /* The status select wears its state. */
   select.status-select { min-width: 190px; font-weight: 600; padding-left: 28px;
     background-image: radial-gradient(circle at 14px 50%, var(--dot, var(--ink-4)) 4px, transparent 4.5px),
@@ -855,12 +859,14 @@
     #chatRows tr.pinned { background: var(--danger-soft); box-shadow: inset 3px 0 0 var(--danger); }
     #leadRows tr.is-new { box-shadow: inset 3px 0 0 var(--danger); }
     #chatRows tr.sel { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
-    #leadRows td:nth-child(4) { grid-column: 2; grid-row: 1; text-align: right; font-size: var(--fs-xs); }
+    #leadRows td:nth-child(5) { grid-column: 2; grid-row: 1; text-align: right; font-size: var(--fs-xs); }
+    #leadRows td:nth-child(4) { grid-column: 1 / -1; }
+    #leadRows td:nth-child(4)::before { content: "Qo'ng'iroq vaqti: "; color: var(--ink-3); font-size: var(--fs-xs); font-weight: 600; }
     #leadRows td:nth-child(2), #leadRows td:nth-child(3), #leadRows td[colspan] { grid-column: 1 / -1; max-width: none; }
     /* Status and "Suhbat" share the last line. */
-    #leadRows td:nth-child(5) { grid-column: 1; margin-top: 4px; }
-    #leadRows td:nth-child(6) { grid-column: 2; margin-top: 4px; }
-    #leadRows td:nth-child(5):last-child, #leadRows td:nth-child(6):empty { grid-column: 1 / -1; }
+    #leadRows td:nth-child(6) { grid-column: 1; margin-top: 4px; }
+    #leadRows td:nth-child(7) { grid-column: 2; margin-top: 4px; }
+    #leadRows td:nth-child(6):last-child, #leadRows td:nth-child(7):empty { grid-column: 1 / -1; }
     #leadRows select.status-select { width: 100%; min-width: 0; }
 
     .rp-hero { padding: 20px 16px; }
@@ -1173,7 +1179,7 @@
       </div>
       <div class="views" id="views-leads"></div>
       <div class="scroll"><table class="leads-table">
-        <thead><tr><th>Bemor</th><th>Telefon</th><th>Nima uchun</th><th>Qachon</th><th>Holat</th><th></th></tr></thead>
+        <thead><tr><th>Bemor</th><th>Telefon</th><th>Nima uchun</th><th>Qo'ng'iroq vaqti</th><th>Yozgan</th><th>Holat</th><th></th></tr></thead>
         <tbody id="leadRows"></tbody>
       </table></div>
       <button type="button" class="more-btn" id="leadMore" hidden>Yana ko'rsatish</button>
@@ -1909,7 +1915,7 @@ async function loadHome() {
       return item;
     }),
     ...newLeads.map((l) => attentionItem("lead", "Qo'ng'iroq qiling", l.patient_name || (l.username ? "@" + l.username : l.phone || "—"),
-      [l.phone, l.topic].filter(Boolean).join(" · ") || "—", relativeWhen(l.created_at), () => showTab("leads").catch((e) => toast(e.message, true)))),
+      [l.phone, l.convenient_time ? "📞 " + l.convenient_time : null, l.topic].filter(Boolean).join(" · ") || "—", relativeWhen(l.created_at), () => showTab("leads").catch((e) => toast(e.message, true)))),
     ...unseenPeople.map((p) => attentionItem("media", "Rasm ko'rilmagan", patientTitle(p),
       `${p.unseen} ta yangi rasm`, p.last_at ? relativeWhen(p.last_at) : "", () => showTab("media").catch((e) => toast(e.message, true)))),
   ];
@@ -2319,7 +2325,7 @@ async function loadLeads() {
     `${rows.length} ta ko'rsatilgan · ${unseen} tasiga hali qo'ng'iroq qilinmagan`;
 
   if (!shown.length) {
-    fill("leadRows", [el("tr", {}, el("td", { colspan: "6", class: "muted", style: "text-align:center;padding:28px" },
+    fill("leadRows", [el("tr", {}, el("td", { colspan: "7", class: "muted", style: "text-align:center;padding:28px" },
       q || params.get("status") ? "Filtrga mos so'rov yo'q" : "Hali hech kim qo'ng'iroq qilishni so'ramagan"))]);
     return;
   }
@@ -2334,6 +2340,7 @@ async function loadLeads() {
       el("td", { class: "lead-who" }, el("b", {}, title), l.username && l.patient_name ? el("span", {}, "@" + l.username) : null),
       el("td", {}, phone),
       el("td", { class: "lead-reason" }, l.topic || el("span", { class: "muted" }, "aytilmagan")),
+      el("td", { class: "lead-call" }, callTimeCell(l)),
       el("td", { class: "lead-when", title: localDateTime(l.created_at) }, relativeWhen(l.created_at)),
       el("td", {}, canManage()
         ? el("select", { class: "status-select", "data-status": l.status, "aria-label": "Holat", onchange: (e) => { e.target.dataset.status = e.target.value; updateLead(l.id, e.target.value); } },
@@ -2344,6 +2351,41 @@ async function loadLeads() {
         ? el("button", { class: "act", onclick: () => openPatientChat(l.conversation_id) }, icon("chat"), "Suhbat")
         : null));
   }));
+}
+
+// When the patient asked to be rung, as the operator needs it: "ertaga 10-11
+// larda" written on the 16th is the 17th, and the operator reads it on the 17th.
+// \b knows only Latin letters, so the words are fenced by any non-letter.
+const callWord = (words) => new RegExp(`(^|[^\\p{L}])(${words})(?=$|[^\\p{L}])`, "iu");
+const CALL_DAY_WORDS = [
+  [callWord("bugun|бугун|сегодня"), 0],
+  [callWord("ertaga|эртага|завтра"), 1],
+  [callWord("indinga|indin|индинга|индин|послезавтра"), 2],
+];
+function callDay(text, writtenIso) {
+  for (const [pattern, days] of CALL_DAY_WORDS) {
+    if (pattern.test(text)) {
+      const day = new Date(writtenIso);
+      day.setHours(0, 0, 0, 0);
+      day.setDate(day.getDate() + days);
+      return { day, rest: text.replace(pattern, "$1").replace(/^[\s,]+/, "").trim() };
+    }
+  }
+  return null;
+}
+function callTimeCell(l) {
+  const text = (l.convenient_time || "").trim();
+  if (!text) return el("span", { class: "muted" }, "aytilmagan");
+  const found = callDay(text, l.created_at);
+  if (!found) return el("b", { class: "call-time" }, text);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diff = Math.round((found.day - today) / 86400000);
+  const dayLabel = diff === 0 ? "Bugun" : diff === 1 ? "Ertaga" : `${found.day.getDate()}-${MONTHS_SHORT[found.day.getMonth()]}`;
+  const late = diff < 0 && l.status === "new";
+  return el("span", { class: "call-time-wrap", title: `Bemor yozgani: "${text}"` },
+    el("b", { class: "call-time" + (late ? " late" : "") }, [dayLabel, found.rest].filter(Boolean).join(", ")),
+    late ? el("span", { class: "pill bad" }, "vaqti o'tdi") : null);
 }
 
 async function copyText(text) {
