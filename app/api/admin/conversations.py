@@ -23,6 +23,8 @@ from app.api.admin.schemas import (
     ConversationSummary,
     MessageOut,
     OperatorReply,
+    PostCommentGroup,
+    PostOut,
 )
 from app.api.auth import get_current_operator
 from app.core.db import get_db_session
@@ -30,6 +32,7 @@ from app.core.redaction import preview
 from app.core.tenant_context import get_current_tenant
 from app.models.channel import Channel
 from app.models.conversation import Conversation
+from app.models.instagram_post import InstagramPost
 from app.models.lead import Lead
 from app.models.message import Message, MessageSender
 from app.models.operator import Operator
@@ -104,6 +107,7 @@ async def _summaries(
     reasons = await _waiting_reasons(
         session, [c.id for c in conversations if c.needs_doctor_since is not None]
     )
+    posts = await _posts_behind(session, [c.id for c in conversations])
 
     rows = []
     for conversation in conversations:
@@ -127,9 +131,73 @@ async def _summaries(
                 updated_at=conversation.updated_at,
                 needs_doctor_since=conversation.needs_doctor_since,
                 waiting_reason=reasons.get(conversation.id),
+                post_summary=_post_label(posts.get(conversation.id)),
+                post_media_id=posts[conversation.id].media_id if conversation.id in posts else None,
             )
         )
     return rows
+
+
+async def _posts_behind(
+    session: AsyncSession, conversation_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, InstagramPost]:
+    """For each conversation that began under a post, that post -- the one
+    the newest comment in it names."""
+    if not conversation_ids:
+        return {}
+    rows = (
+        await session.execute(
+            select(Message.conversation_id, Message.meta["post_media_id"].astext)
+            .where(
+                Message.conversation_id.in_(conversation_ids),
+                Message.sender == MessageSender.PATIENT,
+                Message.meta["post_media_id"].astext.is_not(None),
+            )
+            .order_by(Message.created_at.desc())
+        )
+    ).all()
+    wanted: dict[uuid.UUID, str] = {}
+    for conversation_id, media_id in rows:
+        wanted.setdefault(conversation_id, media_id)
+    if not wanted:
+        return {}
+    posts = {
+        post.media_id: post
+        for post in (
+            await session.execute(
+                select(InstagramPost).where(
+                    InstagramPost.tenant_id == get_current_tenant(),
+                    InstagramPost.media_id.in_(set(wanted.values())),
+                )
+            )
+        ).scalars()
+    }
+    return {cid: posts[mid] for cid, mid in wanted.items() if mid in posts}
+
+
+def _post_label(post: InstagramPost | None) -> str | None:
+    """What to call the post in a list: its summary, else its caption's
+    first line, else the kind of post it is."""
+    if post is None:
+        return None
+    if post.summary:
+        return post.summary
+    if post.caption:
+        return post.caption.strip().splitlines()[0][:140]
+    return "Video" if post.media_type == "VIDEO" else "Post"
+
+
+def post_out(post: InstagramPost) -> PostOut:
+    return PostOut(
+        media_id=post.media_id,
+        media_type=post.media_type,
+        caption=post.caption,
+        summary=post.summary,
+        permalink=post.permalink,
+        posted_at=post.posted_at,
+        has_cover=bool(post.thumbnail_url),
+        transcript_status=post.transcript_status,
+    )
 
 
 # What a patient says when they are done, not when they are asking: these
@@ -218,6 +286,52 @@ def _commented() -> Any:
     )
 
 
+@router.get("/by-post", response_model=list[PostCommentGroup])
+async def conversations_by_post(
+    operator: Operator = Depends(get_current_operator),
+    session: AsyncSession = Depends(get_db_session),
+) -> list[PostCommentGroup]:
+    """The posts people commented under, most commented first: which video
+    is bringing the questions, and where to answer them."""
+    tenant_id = get_current_tenant()
+    counted = (
+        await session.execute(
+            select(
+                Message.meta["post_media_id"].astext.label("media_id"),
+                func.count(func.distinct(Message.conversation_id)).label("conversations"),
+            )
+            .join(Conversation, Conversation.id == Message.conversation_id)
+            .where(
+                Conversation.tenant_id == tenant_id,
+                Message.sender == MessageSender.PATIENT,
+                Message.meta["post_media_id"].astext.is_not(None),
+            )
+            .group_by(Message.meta["post_media_id"].astext)
+            .order_by(func.count(func.distinct(Message.conversation_id)).desc())
+        )
+    ).all()
+    posts = (
+        {
+            post.media_id: post
+            for post in (
+                await session.execute(
+                    select(InstagramPost).where(
+                        InstagramPost.tenant_id == tenant_id,
+                        InstagramPost.media_id.in_([media_id for media_id, _ in counted]),
+                    )
+                )
+            ).scalars()
+        }
+        if counted
+        else {}
+    )
+    return [
+        PostCommentGroup(post=post_out(posts[media_id]), comments=n)
+        for media_id, n in counted
+        if media_id in posts
+    ]
+
+
 @router.get("", response_model=list[ConversationSummary])
 async def list_conversations(
     operator: Operator = Depends(get_current_operator),
@@ -226,6 +340,7 @@ async def list_conversations(
     only_taken_over: bool = Query(default=False),
     needs_doctor: bool = Query(default=False),
     from_comments: bool = Query(default=False),
+    post_media_id: str | None = Query(default=None, max_length=64),
     q: str | None = Query(default=None, max_length=100),
     limit: int = Query(default=50, ge=1, le=500),
 ) -> list[ConversationSummary]:
@@ -262,6 +377,15 @@ async def list_conversations(
         stmt = stmt.where(Conversation.needs_doctor_since.is_not(None))
     if from_comments:
         stmt = stmt.where(_commented())
+    if post_media_id:
+        # The comments under one post: the "by video" strip on the inbox.
+        stmt = stmt.where(
+            exists().where(
+                Message.conversation_id == Conversation.id,
+                Message.sender == MessageSender.PATIENT,
+                Message.meta["post_media_id"].astext == post_media_id,
+            )
+        )
     if q and q.strip():
         # Matched in the database rather than in the dashboard, because the
         # list is capped at `limit`: filtering what was already fetched would
@@ -333,6 +457,24 @@ async def get_conversation(
     conversation = await _load(session, conversation_id)
     messages = await MessageRepository(session).list_recent(conversation.id, TRANSCRIPT_LIMIT)
     [summary] = await _summaries(session, [conversation])
+    media_ids = {
+        m.meta.get("post_media_id") for m in messages if m.meta and m.meta.get("post_media_id")
+    }
+    posts = (
+        {
+            post.media_id: post_out(post)
+            for post in (
+                await session.execute(
+                    select(InstagramPost).where(
+                        InstagramPost.tenant_id == get_current_tenant(),
+                        InstagramPost.media_id.in_(media_ids),
+                    )
+                )
+            ).scalars()
+        }
+        if media_ids
+        else {}
+    )
     return ConversationDetail(
         conversation=summary,
         messages=[
@@ -344,6 +486,7 @@ async def get_conversation(
                 created_at=message.created_at,
                 delivery_status=message.delivery_status,
                 delivery_error=message.delivery_error,
+                post=posts.get(str((message.meta or {}).get("post_media_id") or "")),
             )
             for message in messages
         ],

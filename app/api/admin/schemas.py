@@ -78,6 +78,30 @@ class ConversationSummary(BaseModel):
     # comes last. The task list shows this so nobody has to open the chat
     # to know what it is about.
     waiting_reason: str | None = None
+    # For a conversation that began under a post: which one, in a few words.
+    post_summary: str | None = None
+    post_media_id: str | None = None
+
+
+class PostOut(BaseModel):
+    """The Instagram post a comment was left under, as the dashboard shows it."""
+
+    media_id: str
+    media_type: str | None
+    caption: str | None
+    summary: str | None
+    permalink: str | None
+    posted_at: datetime | None
+    # Whether a cover can be fetched from /api/admin/posts/{media_id}/cover.
+    has_cover: bool
+    transcript_status: str
+
+
+class PostCommentGroup(BaseModel):
+    """One post and how many conversations began with a comment under it."""
+
+    post: PostOut
+    comments: int
 
 
 class MessageOut(BaseModel):
@@ -86,6 +110,8 @@ class MessageOut(BaseModel):
     content: str
     channel: str
     created_at: datetime
+    # For a comment: the post it was written under.
+    post: PostOut | None = None
     # "sent", "undeliverable", "failed". An answer that never reached the
     # patient is the thing the clinic most needs to see in a transcript,
     # and it used not to be written down at all.

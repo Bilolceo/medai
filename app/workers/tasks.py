@@ -52,6 +52,7 @@ from app.services import (
     comments,
     doctor_telegram,
     handoff,
+    instagram_posts,
     message_labels,
     patient_media,
     small_talk,
@@ -1481,6 +1482,17 @@ async def answer_comment(
                         channel_type=str(channel.type),
                         sender_external_id=author_external_id,
                         text=f"{message_labels.COMMENT_PREFIX}{text}",
+                        reply_context={"post_media_id": media_id} if media_id else None,
+                    )
+                    # Fetched even when not answered: the dashboard shows
+                    # staff which video the comment was under.
+                    await instagram_posts.context(
+                        session,
+                        tenant_id=tenant_uuid,
+                        client=instagram,
+                        access_token=access_token,
+                        media_id=media_id,
+                        llm_provider=llm_provider,
                     )
                     author = await session.get(User, kept.user_id)
                     if author is not None and username and not author.username:
@@ -1499,14 +1511,22 @@ async def answer_comment(
                 logger.info("comment_thanked", extra={"username": username})
                 return
 
-            caption = (
-                await instagram.fetch_media_caption(access_token=access_token, media_id=media_id)
-                if media_id
-                else None
+            # The post the comment is about: fetched, its video heard and
+            # summarised the first time, read back after that.
+            post = await instagram_posts.context(
+                session,
+                tenant_id=tenant_uuid,
+                client=instagram,
+                access_token=access_token,
+                media_id=media_id,
+                llm_provider=llm_provider,
             )
+            caption = post.caption if post is not None else None
 
             # Recorded as a message from this patient, so the conversation the
             # reply lands in reads in order: what they asked, then the answer.
+            # The post's id rides in the message's meta, so the dashboard can
+            # show which video the comment was under.
             inbound = None
             if author_external_id:
                 inbound = await register_inbound_message(
@@ -1515,6 +1535,7 @@ async def answer_comment(
                     channel_type=str(channel.type),
                     sender_external_id=author_external_id,
                     text=f"{message_labels.COMMENT_PREFIX}{text}",
+                    reply_context={"post_media_id": media_id} if media_id else None,
                 )
                 # The comment arrives with the author's handle, and nothing
                 # else will ever tell us it: without it the dashboard lists
@@ -1534,7 +1555,7 @@ async def answer_comment(
                     if inbound is not None
                     else None
                 ),
-                situation=comments.situation(caption),
+                situation=comments.situation(caption, instagram_posts.describe(post)),
             )
             reply, _ = callbacks.extract(reply)
             reply, needs_doctor = handoff.extract(reply)

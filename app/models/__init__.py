@@ -9,6 +9,7 @@ from app.models.conversation_state import (
     FlowStatus,
 )
 from app.models.doctor import Doctor
+from app.models.instagram_post import InstagramPost, TranscriptStatus
 from app.models.knowledge_base import KnowledgeBase
 from app.models.knowledge_document import KnowledgeChunk, KnowledgeDocument
 from app.models.lead import Lead, LeadStatus
@@ -32,6 +33,7 @@ __all__ = [
     "FlowIntent",
     "FlowStatus",
     "Doctor",
+    "InstagramPost",
     "KnowledgeBase",
     "KnowledgeChunk",
     "KnowledgeDocument",
@@ -48,5 +50,6 @@ __all__ = [
     "SuggestionKind",
     "SuggestionStatus",
     "Tenant",
+    "TranscriptStatus",
     "User",
 ]

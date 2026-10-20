@@ -64,11 +64,17 @@ def thanks_reply() -> str:
     return random.choice(THANKS_REPLIES)
 
 
-def situation(caption: str | None) -> str:
-    """What the model is told about a message that arrived as a comment."""
-    if caption:
-        post = caption[:_MAX_CAPTION_CHARS]
-        post_line = f"Izoh yozilgan post matni:\n«{post}»"
+def situation(caption: str | None, post: str | None = None) -> str:
+    """What the model is told about a message that arrived as a comment.
+
+    `post` is the fuller description -- what the video says, then the
+    caption (app.services.instagram_posts.describe); `caption` alone is what
+    there is when the post could not be fetched.
+    """
+    if post:
+        post_line = f"Izoh yozilgan post haqida:\n{post}"
+    elif caption:
+        post_line = f"Izoh yozilgan post matni:\n«{caption[:_MAX_CAPTION_CHARS]}»"
     else:
         post_line = "Izoh yozilgan post matni noma'lum."
     return (
@@ -79,7 +85,9 @@ def situation(caption: str | None) -> str:
         f"{post_line}\n"
         "- Avval izohni post mazmuni bilan birga yaxshilab tushunib oling: "
         '"qancha?", "qayerda?", "menda ham shunday" kabi qisqa izohlar aynan '
-        "shu postdagi xizmat yoki muammo haqida.\n"
+        "shu postdagi xizmat yoki muammo haqida. Video mazmuni berilgan "
+        "bo'lsa, izohni shu video haqida deb tushuning va javobni unga "
+        "moslang -- qaysi xizmat ekanini qayta so'ramang.\n"
         "- Aynan so'ralgan narsaga aniq va to'g'ri javob bering, faqat "
         "klinika ma'lumotlari va bilimlar bazasiga tayaning. Bilmagan narsani "
         "o'ylab topmang.\n"

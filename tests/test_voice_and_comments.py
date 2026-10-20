@@ -8,6 +8,7 @@ from contextlib import AbstractContextManager
 from typing import Any
 from uuid import UUID
 
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.webhook import WebhookPayload
@@ -293,3 +294,67 @@ async def test_comments_switched_off_are_kept_and_not_answered(db_session: Any, 
     finally:
         reset_current_tenant(token)
     assert kept and kept[0].endswith("Narxi qancha?")
+
+
+async def test_a_comment_is_answered_knowing_what_the_video_says(
+    db_session: Any, seed: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Owner, 2026-10-20: the assistant answered comments blind to the reel.
+    Now the prompt carries the video's summary, and the comment remembers
+    which post it was under, for the dashboard."""
+    from contextlib import asynccontextmanager
+
+    from sqlalchemy import select
+
+    from app.core.tenant_context import reset_current_tenant, set_current_tenant
+    from app.models.message import Message
+    from app.services import instagram_posts
+    from app.workers.tasks import answer_comment
+    from tests.test_conversation_memory import NoEmbeddings, ScriptedLLM
+    from tests.test_instagram_posts import REEL, PostClient
+
+    async def hear(data: bytes) -> str | None:
+        return "Bu videoda jinsiy zaiflikni dorisiz davolash haqida gapiramiz"
+
+    monkeypatch.setattr(instagram_posts, "_speech_to_text", hear)
+
+    @asynccontextmanager
+    async def sessions() -> Any:
+        yield db_session
+
+    llm = ScriptedLLM()
+    llm.say("Video jinsiy zaiflikni dorisiz davolash haqida.")  # the summary
+    llm.say("Assalomu alaykum. Bu holat davolanadi, doktor ko'rikda aytadi.")  # the answer
+    client = PostClient()
+    await answer_comment(
+        {},
+        str(seed.tenant_a.id),
+        str(seed.a.channel.id),
+        "comment-9",
+        "1106997565421699",
+        "aziz_9",
+        "Menda ham shunday, davolanadimi?",
+        session_factory=sessions,
+        embedding_provider=NoEmbeddings(),
+        llm_provider=llm,
+        client=client,
+        media_id=REEL["id"],
+    )
+
+    # The answer's prompt was told what the video is about.
+    assert any("Video mazmuni: Video jinsiy zaiflikni" in p for p in llm.prompts)
+    assert client.downloads == [REEL["media_url"]]
+    token = set_current_tenant(seed.tenant_a.id)
+    try:
+        message = (
+            (
+                await db_session.execute(
+                    select(Message).where(Message.content.like("%Menda ham shunday%"))
+                )
+            )
+            .scalars()
+            .first()
+        )
+    finally:
+        reset_current_tenant(token)
+    assert message is not None and message.meta.get("post_media_id") == REEL["id"]

@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
+from typing import Any
 
 import httpx
 
@@ -58,6 +59,13 @@ class InstagramSendError(Exception):
     """Raised when the Instagram Graph API rejects or fails a send request."""
 
 
+# What is asked of a post a comment was left under. media_url is the video
+# file (or the image) and expires; thumbnail_url is the cover.
+MEDIA_FIELDS = (
+    "id,media_type,media_product_type,caption,permalink,thumbnail_url,media_url,timestamp"
+)
+
+
 class InstagramClient(ABC):
     """Abstraction over "send a text message to an Instagram user via the
     Send API", mirroring LLMProvider/EmbeddingProvider (app/rag/llm.py,
@@ -95,6 +103,21 @@ class InstagramClient(ABC):
 
     async def fetch_media_caption(self, *, access_token: str, media_id: str) -> str | None:
         """The caption of the post a comment was left under, or None."""
+        return None
+
+    async def fetch_media(self, *, access_token: str, media_id: str) -> dict[str, Any] | None:
+        """The post a comment was left under: caption, type, cover, link,
+        time, and for a video the link to its file. None when it cannot be
+        had -- a comment is answered without its post rather than not at all.
+        """
+        return None
+
+    async def download(self, url: str, *, max_bytes: int) -> bytes | None:
+        """The bytes behind one of Instagram's CDN links, or None.
+
+        None past `max_bytes` as well as on any error: a video the clinic
+        posted is a few megabytes, and nothing here should hold more.
+        """
         return None
 
     @abstractmethod
@@ -204,6 +227,50 @@ class GraphAPIInstagramClient(InstagramClient):
             if isinstance(caption, str) and caption.strip():
                 return caption.strip()
         return None
+
+    async def fetch_media(self, *, access_token: str, media_id: str) -> dict[str, Any] | None:
+        try:
+            response = await self._http.get(
+                f"/{media_id}",
+                params={"fields": MEDIA_FIELDS, "access_token": access_token},
+            )
+        except httpx.HTTPError:
+            return None
+        if response.is_error:
+            logger.warning(
+                "instagram_media_fetch_failed",
+                extra={"media_id": media_id, "status_code": response.status_code},
+            )
+            return None
+        with suppress(ValueError):
+            body = response.json()
+            if isinstance(body, dict) and body.get("id"):
+                return body
+        return None
+
+    async def download(self, url: str, *, max_bytes: int) -> bytes | None:
+        # The CDN, not the Graph API: a full URL, and a longer wait than a
+        # Graph call gets, because this is megabytes rather than a line.
+        try:
+            async with (
+                httpx.AsyncClient(timeout=60.0, follow_redirects=True) as http,
+                http.stream("GET", url) as response,
+            ):
+                if response.is_error:
+                    return None
+                declared = response.headers.get("content-length")
+                if declared and declared.isdigit() and int(declared) > max_bytes:
+                    return None
+                chunks: list[bytes] = []
+                size = 0
+                async for chunk in response.aiter_bytes():
+                    size += len(chunk)
+                    if size > max_bytes:
+                        return None
+                    chunks.append(chunk)
+                return b"".join(chunks)
+        except httpx.HTTPError:
+            return None
 
     async def fetch_username(self, *, access_token: str, igsid: str) -> str | None:
         # The sender's own node, which the messaging permission grants for
