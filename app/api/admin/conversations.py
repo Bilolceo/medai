@@ -294,20 +294,22 @@ async def conversations_by_post(
     """The posts people commented under, most commented first: which video
     is bringing the questions, and where to answer them."""
     tenant_id = get_current_tenant()
+    # One expression, named once: Postgres groups by the very expression it
+    # selects, and two renderings of meta->>'post_media_id' did not match
+    # ("must appear in the GROUP BY clause", 2026-10-20).
+    media_id = Message.meta["post_media_id"].astext.label("media_id")
+    conversations = func.count(func.distinct(Message.conversation_id)).label("conversations")
     counted = (
         await session.execute(
-            select(
-                Message.meta["post_media_id"].astext.label("media_id"),
-                func.count(func.distinct(Message.conversation_id)).label("conversations"),
-            )
+            select(media_id, conversations)
             .join(Conversation, Conversation.id == Message.conversation_id)
             .where(
                 Conversation.tenant_id == tenant_id,
                 Message.sender == MessageSender.PATIENT,
                 Message.meta["post_media_id"].astext.is_not(None),
             )
-            .group_by(Message.meta["post_media_id"].astext)
-            .order_by(func.count(func.distinct(Message.conversation_id)).desc())
+            .group_by(media_id)
+            .order_by(conversations.desc())
         )
     ).all()
     posts = (

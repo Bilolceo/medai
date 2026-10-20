@@ -1695,3 +1695,50 @@ async def test_the_inbox_reads_fresh_red_rows_first_then_everything_by_time(
     ids = [r["id"] for r in (await client.get("/api/admin/conversations?limit=500")).json()]
     mine = [i for i in ids if i in {old_pin, pin_a, pin_b, recent}]
     assert mine == [pin_b, pin_a, recent, old_pin]
+
+
+async def test_the_inbox_lists_the_posts_people_commented_under(
+    client: httpx.AsyncClient, db_session: AsyncSession, seed: Seed
+) -> None:
+    """The "by video" strip under Izohlar: posts, most commented first, and
+    the conversations narrowed to one post. The grouped query once failed on
+    Postgres ("must appear in the GROUP BY clause", 2026-10-20)."""
+    from app.models.instagram_post import InstagramPost
+    from app.models.message import Message
+    from app.services.message_labels import COMMENT_PREFIX
+
+    _login_as(client, seed.a.operator.id)
+    db_session.add(
+        InstagramPost(
+            tenant_id=seed.tenant_a.id,
+            media_id="m-1",
+            media_type="VIDEO",
+            caption="Implant haqida",
+            summary="Uch komponentli implant amaliyoti.",
+            thumbnail_url="https://cdn.example/c.jpg",
+        )
+    )
+    db_session.add(
+        Message(
+            conversation_id=seed.a.conversation.id,
+            sender="patient",
+            content=f"{COMMENT_PREFIX}Narxi qancha?",
+            channel="instagram",
+            meta={"post_media_id": "m-1"},
+        )
+    )
+    await db_session.flush()
+
+    groups = (await client.get("/api/admin/conversations/by-post")).json()
+    assert groups and groups[0]["post"]["media_id"] == "m-1"
+    assert groups[0]["post"]["summary"].startswith("Uch komponentli")
+    assert groups[0]["post"]["has_cover"] is True
+    assert groups[0]["comments"] == 1
+
+    rows = (await client.get("/api/admin/conversations?post_media_id=m-1")).json()
+    assert [r["id"] for r in rows] == [str(seed.a.conversation.id)]
+    assert rows[0]["post_summary"].startswith("Uch komponentli")
+
+    detail = (await client.get(f"/api/admin/conversations/{seed.a.conversation.id}")).json()
+    comment = next(m for m in detail["messages"] if m["content"].endswith("Narxi qancha?"))
+    assert comment["post"]["media_id"] == "m-1"
