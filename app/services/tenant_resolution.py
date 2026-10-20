@@ -83,6 +83,18 @@ async def bot_replies_enabled(session: AsyncSession, tenant_id: uuid.UUID) -> bo
     return bool(tenant.settings.get("bot_replies_enabled", True))
 
 
+async def comment_replies_enabled(session: AsyncSession, tenant_id: uuid.UUID) -> bool:
+    """Whether the assistant answers comments under the clinic's posts.
+
+    Its own switch beside the assistant's: a clinic may want Direct answered
+    and its public comments left to people. Absent means on, as before.
+    """
+    tenant = await session.get(Tenant, tenant_id)
+    if tenant is None:
+        return True
+    return bool(tenant.settings.get("comment_replies_enabled", True))
+
+
 async def debounce_window(session: AsyncSession, tenant_id: uuid.UUID) -> int | None:
     """How long this clinic waits for a patient to finish typing, in seconds.
 

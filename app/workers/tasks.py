@@ -87,7 +87,11 @@ from app.services.sheets import (
     mirror_lead,
     summarise_problem,
 )
-from app.services.tenant_resolution import bot_replies_enabled, debounce_window
+from app.services.tenant_resolution import (
+    bot_replies_enabled,
+    comment_replies_enabled,
+    debounce_window,
+)
 from app.services.token_refresh import refresh_instagram_tokens
 from app.services.webhook_watch import verify_telegram_webhooks
 
@@ -1466,6 +1470,24 @@ async def answer_comment(
                 return
             access_token = decrypt(channel.credentials)
             instagram = client or get_instagram_client()
+
+            if not await comment_replies_enabled(session, tenant_uuid):
+                # Comments switched off: kept where staff will see them, under
+                # "Izohlar", and nothing posted or sent.
+                if author_external_id and comments.has_words(text):
+                    kept = await register_inbound_message(
+                        session,
+                        channel_id=uuid.UUID(channel_id),
+                        channel_type=str(channel.type),
+                        sender_external_id=author_external_id,
+                        text=f"{message_labels.COMMENT_PREFIX}{text}",
+                    )
+                    author = await session.get(User, kept.user_id)
+                    if author is not None and username and not author.username:
+                        author.username = username.lstrip("@")
+                    await session.commit()
+                logger.info("comment_replies_off", extra={"username": username})
+                return
 
             if not comments.has_words(text):
                 with suppress(Exception):

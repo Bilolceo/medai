@@ -239,3 +239,57 @@ async def test_a_comment_is_answered_without_an_offer_to_book(db_session: Any, s
     [(_, text)] = client.private_replies
     assert "shaxsiy ma'lumot" in text
     assert "telefon" not in text
+
+
+async def test_comments_switched_off_are_kept_and_not_answered(db_session: Any, seed: Any) -> None:
+    """Owner, 2026-10-20: a switch for answering comments. Off, nothing is
+    posted or sent; the comment still reaches "Izohlar" for staff."""
+    from contextlib import asynccontextmanager
+
+    from sqlalchemy import select
+
+    from app.core.tenant_context import reset_current_tenant, set_current_tenant
+    from app.models.message import Message
+    from app.models.tenant import Tenant
+    from app.workers.tasks import answer_comment
+    from tests.test_conversation_memory import NoEmbeddings, ScriptedLLM
+    from tests.test_worker_tasks import FakeInstagramClient
+
+    tenant = await db_session.get(Tenant, seed.tenant_a.id)
+    tenant.settings = {**(tenant.settings or {}), "comment_replies_enabled": False}
+    await db_session.flush()
+
+    @asynccontextmanager
+    async def sessions() -> Any:
+        yield db_session
+
+    client = FakeInstagramClient()
+    await answer_comment(
+        {},
+        str(seed.tenant_a.id),
+        str(seed.a.channel.id),
+        "comment-3",
+        "1106997565421642",
+        "sardor_99",
+        "Narxi qancha?",
+        session_factory=sessions,
+        embedding_provider=NoEmbeddings(),
+        llm_provider=ScriptedLLM(),
+        client=client,
+    )
+
+    assert client.private_replies == [] and client.comment_replies == []
+    token = set_current_tenant(seed.tenant_a.id)
+    try:
+        kept = (
+            (
+                await db_session.execute(
+                    select(Message.content).where(Message.content.like("%Narxi qancha?%"))
+                )
+            )
+            .scalars()
+            .all()
+        )
+    finally:
+        reset_current_tenant(token)
+    assert kept and kept[0].endswith("Narxi qancha?")

@@ -208,6 +208,7 @@
   .icon-btn.bordered { border-color: var(--glass-border); background: var(--panel); box-shadow: var(--shadow); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
   td .icon-btn { width: var(--ctl-sm); height: var(--ctl-sm); }
   #logout:hover { color: var(--danger); }
+  #commentToggle.is-off { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
 
   .shell { margin-left: var(--side-w); min-width: 0; min-height: 100vh; display: flex; flex-direction: column; }
   .topbar { position: sticky; top: 0; z-index: 20; height: var(--topbar-h); display: flex; align-items: center; gap: 16px; padding: 0 32px; background: color-mix(in srgb, var(--bg) 55%, transparent); -webkit-backdrop-filter: saturate(160%) blur(18px); backdrop-filter: saturate(160%) blur(18px); }
@@ -1096,6 +1097,7 @@
         <span id="chatLiveHint" class="muted"></span>
         <span id="botStatePill" class="pill">—</span>
         <button id="botToggle" class="act" hidden></button>
+        <button id="commentToggle" class="act" hidden></button>
       </div>
       <div class="views" id="views-conversations"></div>
       <div class="scroll"><table>
@@ -2024,6 +2026,8 @@ document.getElementById("tab-home").addEventListener("click", (e) => {
 // to the conversations because that is the screen somebody is looking at when
 // they decide the bot should stop.
 let BOT_REPLIES_ENABLED = true;
+// Answers to comments under the posts: their own switch, beside the bot's.
+let COMMENT_REPLIES_ENABLED = true;
 
 function renderBotSwitch() {
   const pill = document.getElementById("botStatePill");
@@ -2032,13 +2036,34 @@ function renderBotSwitch() {
   pill.className = "pill " + (BOT_REPLIES_ENABLED ? "ok" : "bad");
   button.hidden = !canManageClinic();
   button.textContent = BOT_REPLIES_ENABLED ? "Botni o'chirish" : "Botni yoqish";
+  const comments = document.getElementById("commentToggle");
+  comments.hidden = !canManageClinic();
+  comments.textContent = COMMENT_REPLIES_ENABLED ? "Izohlarga javobni o'chirish" : "Izohlarga javobni yoqish";
+  comments.classList.toggle("is-off", !COMMENT_REPLIES_ENABLED);
+  comments.title = COMMENT_REPLIES_ENABLED
+    ? "Hozir bot postlar ostidagi izohlarga javob beryapti"
+    : "Hozir bot izohlarga javob bermayapti; izohlar \"Izohlar\" ro'yxatida ko'rinadi";
 }
 
 async function loadBotSwitch() {
   const settings = await api("/settings");
   BOT_REPLIES_ENABLED = settings.bot_replies_enabled !== false;
+  COMMENT_REPLIES_ENABLED = settings.comment_replies_enabled !== false;
   renderBotSwitch();
 }
+
+document.getElementById("commentToggle").addEventListener("click", async () => {
+  const turningOff = COMMENT_REPLIES_ENABLED;
+  if (turningOff && !await uiConfirm("Bot postlar ostidagi izohlarga javob berishni to'xtatadimi? Izohlar \"Izohlar\" ro'yxatida ko'rinib turadi.")) return;
+  try {
+    await api("/settings", { method: "PATCH", body: { comment_replies_enabled: !COMMENT_REPLIES_ENABLED } });
+    COMMENT_REPLIES_ENABLED = !COMMENT_REPLIES_ENABLED;
+    renderBotSwitch();
+    toast(COMMENT_REPLIES_ENABLED ? "Izohlarga javob yoqildi" : "Izohlarga javob o'chirildi");
+  } catch (err) {
+    toast(err.message, true);
+  }
+});
 
 document.getElementById("chatSearch").addEventListener("input", (e) => onChatSearch(e.target.value));
 document.getElementById("chatSearchClear").addEventListener("click", () => {

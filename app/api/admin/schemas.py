@@ -254,6 +254,10 @@ class TenantSettings(BaseModel):
     # answer to anything already queued, and is not something a front desk can
     # be asked to do at eleven at night.
     bot_replies_enabled: bool | None = None
+    # Answers to comments under the clinic's posts, on their own switch
+    # (owner, 2026-10-20): off, a comment is still recorded and listed under
+    # "Izohlar" for staff, and nothing is posted or sent to its author.
+    comment_replies_enabled: bool | None = None
     debounce_seconds: int | None = Field(default=None, ge=0, le=300)
     clinic_address: str | None = None
     clinic_landmark: str | None = None
