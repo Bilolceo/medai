@@ -105,3 +105,10 @@ def test_an_age_written_with_da_is_uzbek_not_russian() -> None:
 
 def test_russian_da_is_still_russian() -> None:
     assert reply_script("Да, давайте запишусь на завтра") == "ru"
+
+
+def test_switching_to_cyrillic_is_answered_in_cyrillic() -> None:
+    """Live, 2026-10-20: a Latin question, then "Пенил оператсия неча пул",
+    answered in Latin."""
+    history: list[ChatMessage] = [{"role": "user", "content": "Qabulga qanday yozilsam bo`ladi?"}]
+    assert conversation_script(history, "Пенил оператсия  неча пул") == "uz-cyrl"

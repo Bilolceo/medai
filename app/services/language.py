@@ -49,7 +49,7 @@ _UZBEK_WORDS = frozenset(
         "ешим ёшим ешимда ёшимда ёшда ешда умуман чикмеди чикмади чикади "
         "оғрияпти огрияпти огрийапти куриб курсатинг беринг бериниг "
         # "Адрес кайси жойда" was answered in Russian (2026-10-16).
-        "кайси қайси жой жойда жойи жойлашган каерда кайда кани",
+        "кайси қайси жой жойда жойи жойлашган каерда кайда кани неча пул пули",
     )
 )
 _UZBEK_SUFFIX = re.compile(r"(лар|ларни|ларга|дан|даги|нинг|миз|сиз|ман|ган|япти|ябди|мокда)$")
@@ -201,11 +201,23 @@ def conversation_script(history: Sequence[ChatMessage] | None, user_message: str
         if _letter_count(message) < _MIN_LETTERS:
             continue
         script, clear = _script_of(message)
+        if first_guess is not None and _is_cyrillic(script) != _is_cyrillic(first_guess):
+            continue
         if clear:
             return script
         if first_guess is None:
             first_guess = script
+        elif _is_cyrillic(script) != _is_cyrillic(first_guess):
+            # The alphabet itself is never unclear. "Пенил оператсия неча пул"
+            # after a Latin "Qabulga qanday yozilsam?" was answered in Latin
+            # (2026-10-20): an older message in the other alphabet says
+            # nothing about Uzbek-or-Russian in this one.
+            continue
     return first_guess or reply_script(written[0])
+
+
+def _is_cyrillic(script: str) -> bool:
+    return script in ("uz-cyrl", "ru")
 
 
 # Labels the system puts in the transcript in its own words -- "🎤 Ovozli
