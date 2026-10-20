@@ -1111,6 +1111,7 @@
           <button type="button" data-scope="all" aria-pressed="true">Hammasi</button>
           <button type="button" data-scope="operator" aria-pressed="false" title="Operator yoki doktor olgan, bot javob bermayotgan suhbatlar">Operatorga o'tganlar <span class="seg-n" id="chatOperatorCount" hidden></span></button>
           <button type="button" data-scope="comments" aria-pressed="false" title="Instagram postlari ostiga yozilgan izohlardan kelgan suhbatlar">Izohlar <span class="seg-n" id="chatCommentCount" hidden></span></button>
+          <button type="button" data-scope="bot" aria-pressed="false" title="Faqat botning o'zi javob bergan suhbatlar — operator aralashmagan, izohdan kelmagan">Chat bot <span class="seg-n" id="chatBotCount" hidden></span></button>
         </div>
         <span class="tb-spacer"></span>
         <span id="chatLiveHint" class="muted"></span>
@@ -2164,7 +2165,7 @@ let CHATS_LAST_SEEN = new Map();
 // so the operators can work through their own list without the bot's.
 // "Izohlar": the people who wrote under a post, so somebody can answer the
 // comments the assistant could not reach in Direct.
-const CHAT_SCOPES = { operator: "only_taken_over", comments: "from_comments" };
+const CHAT_SCOPES = { operator: "only_taken_over", comments: "from_comments", bot: "bot_only" };
 function chatScope() {
   const params = LIST_PARAMS.conversations;
   return Object.keys(CHAT_SCOPES).find((scope) => params[CHAT_SCOPES[scope]] === "true") || "all";
@@ -2203,7 +2204,7 @@ async function loadChats(options = {}) {
   ]);
   if (seq !== CHATS_SEQ) return;
   renderByPost(byPost);
-  for (const [id, field] of [["chatOperatorCount", "taken_over"], ["chatCommentCount", "comments"]]) {
+  for (const [id, field] of [["chatOperatorCount", "taken_over"], ["chatCommentCount", "comments"], ["chatBotCount", "bot_only"]]) {
     const badge = document.getElementById(id);
     badge.textContent = counts ? String(counts[field] || 0) : "";
     badge.hidden = !counts || !counts[field];
@@ -2211,6 +2212,7 @@ async function loadChats(options = {}) {
   const emptyScope = {
     operator: "Operatorga o'tgan suhbat yo'q — hammasiga bot javob beryapti",
     comments: "Izohdan kelgan suhbat yo'q",
+    bot: "Bot o'zi javob bergan suhbat yo'q",
   }[chatScope()];
   if (!rows.length && emptyScope && !CHAT_SEARCH) {
     CHATS_SIGNATURE = "";

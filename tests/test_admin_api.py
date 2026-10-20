@@ -1742,3 +1742,48 @@ async def test_the_inbox_lists_the_posts_people_commented_under(
     detail = (await client.get(f"/api/admin/conversations/{seed.a.conversation.id}")).json()
     comment = next(m for m in detail["messages"] if m["content"].endswith("Narxi qancha?"))
     assert comment["post"]["media_id"] == "m-1"
+
+
+async def test_the_chat_bot_view_shows_only_what_the_bot_answered_alone(
+    client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    seed: Seed,
+    as_tenant: Callable[[UUID], AbstractContextManager[None]],
+) -> None:
+    """Owner, 2026-10-20: a "Chat bot" tab -- the bot on, nobody from the
+    clinic ever wrote, and not a comment. Operator-touched, paused and
+    comment conversations stay out; so does one the bot never answered."""
+    from app.models.message import Message
+    from app.repositories.conversation import ConversationRepository
+    from app.repositories.user import UserRepository
+    from app.services.message_labels import COMMENT_PREFIX
+
+    _login_as(client, seed.a.operator.id)
+
+    async def chat(name: str, *senders: str, bot_on: bool = True, comment: bool = False) -> str:
+        with as_tenant(seed.tenant_a.id):
+            user = await UserRepository(db_session).create(
+                channel_id=seed.a.channel.id, external_id=name
+            )
+            c = await ConversationRepository(db_session).create(user_id=user.id, status="open")
+            c.is_bot_enabled = bot_on
+            for s in senders:
+                text = f"{COMMENT_PREFIX}salom" if comment and s == "patient" else "salom"
+                db_session.add(
+                    Message(conversation_id=c.id, sender=s, content=text, channel="instagram")
+                )
+            await db_session.flush()
+            return str(c.id)
+
+    bot_alone = await chat("bot-alone", "patient", "bot")
+    with_operator = await chat("with-op", "patient", "bot", "operator")
+    paused = await chat("paused", "patient", "bot", bot_on=False)
+    from_comment = await chat("comment", "patient", "bot", comment=True)
+    unanswered = await chat("unanswered", "patient")
+
+    rows = (await client.get("/api/admin/conversations?bot_only=true&limit=500")).json()
+    ids = {r["id"] for r in rows}
+    assert bot_alone in ids
+    assert not ({with_operator, paused, from_comment, unanswered} & ids)
+    counts = (await client.get("/api/admin/conversations/counts")).json()
+    assert counts["bot_only"] == len(rows)

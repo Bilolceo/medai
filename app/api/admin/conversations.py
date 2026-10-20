@@ -271,8 +271,32 @@ async def conversation_counts(
     commented = await session.scalar(
         select(func.count()).select_from(Conversation).where(*open_here, _commented())
     )
+    bot = await session.scalar(
+        select(func.count()).select_from(Conversation).where(*open_here, _bot_alone())
+    )
     return ConversationCounts(
-        taken_over=taken_over or 0, needs_doctor=waiting or 0, comments=commented or 0
+        taken_over=taken_over or 0,
+        needs_doctor=waiting or 0,
+        comments=commented or 0,
+        bot_only=bot or 0,
+    )
+
+
+def _bot_alone() -> Any:
+    """Only the assistant has answered here: it is on, no person from the
+    clinic ever wrote, and the patient came through Direct, not a comment.
+    The "Chat bot" view -- what the bot is doing on its own (owner, 2026-10-20)."""
+    return (
+        Conversation.is_bot_enabled.is_(True)
+        & ~exists().where(
+            Message.conversation_id == Conversation.id,
+            Message.sender == MessageSender.OPERATOR,
+        )
+        & ~_commented()
+        & exists().where(
+            Message.conversation_id == Conversation.id,
+            Message.sender == MessageSender.BOT,
+        )
     )
 
 
@@ -342,6 +366,7 @@ async def list_conversations(
     only_taken_over: bool = Query(default=False),
     needs_doctor: bool = Query(default=False),
     from_comments: bool = Query(default=False),
+    bot_only: bool = Query(default=False),
     post_media_id: str | None = Query(default=None, max_length=64),
     q: str | None = Query(default=None, max_length=100),
     limit: int = Query(default=50, ge=1, le=500),
@@ -379,6 +404,8 @@ async def list_conversations(
         stmt = stmt.where(Conversation.needs_doctor_since.is_not(None))
     if from_comments:
         stmt = stmt.where(_commented())
+    if bot_only:
+        stmt = stmt.where(_bot_alone())
     if post_media_id:
         # The comments under one post: the "by video" strip on the inbox.
         stmt = stmt.where(
