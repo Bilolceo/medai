@@ -151,3 +151,13 @@ def test_one_shape_for_every_number(text: str, number: str) -> None:
 def test_an_acknowledgement_is_not_a_name(word: str) -> None:
     """Live, 2026-10-15: "Hop" (xo'p) was booked as the patient's name."""
     assert not looks_like_a_name(word)
+
+
+def test_an_implant_type_asked_in_one_word_is_not_a_name() -> None:
+    """Live, 2026-10-20: "Кнопкалими" (the button-type implant?) was taken
+    for a name and the patient thanked by it."""
+    from app.services.patient_profile import looks_like_a_name
+
+    assert not looks_like_a_name("Кнопкалими")
+    assert not looks_like_a_name("PRP")
+    assert looks_like_a_name("Shag'zod")

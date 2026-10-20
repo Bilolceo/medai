@@ -108,6 +108,10 @@ _NOT_A_NAME = frozenset(
         "hop", "xop", "xo'p", "ho'p", "xopmi", "okay", "albatta", "tushundim", "chundim",
         "майли", "хоп", "хўп", "ҳа", "раҳмат", "рахмат", "ок",
         "да", "нет", "хорошо", "спасибо", "приём", "прием", "врач",
+        # Implant types, asked about in one word; "Кнопкалими" was taken
+        # for a name and thanked by it (2026-10-20).
+        "implant", "имплант", "knopkali", "кнопкали", "кнопкалими", "knopkalimi",
+        "komponentli", "компонентли", "prp", "прп", "operatsiya", "операция",
     }
 )  # fmt: skip
 
