@@ -19,6 +19,7 @@ from app.core.db import get_db_session
 from app.core.passwords import verify_password
 from app.core.session import SESSION_COOKIE_NAME, create_session_cookie
 from app.main import app
+from app.models.operator import Operator
 from app.repositories.operator import OperatorRepository
 from tests.conftest import Seed
 
@@ -47,8 +48,8 @@ async def admin(
         )
 
 
-def _login_as(client: httpx.AsyncClient, operator_id: UUID) -> str:
-    cookie_value, csrf_token = create_session_cookie(operator_id)
+def _login_as(client: httpx.AsyncClient, operator: Operator) -> str:
+    cookie_value, csrf_token = create_session_cookie(operator.id, operator.password_hash)
     client.cookies.set(SESSION_COOKIE_NAME, cookie_value)
     return csrf_token
 
@@ -63,7 +64,7 @@ async def test_an_admin_hires_a_receptionist(
     admin: Any,
     as_tenant: Callable[[UUID], AbstractContextManager[None]],
 ) -> None:
-    csrf = _login_as(client, admin.id)
+    csrf = _login_as(client, admin)
 
     response = await client.post(
         "/api/admin/operators",
@@ -94,7 +95,7 @@ async def test_an_admin_hires_a_receptionist(
 async def test_a_short_password_is_refused_before_the_account_exists(
     client: httpx.AsyncClient, seed: Seed, admin: Any
 ) -> None:
-    csrf = _login_as(client, admin.id)
+    csrf = _login_as(client, admin)
 
     response = await client.post(
         "/api/admin/operators",
@@ -113,7 +114,7 @@ async def test_a_taken_login_is_a_conflict_that_does_not_say_whose(
     caller cannot see. The message must not turn that into a way to probe
     for it.
     """
-    csrf = _login_as(client, admin.id)
+    csrf = _login_as(client, admin)
     taken = seed.b.operator.username
 
     response = await client.post(
@@ -141,7 +142,7 @@ async def test_only_an_admin_manages_staff(
         member = await OperatorRepository(db_session).create(
             name="Staff", role=role, username=f"{role}-{seed.tenant_a.id}", password_hash="x"
         )
-    csrf = _login_as(client, member.id)
+    csrf = _login_as(client, member)
 
     assert (await client.get("/api/admin/operators")).status_code == 403
     created = await client.post(
@@ -155,7 +156,7 @@ async def test_only_an_admin_manages_staff(
 async def test_the_staff_list_stops_at_this_clinic(
     client: httpx.AsyncClient, seed: Seed, admin: Any
 ) -> None:
-    _login_as(client, admin.id)
+    _login_as(client, admin)
 
     usernames = {row["username"] for row in (await client.get("/api/admin/operators")).json()}
 
@@ -169,7 +170,7 @@ async def test_another_clinics_account_is_a_404_not_a_403(
     """A 403 would confirm the id exists. A 404 is the same answer an id
     that does not exist gets.
     """
-    csrf = _login_as(client, admin.id)
+    csrf = _login_as(client, admin)
 
     response = await client.patch(
         f"/api/admin/operators/{seed.b.operator.id}",
@@ -187,7 +188,7 @@ async def test_another_clinics_account_is_a_404_not_a_403(
 async def test_a_write_without_the_csrf_header_is_refused(
     client: httpx.AsyncClient, seed: Seed, admin: Any
 ) -> None:
-    _login_as(client, admin.id)
+    _login_as(client, admin)
 
     response = await client.post(
         "/api/admin/operators",
@@ -206,7 +207,7 @@ async def test_you_cannot_demote_yourself(
     """Holding MANAGE_STAFF is exactly the state in which one wrong click
     removes the only account that could undo it.
     """
-    csrf = _login_as(client, admin.id)
+    csrf = _login_as(client, admin)
 
     response = await client.patch(
         f"/api/admin/operators/{admin.id}", json={"role": "doctor"}, headers={CSRF_HEADER: csrf}
@@ -218,7 +219,7 @@ async def test_you_cannot_demote_yourself(
 async def test_you_cannot_delete_yourself(
     client: httpx.AsyncClient, seed: Seed, admin: Any
 ) -> None:
-    csrf = _login_as(client, admin.id)
+    csrf = _login_as(client, admin)
 
     response = await client.delete(f"/api/admin/operators/{admin.id}", headers={CSRF_HEADER: csrf})
 
@@ -241,7 +242,7 @@ async def test_the_last_admin_cannot_be_removed_by_another_admin(
         second = await OperatorRepository(db_session).create(
             name="Admin Two", role="admin", username=f"admin2-{seed.tenant_a.id}", password_hash="x"
         )
-    csrf = _login_as(client, admin.id)
+    csrf = _login_as(client, admin)
 
     removed = await client.delete(f"/api/admin/operators/{second.id}", headers={CSRF_HEADER: csrf})
     assert removed.status_code == 204
@@ -265,7 +266,7 @@ async def test_a_second_admin_can_be_demoted_while_one_remains(
         second = await OperatorRepository(db_session).create(
             name="Admin Two", role="admin", username=f"admin2-{seed.tenant_a.id}", password_hash="x"
         )
-    csrf = _login_as(client, admin.id)
+    csrf = _login_as(client, admin)
 
     response = await client.patch(
         f"/api/admin/operators/{second.id}", json={"role": "operator"}, headers={CSRF_HEADER: csrf}
@@ -290,7 +291,7 @@ async def test_resetting_a_password_does_not_touch_the_role(
         member = await OperatorRepository(db_session).create(
             name="Nodira", role="operator", username=f"nod-{seed.tenant_a.id}", password_hash="x"
         )
-    csrf = _login_as(client, admin.id)
+    csrf = _login_as(client, admin)
 
     response = await client.patch(
         f"/api/admin/operators/{member.id}",
@@ -307,7 +308,7 @@ async def test_resetting_a_password_does_not_touch_the_role(
 async def test_a_role_outside_the_three_is_refused(
     client: httpx.AsyncClient, seed: Seed, admin: Any
 ) -> None:
-    csrf = _login_as(client, admin.id)
+    csrf = _login_as(client, admin)
 
     response = await client.post(
         "/api/admin/operators",

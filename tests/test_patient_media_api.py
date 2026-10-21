@@ -18,6 +18,7 @@ from app.api.admin.deps import CSRF_HEADER
 from app.core.db import get_db_session
 from app.core.session import SESSION_COOKIE_NAME, create_session_cookie
 from app.main import app
+from app.models.operator import Operator
 from app.models.patient_media import PatientMedia
 from app.models.user import User
 from app.repositories.operator import OperatorRepository
@@ -53,8 +54,8 @@ async def front_desk(
         )
 
 
-def _login(client: httpx.AsyncClient, operator_id: uuid.UUID) -> str:
-    cookie, csrf = create_session_cookie(operator_id)
+def _login(client: httpx.AsyncClient, operator: Operator) -> str:
+    cookie, csrf = create_session_cookie(operator.id, operator.password_hash)
     client.cookies.set(SESSION_COOKIE_NAME, cookie)
     return csrf
 
@@ -79,7 +80,7 @@ async def test_a_photo_is_served_with_headers_that_keep_it_inert(
     client: httpx.AsyncClient, db_session: AsyncSession, seed: Seed, front_desk: Any
 ) -> None:
     media_id = await _photo(db_session, seed.tenant_a.id, seed.a.user.id, PNG, "image/png")
-    _login(client, front_desk.id)
+    _login(client, front_desk)
 
     response = await client.get(f"/api/admin/media/{media_id}/file")
 
@@ -96,7 +97,7 @@ async def test_a_stored_svg_is_never_served_as_something_a_browser_runs(
 ) -> None:
     """A row from before SVGs were refused, or put there some other way."""
     media_id = await _photo(db_session, seed.tenant_a.id, seed.a.user.id, SVG, "image/svg+xml")
-    _login(client, front_desk.id)
+    _login(client, front_desk)
 
     response = await client.get(f"/api/admin/media/{media_id}/file")
 
@@ -108,7 +109,7 @@ async def test_another_clinics_photo_is_not_found(
     client: httpx.AsyncClient, db_session: AsyncSession, seed: Seed, front_desk: Any
 ) -> None:
     theirs = await _photo(db_session, seed.tenant_b.id, seed.b.user.id, PNG, "image/png")
-    csrf = _login(client, front_desk.id)
+    csrf = _login(client, front_desk)
 
     assert (await client.get(f"/api/admin/media/{theirs}/file")).status_code == 404
     changed = await client.post(
@@ -134,7 +135,7 @@ async def test_a_view_only_account_cannot_open_patient_photos(
     client: httpx.AsyncClient, db_session: AsyncSession, seed: Seed
 ) -> None:
     media_id = await _photo(db_session, seed.tenant_a.id, seed.a.user.id, PNG, "image/png")
-    _login(client, seed.a.operator.id)
+    _login(client, seed.a.operator)
 
     assert (await client.get(f"/api/admin/media/{media_id}/file")).status_code == 403
 
@@ -221,7 +222,7 @@ async def test_every_unseen_photo_on_the_screen_is_marked_seen_at_once(
         await _photo_at(db_session, seed.tenant_a.id, seed.a.user.id, 1),
         await _photo_at(db_session, seed.tenant_a.id, other, 2),
     ]
-    csrf = _login(client, front_desk.id)
+    csrf = _login(client, front_desk)
 
     screen = (await client.get("/api/admin/media", params={"only_unseen": True})).json()
     response = await client.post(
@@ -240,7 +241,7 @@ async def test_a_photo_that_arrives_meanwhile_stays_new(
     client: httpx.AsyncClient, db_session: AsyncSession, seed: Seed, front_desk: Any
 ) -> None:
     shown = await _photo_at(db_session, seed.tenant_a.id, seed.a.user.id, 0)
-    csrf = _login(client, front_desk.id)
+    csrf = _login(client, front_desk)
     screen = (await client.get("/api/admin/media")).json()
     later = await _photo_at(db_session, seed.tenant_a.id, seed.a.user.id, 5)
 
@@ -260,7 +261,7 @@ async def test_only_the_patients_on_the_screen_are_marked(
     other = await _second_patient(db_session, seed)
     shown = await _photo_at(db_session, seed.tenant_a.id, seed.a.user.id, 0)
     hidden = await _photo_at(db_session, seed.tenant_a.id, other, 1)
-    csrf = _login(client, front_desk.id)
+    csrf = _login(client, front_desk)
 
     await client.post(
         "/api/admin/media/seen",
@@ -275,7 +276,7 @@ async def test_another_clinics_photos_are_never_marked(
     client: httpx.AsyncClient, db_session: AsyncSession, seed: Seed, front_desk: Any
 ) -> None:
     theirs = await _photo_at(db_session, seed.tenant_b.id, seed.b.user.id, 0)
-    csrf = _login(client, front_desk.id)
+    csrf = _login(client, front_desk)
 
     response = await client.post(
         "/api/admin/media/seen",
@@ -293,9 +294,9 @@ async def test_marking_all_seen_needs_the_csrf_token_and_patient_access(
     photo = await _photo_at(db_session, seed.tenant_a.id, seed.a.user.id, 0)
     body = {"user_ids": [str(seed.a.user.id)], "up_to": (T0 + timedelta(hours=1)).isoformat()}
 
-    _login(client, front_desk.id)
+    _login(client, front_desk)
     no_token = await client.post("/api/admin/media/seen", json=body)
-    view_only_csrf = _login(client, seed.a.operator.id)
+    view_only_csrf = _login(client, seed.a.operator)
     view_only = await client.post(
         "/api/admin/media/seen", json=body, headers={CSRF_HEADER: view_only_csrf}
     )
@@ -308,7 +309,7 @@ async def test_marking_all_seen_needs_the_csrf_token_and_patient_access(
 async def test_nothing_on_the_screen_marks_nothing(
     client: httpx.AsyncClient, seed: Seed, front_desk: Any
 ) -> None:
-    csrf = _login(client, front_desk.id)
+    csrf = _login(client, front_desk)
 
     response = await client.post(
         "/api/admin/media/seen",

@@ -21,6 +21,7 @@ from app.api.admin.deps import CSRF_HEADER
 from app.core.db import get_db_session
 from app.core.session import SESSION_COOKIE_NAME, create_session_cookie
 from app.main import app
+from app.models.operator import Operator
 from app.repositories.appointment import AppointmentRepository
 from app.repositories.lead import LeadRepository
 from app.repositories.operator import OperatorRepository
@@ -51,8 +52,8 @@ async def admin(
         )
 
 
-def _login_as(client: httpx.AsyncClient, operator_id: UUID) -> str:
-    cookie_value, csrf_token = create_session_cookie(operator_id)
+def _login_as(client: httpx.AsyncClient, operator: Operator) -> str:
+    cookie_value, csrf_token = create_session_cookie(operator.id, operator.password_hash)
     client.cookies.set(SESSION_COOKIE_NAME, cookie_value)
     return csrf_token
 
@@ -70,7 +71,7 @@ TODAYS_TELEGRAM = {
 async def test_an_admin_saves_a_view_the_clinic_asks_for_every_morning(
     client: httpx.AsyncClient, seed: Seed, admin: Any
 ) -> None:
-    csrf = _login_as(client, admin.id)
+    csrf = _login_as(client, admin)
 
     response = await client.post(
         "/api/admin/filters", json=TODAYS_TELEGRAM, headers={CSRF_HEADER: csrf}
@@ -90,7 +91,7 @@ async def test_a_saved_view_replays_through_the_endpoint_it_was_saved_for(
     the controls makes. If this ever fails, there are two query paths and
     one of them will drift.
     """
-    csrf = _login_as(client, admin.id)
+    csrf = _login_as(client, admin)
     saved = (
         await client.post("/api/admin/filters", json=TODAYS_TELEGRAM, headers={CSRF_HEADER: csrf})
     ).json()
@@ -106,7 +107,7 @@ async def test_two_views_cannot_share_a_name_on_the_same_list(
     """The second would be unreachable in the interface, which is a worse
     answer than refusing to save it.
     """
-    csrf = _login_as(client, admin.id)
+    csrf = _login_as(client, admin)
     await client.post("/api/admin/filters", json=TODAYS_TELEGRAM, headers={CSRF_HEADER: csrf})
 
     again = await client.post(
@@ -119,7 +120,7 @@ async def test_two_views_cannot_share_a_name_on_the_same_list(
 async def test_the_same_name_on_a_different_list_is_a_different_question(
     client: httpx.AsyncClient, seed: Seed, admin: Any
 ) -> None:
-    csrf = _login_as(client, admin.id)
+    csrf = _login_as(client, admin)
     await client.post(
         "/api/admin/filters",
         json={"resource": "appointments", "name": "Bugun", "params": {}},
@@ -145,7 +146,7 @@ async def test_a_parameter_the_list_does_not_understand_is_dropped_not_refused(
     working, showing the rows it still can — not become an error the clinic
     cannot fix from the interface.
     """
-    csrf = _login_as(client, admin.id)
+    csrf = _login_as(client, admin)
 
     response = await client.post(
         "/api/admin/filters",
@@ -164,7 +165,7 @@ async def test_a_parameter_the_list_does_not_understand_is_dropped_not_refused(
 async def test_a_saved_view_cannot_become_a_place_to_keep_documents(
     client: httpx.AsyncClient, seed: Seed, admin: Any
 ) -> None:
-    csrf = _login_as(client, admin.id)
+    csrf = _login_as(client, admin)
 
     response = await client.post(
         "/api/admin/filters",
@@ -179,7 +180,7 @@ async def test_a_nested_value_is_refused(client: httpx.AsyncClient, seed: Seed, 
     """Query parameters are flat. Anything else is somebody storing
     structure where the API only ever reads a string.
     """
-    csrf = _login_as(client, admin.id)
+    csrf = _login_as(client, admin)
 
     response = await client.post(
         "/api/admin/filters",
@@ -193,7 +194,7 @@ async def test_a_nested_value_is_refused(client: httpx.AsyncClient, seed: Seed, 
 async def test_a_list_nobody_serves_is_refused(
     client: httpx.AsyncClient, seed: Seed, admin: Any
 ) -> None:
-    csrf = _login_as(client, admin.id)
+    csrf = _login_as(client, admin)
 
     response = await client.post(
         "/api/admin/filters",
@@ -217,7 +218,7 @@ async def test_the_front_desk_can_use_the_views_but_not_write_them(
     """A view is only worth having if the people working the lists can click
     it; deciding which views exist is the admin's.
     """
-    csrf = _login_as(client, admin.id)
+    csrf = _login_as(client, admin)
     await client.post("/api/admin/filters", json=TODAYS_TELEGRAM, headers={CSRF_HEADER: csrf})
 
     with as_tenant(seed.tenant_a.id):
@@ -227,7 +228,7 @@ async def test_the_front_desk_can_use_the_views_but_not_write_them(
             username=f"fdesk-{seed.tenant_a.id}",
             password_hash="x",
         )
-    desk_csrf = _login_as(client, desk.id)
+    desk_csrf = _login_as(client, desk)
 
     assert len((await client.get("/api/admin/filters")).json()) == 1
     refused = await client.post(
@@ -245,14 +246,14 @@ async def test_one_clinics_views_are_not_another_clinics(
     as_tenant: Callable[[UUID], AbstractContextManager[None]],
     admin: Any,
 ) -> None:
-    csrf = _login_as(client, admin.id)
+    csrf = _login_as(client, admin)
     await client.post("/api/admin/filters", json=TODAYS_TELEGRAM, headers={CSRF_HEADER: csrf})
 
     with as_tenant(seed.tenant_b.id):
         other_admin = await OperatorRepository(db_session).create(
             name="Admin B", role="admin", username=f"fadmin-{seed.tenant_b.id}", password_hash="x"
         )
-    _login_as(client, other_admin.id)
+    _login_as(client, other_admin)
 
     assert (await client.get("/api/admin/filters")).json() == []
 
@@ -268,7 +269,7 @@ async def test_another_clinics_view_cannot_be_deleted(
         theirs = await SavedFilterRepository(db_session).create(
             resource="leads", name="Ularniki", params={}, position=0
         )
-    csrf = _login_as(client, admin.id)
+    csrf = _login_as(client, admin)
 
     response = await client.delete(f"/api/admin/filters/{theirs.id}", headers={CSRF_HEADER: csrf})
 
@@ -278,7 +279,7 @@ async def test_another_clinics_view_cannot_be_deleted(
 async def test_a_write_without_the_csrf_header_is_refused(
     client: httpx.AsyncClient, seed: Seed, admin: Any
 ) -> None:
-    _login_as(client, admin.id)
+    _login_as(client, admin)
 
     response = await client.post("/api/admin/filters", json=TODAYS_TELEGRAM)
 
@@ -291,7 +292,7 @@ async def test_a_write_without_the_csrf_header_is_refused(
 async def test_a_view_can_be_renamed_and_reordered(
     client: httpx.AsyncClient, seed: Seed, admin: Any
 ) -> None:
-    csrf = _login_as(client, admin.id)
+    csrf = _login_as(client, admin)
     saved = (
         await client.post("/api/admin/filters", json=TODAYS_TELEGRAM, headers={CSRF_HEADER: csrf})
     ).json()
@@ -311,7 +312,7 @@ async def test_a_view_can_be_renamed_and_reordered(
 async def test_a_deleted_view_is_gone_from_the_list(
     client: httpx.AsyncClient, seed: Seed, admin: Any
 ) -> None:
-    csrf = _login_as(client, admin.id)
+    csrf = _login_as(client, admin)
     saved = (
         await client.post("/api/admin/filters", json=TODAYS_TELEGRAM, headers={CSRF_HEADER: csrf})
     ).json()
@@ -385,7 +386,7 @@ async def test_leads_are_searched_by_the_server_over_all_of_them(
     expected: set[str],
 ) -> None:
     await _leads(db_session, seed, as_tenant)
-    _login_as(client, admin.id)
+    _login_as(client, admin)
 
     found = (await client.get("/api/admin/leads", params={"q": q})).json()
 
@@ -401,7 +402,7 @@ async def test_only_new_leads_with_a_search_is_both_conditions(
     as_tenant: AsTenant,
 ) -> None:
     await _leads(db_session, seed, as_tenant)
-    _login_as(client, admin.id)
+    _login_as(client, admin)
 
     new_olim = (await client.get("/api/admin/leads", params={"q": "olim", "status": "new"})).json()
     any_olim = (await client.get("/api/admin/leads", params={"q": "olim"})).json()
@@ -422,7 +423,7 @@ async def test_the_lead_list_can_be_asked_for_more_than_a_hundred(
         for n in range(120):
             await repo.create(patient_name=f"Bemor {n}", phone=f"+99890{n:07d}")
     await db_session.flush()
-    _login_as(client, admin.id)
+    _login_as(client, admin)
 
     first = (await client.get("/api/admin/leads", params={"status": "new"})).json()
     more = (await client.get("/api/admin/leads", params={"status": "new", "limit": 200})).json()
@@ -447,7 +448,7 @@ async def test_conversations_are_found_by_the_patients_phone_however_it_is_writt
     with as_tenant(seed.tenant_b.id):
         seed.b.user.phone = "+998977654321"
     await db_session.flush()
-    _login_as(client, admin.id)
+    _login_as(client, admin)
 
     async def ids(q: str) -> list[str]:
         rows = (await client.get("/api/admin/conversations", params={"q": q})).json()
@@ -464,7 +465,7 @@ async def test_conversations_are_found_by_the_patients_phone_however_it_is_writt
 async def test_the_conversation_list_can_be_asked_for_more(
     client: httpx.AsyncClient, seed: Seed, admin: Any
 ) -> None:
-    _login_as(client, admin.id)
+    _login_as(client, admin)
 
     assert (await client.get("/api/admin/conversations", params={"limit": 500})).status_code == 200
     assert (await client.get("/api/admin/conversations", params={"limit": 501})).status_code == 422
@@ -491,7 +492,7 @@ async def test_the_instagram_source_includes_bookings_written_before_channels_we
                 status="scheduled",
             )
     await db_session.flush()
-    _login_as(client, admin.id)
+    _login_as(client, admin)
 
     async def names(source: str) -> set[str]:
         rows = (await client.get("/api/admin/appointments", params={"source": source})).json()
@@ -507,7 +508,7 @@ async def test_a_view_keeps_what_the_screen_shows(
 ) -> None:
     """Days from today rather than a date, and the search box -- the two
     things a saved view used to lose."""
-    csrf = _login_as(client, admin.id)
+    csrf = _login_as(client, admin)
 
     appointments = await client.post(
         "/api/admin/filters",

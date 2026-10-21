@@ -27,6 +27,7 @@ from app.main import app
 from app.models.appointment import AppointmentStatus
 from app.models.lead import LeadStatus
 from app.models.message import MessageSender
+from app.models.operator import Operator
 from app.rag.embeddings import EMBEDDING_DIMENSIONS, EmbeddingProvider
 from app.repositories.appointment import AppointmentRepository
 from app.repositories.doctor import DoctorRepository
@@ -105,11 +106,11 @@ async def client(db_session: AsyncSession) -> AsyncIterator[httpx.AsyncClient]:
     app.dependency_overrides.pop(get_db_session, None)
 
 
-def _login_as(client: httpx.AsyncClient, operator_id: UUID) -> str:
+def _login_as(client: httpx.AsyncClient, operator: Operator) -> str:
     """Put a real signed session cookie on the client and return its CSRF
     token — the same pair a browser gets from POST /login.
     """
-    cookie_value, csrf_token = create_session_cookie(operator_id)
+    cookie_value, csrf_token = create_session_cookie(operator.id, operator.password_hash)
     client.cookies.set(SESSION_COOKIE_NAME, cookie_value)
     return csrf_token
 
@@ -140,7 +141,7 @@ async def test_the_api_is_closed_to_anyone_without_a_session(client: httpx.Async
 async def test_the_session_endpoint_reports_the_operators_own_tenant(
     client: httpx.AsyncClient, seed: Seed
 ) -> None:
-    _login_as(client, seed.a.operator.id)
+    _login_as(client, seed.a.operator)
 
     body = (await client.get("/api/admin/session")).json()
 
@@ -155,7 +156,7 @@ async def test_an_operator_only_ever_sees_their_own_clinics_records(
     """The whole reason for the port. There is no request parameter that
     could widen this — the tenant comes from the operator's own row.
     """
-    _login_as(client, seed.a.operator.id)
+    _login_as(client, seed.a.operator)
 
     conversations = (await client.get("/api/admin/conversations")).json()
     leads = (await client.get("/api/admin/leads")).json()
@@ -173,7 +174,7 @@ async def test_a_tenant_id_query_parameter_changes_nothing(
     """A direct regression test for the vulnerability being replaced: the
     old endpoints took ?tenant_id= and honoured it.
     """
-    _login_as(client, seed.a.operator.id)
+    _login_as(client, seed.a.operator)
 
     body = (await client.get(f"/api/admin/leads?tenant_id={seed.tenant_b.id}")).json()
 
@@ -184,7 +185,7 @@ async def test_a_tenant_id_query_parameter_changes_nothing(
 async def test_another_clinics_record_is_not_reachable_by_id(
     client: httpx.AsyncClient, seed: Seed
 ) -> None:
-    _login_as(client, seed.a.operator.id)
+    _login_as(client, seed.a.operator)
 
     response = await client.get(f"/api/admin/conversations/{seed.b.conversation.id}")
 
@@ -197,7 +198,7 @@ async def test_another_clinics_record_is_not_reachable_by_id(
 async def test_a_write_without_the_csrf_header_is_refused(
     client: httpx.AsyncClient, seed: Seed, manager: Any
 ) -> None:
-    _login_as(client, manager.id)
+    _login_as(client, manager)
 
     response = await client.post(
         "/api/admin/doctors", json={"name": "Dr. New", "specialty": "Ortodont"}
@@ -210,7 +211,7 @@ async def test_a_write_without_the_csrf_header_is_refused(
 async def test_a_write_with_the_wrong_csrf_token_is_refused(
     client: httpx.AsyncClient, seed: Seed, manager: Any
 ) -> None:
-    _login_as(client, manager.id)
+    _login_as(client, manager)
 
     response = await client.post(
         "/api/admin/doctors",
@@ -237,7 +238,7 @@ async def test_a_doctor_account_can_read_but_not_write(
             username=f"viewer-{seed.tenant_a.id}",
             password_hash="x",
         )
-    csrf = _login_as(client, viewer.id)
+    csrf = _login_as(client, viewer)
 
     assert (await client.get("/api/admin/appointments")).status_code == 200
     write = await client.post(
@@ -252,7 +253,7 @@ async def test_a_doctor_account_can_read_but_not_write(
 async def test_turning_the_bot_off_and_back_on(
     client: httpx.AsyncClient, seed: Seed, manager: Any
 ) -> None:
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
     url = f"/api/admin/conversations/{seed.a.conversation.id}/bot"
 
     off = await client.post(url, json={"is_bot_enabled": False}, headers={CSRF_HEADER: csrf})
@@ -266,7 +267,7 @@ async def test_turning_the_bot_off_and_back_on(
 async def test_the_transcript_comes_back_oldest_first(
     client: httpx.AsyncClient, seed: Seed
 ) -> None:
-    _login_as(client, seed.a.operator.id)
+    _login_as(client, seed.a.operator)
 
     body = (await client.get(f"/api/admin/conversations/{seed.a.conversation.id}")).json()
 
@@ -293,7 +294,7 @@ async def test_an_operator_reply_that_cannot_be_delivered_is_not_recorded(
         seed.a.channel.credentials = encrypt("pending")
         await db_session.flush()
 
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     response = await client.post(
         f"/api/admin/conversations/{seed.a.conversation.id}/reply",
@@ -338,7 +339,7 @@ async def test_a_conversation_waiting_on_the_doctor_is_listed_first(
             channel="instagram",
         )
         await _pin(db_session, seed)
-    _login_as(client, seed.a.operator.id)
+    _login_as(client, seed.a.operator)
 
     rows = (await client.get("/api/admin/conversations")).json()
     assert rows[0]["id"] == str(seed.a.conversation.id)
@@ -365,7 +366,7 @@ async def test_an_operator_reply_unpins_the_conversation(
     monkeypatch.setattr(conversations_api, "send_reply", delivered)
     with as_tenant(seed.tenant_a.id):
         await _pin(db_session, seed)
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     response = await client.post(
         f"/api/admin/conversations/{seed.a.conversation.id}/reply",
@@ -388,7 +389,7 @@ async def test_a_reply_that_did_not_reach_the_patient_keeps_the_pin(
     with as_tenant(seed.tenant_a.id):
         seed.a.channel.credentials = encrypt("pending")
         await _pin(db_session, seed)
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     response = await client.post(
         f"/api/admin/conversations/{seed.a.conversation.id}/reply",
@@ -410,7 +411,7 @@ async def test_marking_a_conversation_done_unpins_it(
 ) -> None:
     with as_tenant(seed.tenant_a.id):
         await _pin(db_session, seed)
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     response = await client.post(
         f"/api/admin/conversations/{seed.a.conversation.id}/resolve", headers={CSRF_HEADER: csrf}
@@ -429,7 +430,7 @@ async def test_marking_done_needs_the_csrf_token(
 ) -> None:
     with as_tenant(seed.tenant_a.id):
         await _pin(db_session, seed)
-    _login_as(client, manager.id)
+    _login_as(client, manager)
 
     response = await client.post(f"/api/admin/conversations/{seed.a.conversation.id}/resolve")
 
@@ -446,7 +447,7 @@ async def test_a_view_only_account_cannot_mark_done(
 ) -> None:
     with as_tenant(seed.tenant_a.id):
         await _pin(db_session, seed)
-    csrf = _login_as(client, seed.a.operator.id)
+    csrf = _login_as(client, seed.a.operator)
 
     response = await client.post(
         f"/api/admin/conversations/{seed.a.conversation.id}/resolve", headers={CSRF_HEADER: csrf}
@@ -465,7 +466,7 @@ async def test_another_clinics_conversation_cannot_be_marked_done(
     with as_tenant(seed.tenant_b.id):
         seed.b.conversation.needs_doctor_since = datetime.now(UTC)
         await db_session.flush()
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     response = await client.post(
         f"/api/admin/conversations/{seed.b.conversation.id}/resolve", headers={CSRF_HEADER: csrf}
@@ -512,7 +513,7 @@ async def test_rules_are_numbered_online_first_then_offline(
     as_tenant: Callable[[UUID], AbstractContextManager[None]],
 ) -> None:
     await _rules_fixture(db_session, seed, as_tenant)
-    _login_as(client, seed.a.operator.id)
+    _login_as(client, seed.a.operator)
 
     rules = (await client.get("/api/admin/rules")).json()
 
@@ -530,7 +531,7 @@ async def test_rule_copies_are_not_listed_as_questions_and_answers(
     as_tenant: Callable[[UUID], AbstractContextManager[None]],
 ) -> None:
     await _rules_fixture(db_session, seed, as_tenant)
-    _login_as(client, seed.a.operator.id)
+    _login_as(client, seed.a.operator)
 
     faqs = (await client.get("/api/admin/knowledge-base")).json()
 
@@ -545,7 +546,7 @@ async def test_removing_an_online_rule_takes_it_off_the_live_list_and_its_copy(
     as_tenant: Callable[[UUID], AbstractContextManager[None]],
 ) -> None:
     await _rules_fixture(db_session, seed, as_tenant)
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     response = await client.post(
         "/api/admin/rules/remove",
@@ -570,7 +571,7 @@ async def test_removing_an_offline_rule_leaves_the_live_ones_alone(
     as_tenant: Callable[[UUID], AbstractContextManager[None]],
 ) -> None:
     await _rules_fixture(db_session, seed, as_tenant)
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     response = await client.post(
         "/api/admin/rules/remove", json={"text": "Eski qoida."}, headers={CSRF_HEADER: csrf}
@@ -588,7 +589,7 @@ async def test_removing_a_rule_that_does_not_exist_is_a_404(
     as_tenant: Callable[[UUID], AbstractContextManager[None]],
 ) -> None:
     await _rules_fixture(db_session, seed, as_tenant)
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     response = await client.post(
         "/api/admin/rules/remove", json={"text": "Bunday qoida yo'q"}, headers={CSRF_HEADER: csrf}
@@ -608,7 +609,7 @@ async def test_removing_a_rule_needs_the_csrf_token_and_a_clinic_admin(
     await _rules_fixture(db_session, seed, as_tenant)
     body = {"text": "Narxni aytmang."}
 
-    csrf = _login_as(client, front_desk.id)
+    csrf = _login_as(client, front_desk)
     assert (await client.post("/api/admin/rules/remove", json=body)).status_code == 403
     refused = await client.post("/api/admin/rules/remove", json=body, headers={CSRF_HEADER: csrf})
     assert refused.status_code == 403
@@ -630,7 +631,7 @@ async def test_an_offline_rule_can_be_put_back_online(
     as_tenant: Callable[[UUID], AbstractContextManager[None]],
 ) -> None:
     await _rules_fixture(db_session, seed, as_tenant)
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     response = await _switch(client, csrf, "Eski qoida.", True)
 
@@ -650,7 +651,7 @@ async def test_an_online_rule_taken_offline_stays_listed(
     """ "Narxni aytmang." was typed into Settings and never had a copy; it
     must not vanish from the list when switched off."""
     await _rules_fixture(db_session, seed, as_tenant)
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     response = await _switch(client, csrf, "Narxni aytmang.", False)
 
@@ -676,7 +677,7 @@ async def test_switching_to_the_state_it_already_has_changes_nothing(
     as_tenant: Callable[[UUID], AbstractContextManager[None]],
 ) -> None:
     await _rules_fixture(db_session, seed, as_tenant)
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     response = await _switch(client, csrf, "Narxni aytmang.", True)
 
@@ -701,7 +702,7 @@ async def test_a_rule_cannot_go_online_past_the_limit(
             "strict_rules": [f"Qoida {n}." for n in range(MAX_RULES)],
         }
         await db_session.flush()
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     response = await _switch(client, csrf, "Eski qoida.", True)
 
@@ -718,7 +719,7 @@ async def test_switching_a_rule_that_does_not_exist_is_a_404(
     as_tenant: Callable[[UUID], AbstractContextManager[None]],
 ) -> None:
     await _rules_fixture(db_session, seed, as_tenant)
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     assert (await _switch(client, csrf, "Bunday qoida yo'q", True)).status_code == 404
 
@@ -732,7 +733,7 @@ async def test_switching_a_rule_needs_the_csrf_token_and_a_clinic_admin(
 ) -> None:
     await _rules_fixture(db_session, seed, as_tenant)
 
-    csrf = _login_as(client, front_desk.id)
+    csrf = _login_as(client, front_desk)
     assert (await _switch(client, None, "Eski qoida.", True)).status_code == 403
     assert (await _switch(client, csrf, "Eski qoida.", True)).status_code == 403
     rules = (await client.get("/api/admin/rules")).json()
@@ -746,7 +747,7 @@ async def test_another_clinics_rules_are_never_listed(
     as_tenant: Callable[[UUID], AbstractContextManager[None]],
 ) -> None:
     await _rules_fixture(db_session, seed, as_tenant)
-    _login_as(client, seed.b.operator.id)
+    _login_as(client, seed.b.operator)
 
     assert (await client.get("/api/admin/rules")).json() == []
 
@@ -757,7 +758,7 @@ async def test_another_clinics_rules_are_never_listed(
 async def test_creating_and_editing_a_doctor(
     client: httpx.AsyncClient, seed: Seed, manager: Any
 ) -> None:
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     created = await client.post(
         "/api/admin/doctors",
@@ -786,7 +787,7 @@ async def test_deactivating_a_doctor_removes_them_from_the_default_list(
     manager: Any,
     as_tenant: Callable[[UUID], AbstractContextManager[None]],
 ) -> None:
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     await client.patch(
         f"/api/admin/doctors/{seed.a.doctor.id}",
@@ -805,7 +806,7 @@ async def test_deactivating_a_doctor_removes_them_from_the_default_list(
 async def test_editing_another_clinics_doctor_is_a_404(
     client: httpx.AsyncClient, seed: Seed, manager: Any
 ) -> None:
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     response = await client.patch(
         f"/api/admin/doctors/{seed.b.doctor.id}",
@@ -822,7 +823,7 @@ async def test_editing_another_clinics_doctor_is_a_404(
 async def test_working_a_lead_through_its_statuses(
     client: httpx.AsyncClient, seed: Seed, manager: Any
 ) -> None:
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     created = await client.post(
         "/api/admin/leads",
@@ -846,7 +847,7 @@ async def test_working_a_lead_through_its_statuses(
 async def test_an_unknown_lead_status_is_rejected(
     client: httpx.AsyncClient, seed: Seed, manager: Any
 ) -> None:
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     response = await client.patch(
         f"/api/admin/leads/{seed.a.lead.id}",
@@ -870,7 +871,7 @@ async def test_a_faq_added_here_is_embedded_so_retrieval_can_find_it(
     """A row without an embedding shows in the dashboard and is never used
     to answer anything, which is the worst of both.
     """
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     created = await client.post(
         "/api/admin/knowledge-base",
@@ -890,7 +891,7 @@ async def test_a_faq_added_here_is_embedded_so_retrieval_can_find_it(
 async def test_deleting_a_faq_deactivates_it_rather_than_dropping_the_row(
     client: httpx.AsyncClient, seed: Seed, manager: Any
 ) -> None:
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     response = await client.delete(
         f"/api/admin/knowledge-base/{seed.a.knowledge_base.id}", headers={CSRF_HEADER: csrf}
@@ -908,7 +909,7 @@ async def test_deleting_a_faq_deactivates_it_rather_than_dropping_the_row(
 async def test_settings_merge_rather_than_replace(
     client: httpx.AsyncClient, seed: Seed, manager: Any
 ) -> None:
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     await client.patch(
         "/api/admin/settings",
@@ -929,7 +930,7 @@ async def test_settings_merge_rather_than_replace(
 async def test_an_out_of_range_debounce_window_is_rejected(
     client: httpx.AsyncClient, seed: Seed, manager: Any
 ) -> None:
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     response = await client.patch(
         "/api/admin/settings", json={"debounce_seconds": 9999}, headers={CSRF_HEADER: csrf}
@@ -941,7 +942,7 @@ async def test_an_out_of_range_debounce_window_is_rejected(
 async def test_the_assistants_persona_is_saved_and_can_be_reset(
     client: httpx.AsyncClient, seed: Seed, manager: Any
 ) -> None:
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     saved = await client.patch(
         "/api/admin/settings",
@@ -964,7 +965,7 @@ async def test_the_assistants_persona_is_saved_and_can_be_reset(
 async def test_the_defaults_are_served_for_the_dashboard_to_show(
     client: httpx.AsyncClient, seed: Seed, manager: Any
 ) -> None:
-    _login_as(client, manager.id)
+    _login_as(client, manager)
 
     response = await client.get("/api/admin/assistant-defaults")
 
@@ -976,7 +977,7 @@ async def test_the_defaults_are_served_for_the_dashboard_to_show(
 async def test_an_enormous_persona_is_rejected(
     client: httpx.AsyncClient, seed: Seed, manager: Any
 ) -> None:
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     response = await client.patch(
         "/api/admin/settings",
@@ -999,7 +1000,7 @@ def _upload_form(name: str = "narxlar.csv", data: bytes = _PRICES) -> dict[str, 
 async def test_a_file_is_uploaded_listed_and_deleted(
     client: httpx.AsyncClient, seed: Seed, manager: Any
 ) -> None:
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     uploaded = await client.post(
         "/api/admin/knowledge-files", headers={CSRF_HEADER: csrf}, **_upload_form()
@@ -1023,7 +1024,7 @@ async def test_a_file_is_uploaded_listed_and_deleted(
 async def test_uploading_a_name_again_replaces_it(
     client: httpx.AsyncClient, seed: Seed, manager: Any
 ) -> None:
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     await client.post("/api/admin/knowledge-files", headers={CSRF_HEADER: csrf}, **_upload_form())
     await client.post(
@@ -1047,7 +1048,7 @@ async def test_uploading_a_name_again_replaces_it(
 async def test_an_unusable_file_is_refused_with_a_reason_the_operator_can_read(
     client: httpx.AsyncClient, seed: Seed, manager: Any, name: str, data: bytes, fragment: str
 ) -> None:
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     response = await client.post(
         "/api/admin/knowledge-files", headers={CSRF_HEADER: csrf}, **_upload_form(name, data)
@@ -1062,7 +1063,7 @@ async def test_a_file_over_the_limit_is_refused_before_it_is_read(
     client: httpx.AsyncClient, seed: Seed, manager: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr("app.api.admin.knowledge_files.MAX_FILE_BYTES", 10)
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     response = await client.post(
         "/api/admin/knowledge-files",
@@ -1081,7 +1082,7 @@ async def test_an_embedding_outage_is_a_retryable_error_and_stores_nothing(
             raise RuntimeError("down")
 
     monkeypatch.setattr(knowledge_files_service, "get_embedding_provider", Down)
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     response = await client.post(
         "/api/admin/knowledge-files", headers={CSRF_HEADER: csrf}, **_upload_form()
@@ -1095,7 +1096,7 @@ async def test_an_embedding_outage_is_a_retryable_error_and_stores_nothing(
 async def test_an_upload_without_the_csrf_header_is_refused(
     client: httpx.AsyncClient, seed: Seed, manager: Any
 ) -> None:
-    _login_as(client, manager.id)
+    _login_as(client, manager)
 
     response = await client.post("/api/admin/knowledge-files", **_upload_form())
 
@@ -1105,11 +1106,11 @@ async def test_an_upload_without_the_csrf_header_is_refused(
 async def test_the_front_desk_cannot_add_or_remove_what_the_bot_quotes(
     client: httpx.AsyncClient, seed: Seed, manager: Any, front_desk: Any
 ) -> None:
-    manager_csrf = _login_as(client, manager.id)
+    manager_csrf = _login_as(client, manager)
     uploaded = await client.post(
         "/api/admin/knowledge-files", headers={CSRF_HEADER: manager_csrf}, **_upload_form()
     )
-    csrf = _login_as(client, front_desk.id)
+    csrf = _login_as(client, front_desk)
 
     upload = await client.post(
         "/api/admin/knowledge-files", headers={CSRF_HEADER: csrf}, **_upload_form("boshqa.csv")
@@ -1137,7 +1138,7 @@ async def test_another_clinics_file_is_neither_listed_nor_deletable(
         theirs = await KnowledgeDocumentRepository(db_session).create(
             filename="ularniki.pdf", content_type=None, size_bytes=1, chunk_count=1
         )
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     listed = (await client.get("/api/admin/knowledge-files")).json()
     deleted = await client.delete(
@@ -1154,7 +1155,7 @@ async def test_another_clinics_file_is_neither_listed_nor_deletable(
 async def test_booking_cancelling_and_confirming_from_the_dashboard(
     client: httpx.AsyncClient, seed: Seed, manager: Any
 ) -> None:
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
     slot = _next_free_slot()
 
     created = await client.post(
@@ -1186,7 +1187,7 @@ async def test_booking_cancelling_and_confirming_from_the_dashboard(
 async def test_double_booking_a_slot_is_refused(
     client: httpx.AsyncClient, seed: Seed, manager: Any
 ) -> None:
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
     slot = _next_free_slot(2)
     payload = {"scheduled_at": slot.isoformat(), "patient_name": "Aziza"}
 
@@ -1204,7 +1205,7 @@ async def test_double_booking_a_slot_is_refused(
 async def test_booking_outside_working_hours_is_refused(
     client: httpx.AsyncClient, seed: Seed, manager: Any
 ) -> None:
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
     # 03:00 UTC is 08:00 in Tashkent — before the clinic opens.
     at_night = (datetime.now(UTC) + timedelta(days=1)).replace(
         hour=3, minute=0, second=0, microsecond=0
@@ -1238,7 +1239,7 @@ async def test_analytics_counts_only_this_clinic(
             patient_name="B bemor",
         )
 
-    _login_as(client, seed.a.operator.id)
+    _login_as(client, seed.a.operator)
     body = (await client.get("/api/admin/analytics")).json()
 
     assert body["conversations_total"] == 1
@@ -1266,7 +1267,7 @@ async def test_changing_your_own_password(
             username=f"pw-{seed.tenant_a.id}",
             password_hash=hash_password("current-password"),
         )
-    csrf = _login_as(client, operator.id)
+    csrf = _login_as(client, operator)
 
     response = await client.post(
         "/api/admin/password",
@@ -1296,7 +1297,7 @@ async def test_the_current_password_is_required_to_change_it(
             username=f"pw2-{seed.tenant_a.id}",
             password_hash=hash_password("current-password"),
         )
-    csrf = _login_as(client, operator.id)
+    csrf = _login_as(client, operator)
 
     response = await client.post(
         "/api/admin/password",
@@ -1310,7 +1311,7 @@ async def test_the_current_password_is_required_to_change_it(
 async def test_a_short_new_password_is_rejected(
     client: httpx.AsyncClient, seed: Seed, manager: Any
 ) -> None:
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
 
     response = await client.post(
         "/api/admin/password",
@@ -1322,7 +1323,7 @@ async def test_a_short_new_password_is_rejected(
 
 
 async def test_the_day_exports_as_csv(client: httpx.AsyncClient, seed: Seed, manager: Any) -> None:
-    csrf = _login_as(client, manager.id)
+    csrf = _login_as(client, manager)
     slot = _next_free_slot()
     await client.post(
         "/api/admin/appointments",
@@ -1362,7 +1363,7 @@ async def test_the_export_covers_only_this_clinic(
             patient_name="Boshqa klinikaning bemori",
         )
 
-    _login_as(client, manager.id)
+    _login_as(client, manager)
     local_day = slot.astimezone(CLINIC_TIMEZONE).date().isoformat()
     response = await client.get(f"/api/admin/export/appointments.csv?date={local_day}")
 
@@ -1378,7 +1379,7 @@ async def test_the_front_desk_can_work_a_lead(
     """The front desk's own job. If this ever fails, the role has been
     narrowed into uselessness and everyone will just be given `admin`.
     """
-    csrf = _login_as(client, front_desk.id)
+    csrf = _login_as(client, front_desk)
 
     response = await client.post(
         "/api/admin/leads",
@@ -1410,7 +1411,7 @@ async def test_the_front_desk_cannot_change_what_the_clinic_says(
     asks, by a bot, with nobody reading it first — so editing it is not part
     of a front-desk shift.
     """
-    csrf = _login_as(client, front_desk.id)
+    csrf = _login_as(client, front_desk)
 
     response = await getattr(client, method)(path, json=payload, headers={CSRF_HEADER: csrf})
 
@@ -1449,7 +1450,7 @@ async def test_the_csv_of_patient_names_and_phones_is_not_open_to_every_account(
     building, so it is gated as patient data rather than as a report. The
     seed operator is a `doctor`.
     """
-    _login_as(client, seed.a.operator.id)
+    _login_as(client, seed.a.operator)
 
     response = await client.get("/api/admin/export/appointments.csv")
 
@@ -1467,7 +1468,7 @@ async def test_a_visit_that_has_come_is_marked_and_a_wrong_mark_put_right(
     client: httpx.AsyncClient, seed: Seed, front_desk: Any
 ) -> None:
     """The seeded booking is for now: its time has come."""
-    headers = {CSRF_HEADER: _login_as(client, front_desk.id)}
+    headers = {CSRF_HEADER: _login_as(client, front_desk)}
 
     came = await client.post(_outcome_url(seed.a.appointment.id, "complete"), headers=headers)
     assert came.status_code == 200, came.text
@@ -1481,7 +1482,7 @@ async def test_a_visit_that_has_come_is_marked_and_a_wrong_mark_put_right(
 async def test_the_report_counts_the_marked_outcome(
     client: httpx.AsyncClient, seed: Seed, manager: Any
 ) -> None:
-    headers = {CSRF_HEADER: _login_as(client, manager.id)}
+    headers = {CSRF_HEADER: _login_as(client, manager)}
 
     await client.post(_outcome_url(seed.a.appointment.id, "complete"), headers=headers)
     report = (await client.get("/api/admin/reports?days=7")).json()
@@ -1494,7 +1495,7 @@ async def test_the_report_counts_the_marked_outcome(
 async def test_a_visit_still_ahead_cannot_be_marked(
     client: httpx.AsyncClient, seed: Seed, manager: Any
 ) -> None:
-    headers = {CSRF_HEADER: _login_as(client, manager.id)}
+    headers = {CSRF_HEADER: _login_as(client, manager)}
     created = await client.post(
         "/api/admin/appointments",
         json={"scheduled_at": _next_free_slot().isoformat(), "patient_name": "Ertangi"},
@@ -1511,7 +1512,7 @@ async def test_a_visit_still_ahead_cannot_be_marked(
 async def test_a_cancelled_visit_cannot_be_marked(
     client: httpx.AsyncClient, seed: Seed, manager: Any
 ) -> None:
-    headers = {CSRF_HEADER: _login_as(client, manager.id)}
+    headers = {CSRF_HEADER: _login_as(client, manager)}
     await client.post(f"/api/admin/appointments/{seed.a.appointment.id}/cancel", headers=headers)
 
     response = await client.post(_outcome_url(seed.a.appointment.id, "complete"), headers=headers)
@@ -1525,7 +1526,7 @@ async def test_a_view_only_doctor_account_cannot_mark(
     client: httpx.AsyncClient, seed: Seed, outcome: str
 ) -> None:
     """The seed's own operator is a `doctor`: it reads, it does not write."""
-    headers = {CSRF_HEADER: _login_as(client, seed.a.operator.id)}
+    headers = {CSRF_HEADER: _login_as(client, seed.a.operator)}
 
     response = await client.post(_outcome_url(seed.a.appointment.id, outcome), headers=headers)
 
@@ -1536,7 +1537,7 @@ async def test_a_view_only_doctor_account_cannot_mark(
 async def test_marking_needs_the_csrf_token(
     client: httpx.AsyncClient, seed: Seed, manager: Any, outcome: str
 ) -> None:
-    _login_as(client, manager.id)
+    _login_as(client, manager)
 
     response = await client.post(_outcome_url(seed.a.appointment.id, outcome))
 
@@ -1546,7 +1547,7 @@ async def test_marking_needs_the_csrf_token(
 async def test_another_clinics_visit_is_not_found(
     client: httpx.AsyncClient, seed: Seed, manager: Any
 ) -> None:
-    headers = {CSRF_HEADER: _login_as(client, manager.id)}
+    headers = {CSRF_HEADER: _login_as(client, manager)}
 
     response = await client.post(_outcome_url(seed.b.appointment.id, "complete"), headers=headers)
 
@@ -1554,7 +1555,7 @@ async def test_another_clinics_visit_is_not_found(
 
 
 async def test_an_unknown_visit_is_not_found(client: httpx.AsyncClient, manager: Any) -> None:
-    headers = {CSRF_HEADER: _login_as(client, manager.id)}
+    headers = {CSRF_HEADER: _login_as(client, manager)}
     missing = "00000000-0000-0000-0000-000000000000"
 
     assert (
@@ -1571,7 +1572,7 @@ async def test_a_waiting_conversation_says_what_the_patient_asked(
     from app.models.conversation import Conversation
     from app.models.message import Message
 
-    _login_as(client, seed.a.operator.id)
+    _login_as(client, seed.a.operator)
     conversation = await db_session.get(Conversation, seed.a.conversation.id)
     assert conversation is not None
     conversation.needs_doctor_since = datetime.now(UTC)
@@ -1606,7 +1607,7 @@ async def test_the_inbox_counts_the_conversations_staff_have(
     another clinic's conversations are in neither."""
     from app.models.conversation import Conversation
 
-    _login_as(client, seed.a.operator.id)
+    _login_as(client, seed.a.operator)
     before = (await client.get("/api/admin/conversations/counts")).json()
     conversation = await db_session.get(Conversation, seed.a.conversation.id)
     assert conversation is not None
@@ -1632,7 +1633,7 @@ async def test_the_inbox_finds_the_conversations_that_began_as_comments(
     from app.models.message import Message
     from app.services.message_labels import COMMENT_PREFIX
 
-    _login_as(client, seed.a.operator.id)
+    _login_as(client, seed.a.operator)
     before = (await client.get("/api/admin/conversations/counts")).json()
     db_session.add(
         Message(
@@ -1690,7 +1691,7 @@ async def test_the_inbox_reads_fresh_red_rows_first_then_everything_by_time(
     pin_a = await conversation("pin-a", now + timedelta(hours=2), now - timedelta(hours=5))
     pin_b = await conversation("pin-b", now + timedelta(hours=3), now - timedelta(hours=1))
     recent = await conversation("recent", now + timedelta(hours=4), None)
-    _login_as(client, seed.a.operator.id)
+    _login_as(client, seed.a.operator)
 
     ids = [r["id"] for r in (await client.get("/api/admin/conversations?limit=500")).json()]
     mine = [i for i in ids if i in {old_pin, pin_a, pin_b, recent}]
@@ -1707,7 +1708,7 @@ async def test_the_inbox_lists_the_posts_people_commented_under(
     from app.models.message import Message
     from app.services.message_labels import COMMENT_PREFIX
 
-    _login_as(client, seed.a.operator.id)
+    _login_as(client, seed.a.operator)
     db_session.add(
         InstagramPost(
             tenant_id=seed.tenant_a.id,
@@ -1758,7 +1759,7 @@ async def test_the_chat_bot_view_shows_only_what_the_bot_answered_alone(
     from app.repositories.user import UserRepository
     from app.services.message_labels import COMMENT_PREFIX
 
-    _login_as(client, seed.a.operator.id)
+    _login_as(client, seed.a.operator)
 
     async def chat(name: str, *senders: str, bot_on: bool = True, comment: bool = False) -> str:
         with as_tenant(seed.tenant_a.id):
@@ -1787,3 +1788,24 @@ async def test_the_chat_bot_view_shows_only_what_the_bot_answered_alone(
     assert not ({with_operator, paused, from_comment, unanswered} & ids)
     counts = (await client.get("/api/admin/conversations/counts")).json()
     assert counts["bot_only"] == len(rows)
+
+
+async def test_changing_the_password_ends_the_sessions_opened_under_the_old_one(
+    client: httpx.AsyncClient, db_session: AsyncSession, seed: Seed
+) -> None:
+    """Owner, 2026-10-21, after the admin password was changed: "do the
+    people logged in with the old password stay in?" They do not: the
+    cookie is bound to the password it was issued under."""
+    from app.core.passwords import hash_password
+
+    _login_as(client, seed.a.operator)
+    assert (await client.get("/api/admin/conversations/counts")).status_code == 200
+
+    seed.a.operator.password_hash = hash_password("new-password-1")
+    await db_session.flush()
+
+    response = await client.get("/api/admin/conversations/counts", follow_redirects=False)
+    assert response.status_code in (303, 401)
+
+    _login_as(client, seed.a.operator)
+    assert (await client.get("/api/admin/conversations/counts")).status_code == 200

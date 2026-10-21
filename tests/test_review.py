@@ -27,6 +27,7 @@ from app.core.session import SESSION_COOKIE_NAME, create_session_cookie
 from app.main import app
 from app.models.knowledge_base import KnowledgeBase
 from app.models.message import Message
+from app.models.operator import Operator
 from app.models.suggestion import Suggestion, SuggestionKind, SuggestionStatus
 from app.rag.embeddings import EMBEDDING_DIMENSIONS, EmbeddingProvider
 from app.rag.llm import ChatMessage, LLMProvider
@@ -536,8 +537,8 @@ async def _operator(db_session: AsyncSession, seed: Seed, as_tenant: AsTenant, r
         )
 
 
-def _login(client: httpx.AsyncClient, operator_id: UUID) -> dict[str, str]:
-    cookie, csrf = create_session_cookie(operator_id)
+def _login(client: httpx.AsyncClient, operator: Operator) -> dict[str, str]:
+    cookie, csrf = create_session_cookie(operator.id, operator.password_hash)
     client.cookies.set(SESSION_COOKIE_NAME, cookie)
     return {CSRF_HEADER: csrf}
 
@@ -564,7 +565,7 @@ async def admin_headers(
     client: httpx.AsyncClient, db_session: AsyncSession, seed: Seed, as_tenant: AsTenant
 ) -> dict[str, str]:
     admin = await _operator(db_session, seed, as_tenant, "admin")
-    return _login(client, admin.id)
+    return _login(client, admin)
 
 
 async def test_the_clinic_admin_sees_pending_suggestions_with_whom_they_cite(
@@ -616,7 +617,7 @@ async def test_only_a_clinic_admin_may_see_or_decide(
     role: str,
 ) -> None:
     suggestion = await _pending(db_session, seed.tenant_a.id, seed.a.conversation.id)
-    headers = _login(client, (await _operator(db_session, seed, as_tenant, role)).id)
+    headers = _login(client, await _operator(db_session, seed, as_tenant, role))
 
     assert (await client.get("/api/admin/suggestions")).status_code == 403
     for path in (f"{suggestion.id}/accept", f"{suggestion.id}/reject", "run"):

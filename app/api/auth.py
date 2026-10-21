@@ -15,6 +15,7 @@ from app.core.session import (
     SESSION_MAX_AGE_SECONDS,
     Session,
     create_session_cookie,
+    password_key,
     read_session_cookie,
 )
 from app.core.tenant_context import reset_current_tenant, set_current_tenant
@@ -59,7 +60,8 @@ async def get_current_operator(
     always reset, even if the route raises.
     """
     operator = await db_session.get(Operator, session.operator_id)
-    if operator is None:
+    if operator is None or session.password_key != password_key(operator.password_hash):
+        # Gone, or the password has changed since this session was opened.
         raise NotAuthenticatedError()
     tenant_token = set_current_tenant(operator.tenant_id)
     try:
@@ -115,7 +117,7 @@ async def login_submit(
         )
 
     await reset_login_attempts(pool, username)
-    cookie_value, _csrf_token = create_session_cookie(operator.id)
+    cookie_value, _csrf_token = create_session_cookie(operator.id, operator.password_hash)
     # /admin/, not /dashboard/appointments: the operator dashboard is the one
     # served from app/static/admin, with conversations, leads, doctors, the
     # knowledge base and clinic settings on it. /dashboard predates the merge
