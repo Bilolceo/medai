@@ -811,7 +811,7 @@ async def test_a_quoted_price_is_sent_as_written(
         as_tenant,
         "Сколько стоит?" if russian else "Qancha turadi?",
         reply=reply,
-        tenant_settings=PRICE_RULES,
+        tenant_settings={**PRICE_RULES, "clinic_phone_numbers": "+998 71 200 03 93"},
     )
 
     assert result == reply
@@ -833,7 +833,7 @@ async def test_a_price_from_the_knowledge_base_is_rewritten_out(
         as_tenant,
         "UZI narxi qancha?",
         reply=[leaked, fixed],
-        tenant_settings=PRICE_RULES,
+        tenant_settings={**PRICE_RULES, "clinic_phone_numbers": "+998 71 200 03 93"},
     )
 
     assert result == fixed
@@ -949,3 +949,21 @@ async def test_a_follow_up_to_a_price_question_gets_the_rules_price(
 
     assert result == reply
     assert len(llm.calls) == 1
+
+
+async def test_a_number_that_is_not_the_clinics_never_leaves(
+    db_session: AsyncSession,
+    seed: Seed,
+    as_tenant: Callable[[UUID], AbstractContextManager[None]],
+) -> None:
+    """Owner, 2026-10-21: the doctor's old +998 93 051 25 96 is gone; the
+    model copying it from an older turn still sends the clinic's number."""
+    result, _ = await _ask(
+        db_session,
+        seed,
+        as_tenant,
+        "Telegram chiqmayapti, raqam bering",
+        reply="Bo'lmasa shu raqamga qo'ng'iroq qiling: +998930512596.",
+        tenant_settings={"clinic_phone_numbers": "+998 99 899 62 83, +998 70 310 40 40"},
+    )
+    assert result == "Bo'lmasa shu raqamga qo'ng'iroq qiling: +998 99 899 62 83."

@@ -27,7 +27,14 @@ from app.repositories.appointment import AppointmentRepository
 from app.repositories.doctor import DoctorRepository
 from app.repositories.knowledge_base import KnowledgeBaseMatch
 from app.repositories.knowledge_document import ChunkMatch
-from app.services import booking_offer, medical_safety, price_guard, repetition, spelling
+from app.services import (
+    booking_offer,
+    medical_safety,
+    phone_guard,
+    price_guard,
+    repetition,
+    spelling,
+)
 from app.services import persona as persona_service
 from app.services.language import (
     clear_script,
@@ -382,9 +389,10 @@ async def generate_answer(
         long_gap=long_gap,
     )
     rules = await clinic_rules_for(session, tenant_id)
+    facts = _clinic_facts(tenant, resolved_settings, doctors, rules)
     system_prompt = _build_system_prompt(
         persona_service.from_settings(tenant.settings if tenant is not None else None),
-        facts=_clinic_facts(tenant, resolved_settings, doctors, rules),
+        facts=facts,
         matches=knowledge.faqs,
         chunks=knowledge.chunks,
         state=state,
@@ -450,6 +458,9 @@ async def generate_answer(
         reply = booking_offer.drop_intro(reply)
     reply = repetition.drop_echoed_opening(reply, own_turns)
     reply = spelling.fix(reply)
+    # No telephone number but the clinic's leaves here, whatever the model
+    # read in an older turn (see app.services.phone_guard).
+    reply = phone_guard.strip(reply, facts.phone_numbers)
     if not booking_offer.wants_to_book(user_message, patient_turns) and (
         booking_offer.offered_before(own_turns)
         or booking_offer.declined([*patient_turns, user_message])
