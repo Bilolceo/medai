@@ -428,3 +428,55 @@ def test_a_reminder_names_no_doctor_when_none_was_assigned() -> None:
         assert unassigned == blank
         # A doctor who is named is still named.
         assert "Dr. Aliyev A.A." in named
+
+
+@pytest.mark.parametrize(
+    ("written", "opening"),
+    [
+        ("Ертага 9.00 да келаман, катта раҳмат", "Эслатма: эртага"),
+        ("Завтра в 9 приду, спасибо", "Напоминание: завтра"),
+        ("Ertaga 9 da kelaman, rahmat", "Eslatma: ertaga"),
+    ],
+)
+async def test_a_reminder_is_written_in_the_patients_own_alphabet(
+    db_session: AsyncSession,
+    seed: Seed,
+    booking_factory: Any,
+    as_tenant: Callable[[UUID], AbstractContextManager[None]],
+    written: str,
+    opening: str,
+) -> None:
+    """A patient who wrote Cyrillic all along got a Latin reminder and
+    answered "Лотинча тушунмадим" (live, 2026-10-20). The patient's own
+    messages in the conversation decide the alphabet, Russian included."""
+    with as_tenant(seed.tenant_a.id):
+        await MessageRepository(db_session).create(
+            conversation_id=seed.a.conversation.id,
+            sender=MessageSender.PATIENT,
+            content=written,
+            channel="instagram",
+        )
+    await booking_factory(hours_ahead=23)
+    adapter = RecordingAdapter()
+
+    await send_due_reminders(db_session, now=NOW, adapter=adapter)
+
+    assert len(adapter.calls) == 1
+    assert adapter.calls[0][2].startswith(opening)
+    assert "Dr. Smith" in adapter.calls[0][2]
+
+
+async def test_a_booking_without_a_conversation_follows_the_noted_language(
+    db_session: AsyncSession,
+    seed: Seed,
+    booking_factory: Any,
+    as_tenant: Callable[[UUID], AbstractContextManager[None]],
+) -> None:
+    seed.a.user.preferred_language = "uz-cyrl"
+    await db_session.flush()
+    await booking_factory(hours_ahead=23, with_conversation=False)
+    adapter = RecordingAdapter()
+
+    await send_due_reminders(db_session, now=NOW, adapter=adapter)
+
+    assert adapter.calls[0][2].startswith("Эслатма: эртага")

@@ -35,8 +35,9 @@ from app.core.tenant_context import reset_current_tenant, set_current_tenant
 from app.models.appointment import ACTIVE_STATUSES, Appointment
 from app.models.message import MessageSender
 from app.models.user import User
+from app.services import language
 from app.services.appointment import CLINIC_TIMEZONE, UNASSIGNED_DOCTOR_NAME
-from app.services.conversation import record_outbound_message, reply_context_for
+from app.services.conversation import recent_history, record_outbound_message, reply_context_for
 from app.services.delivery import send_reply
 
 logger = logging.getLogger(__name__)
@@ -54,13 +55,17 @@ class ReminderWindow:
     # the doctor template renders "Tayinlanmagan qabulida", which is what a
     # patient actually received this morning.
     template_unassigned: str
+    # The same two in the other alphabets patients write in, keyed by the
+    # script app.services.language names ("uz-cyrl", "ru"). A patient who
+    # wrote Cyrillic throughout got the Latin one and answered "Лотинча
+    # тушунмадим" (live, 2026-10-20).
+    wording: dict[str, tuple[str, str]]
 
 
 # Ordered longest lead first — see _due_windows for why the order matters.
 #
-# TODO(IGB-?): the wording is one fixed Uzbek string per window. It should
-# come from tenants.settings, and be written in the language the patient has
-# been using, once there is somewhere to put a translation.
+# TODO(IGB-?): the wording is fixed here; it should come from tenants.settings
+# once there is somewhere to put a clinic's own text.
 REMINDER_WINDOWS: tuple[ReminderWindow, ...] = (
     ReminderWindow(
         lead_time=timedelta(hours=24),
@@ -72,6 +77,17 @@ REMINDER_WINDOWS: tuple[ReminderWindow, ...] = (
         template_unassigned=(
             "Eslatma: ertaga, {date} kuni soat {time} da qabulga yozilgansiz. Sizni kutamiz!"
         ),
+        wording={
+            "uz-cyrl": (
+                "Эслатма: эртага, {date} куни соат {time} да {doctor} қабулида "
+                "кўрикка ёзилгансиз. Сизни кутамиз!",
+                "Эслатма: эртага, {date} куни соат {time} да қабулга ёзилгансиз. Сизни кутамиз!",
+            ),
+            "ru": (
+                "Напоминание: завтра, {date}, в {time} вы записаны на приём к {doctor}. Ждём вас!",
+                "Напоминание: завтра, {date}, в {time} вы записаны на приём. Ждём вас!",
+            ),
+        },
     ),
     ReminderWindow(
         lead_time=timedelta(hours=2),
@@ -80,6 +96,17 @@ REMINDER_WINDOWS: tuple[ReminderWindow, ...] = (
             "Eslatma: bugun soat {time} da {doctor} qabulida ko'rikka kutilmoqdasiz. Sizni kutamiz!"
         ),
         template_unassigned=("Eslatma: bugun soat {time} da qabulga yozilgansiz. Sizni kutamiz!"),
+        wording={
+            "uz-cyrl": (
+                "Эслатма: бугун соат {time} да {doctor} қабулида кўрикка кутилмоқдасиз. "
+                "Сизни кутамиз!",
+                "Эслатма: бугун соат {time} да қабулга ёзилгансиз. Сизни кутамиз!",
+            ),
+            "ru": (
+                "Напоминание: сегодня в {time} вас ждут на приёме у {doctor}. Ждём вас!",
+                "Напоминание: сегодня в {time} вы записаны на приём. Ждём вас!",
+            ),
+        },
     ),
 )
 
@@ -123,19 +150,30 @@ def _due_windows(
     return due[-1], due[:-1]
 
 
-def _message(appointment: Appointment, window: ReminderWindow) -> str:
+def _message(appointment: Appointment, window: ReminderWindow, script: str = "uz-latn") -> str:
     local = appointment.scheduled_at.astimezone(CLINIC_TIMEZONE)
     doctor = appointment.doctor_name
-    template = (
-        window.template_unassigned
-        if not doctor or doctor == UNASSIGNED_DOCTOR_NAME
-        else window.template
-    )
+    named, unassigned = window.wording.get(script, (window.template, window.template_unassigned))
+    template = unassigned if not doctor or doctor == UNASSIGNED_DOCTOR_NAME else named
     return template.format(
         date=local.strftime("%d.%m.%Y"),
         time=local.strftime("%H:%M"),
         doctor=doctor,
     )
+
+
+async def _script_for(session: AsyncSession, appointment: Appointment, patient: User) -> str:
+    """The alphabet the patient has been writing in: their own messages in
+    the conversation decide, newest first; a booking made without one falls
+    back on the language noted on the patient, then on Latin Uzbek."""
+    if appointment.conversation_id is not None:
+        turns = await recent_history(session, appointment.conversation_id)
+        written = [t for t in turns if t.get("role") == "user"]
+        if written:
+            return language.conversation_script(written[:-1], written[-1]["content"])
+    if patient.preferred_language in ("uz-cyrl", "ru"):
+        return patient.preferred_language
+    return "uz-latn"
 
 
 async def _pending(session: AsyncSession, now: datetime) -> Sequence[tuple[Appointment, User]]:
@@ -204,12 +242,13 @@ async def send_due_reminders(
             reply_context = None
             if appointment.conversation_id is not None:
                 reply_context = await reply_context_for(session, appointment.conversation_id)
+            text = _message(appointment, to_send, await _script_for(session, appointment, patient))
 
             delivered_over = await send_reply(
                 session,
                 channel_id=patient.channel_id,
                 recipient_external_id=patient.external_id,
-                text=_message(appointment, to_send),
+                text=text,
                 # A reminder is the clinic starting a conversation, not
                 # answering one, so it is measured against the patient's own
                 # last message — which is exactly what a platform's reply
@@ -245,7 +284,7 @@ async def send_due_reminders(
                     session,
                     conversation_id=appointment.conversation_id,
                     channel_type=delivered_over,
-                    text=_message(appointment, to_send),
+                    text=text,
                     sender=MessageSender.BOT,
                 )
             await session.commit()
