@@ -52,6 +52,9 @@ _UZBEK_WORDS = frozenset(
         "кайси қайси жой жойда жойи жойлашган каерда кайда кани неча пул пули",
     )
 )
+# The greeting, however it is spelled: "Ассаллому аллайкум" ends like a
+# Russian adjective ("-ому") and was answered in Russian (live, 2026-10-24).
+_GREETING = re.compile(r"^(?:а?с+а+л+[аоу]+м+[уи]?|а?л+[аеэя]+й?к+у+м+)$")
 _UZBEK_SUFFIX = re.compile(r"(лар|ларни|ларга|дан|даги|нинг|миз|сиз|ман|ган|япти|ябди|мокда)$")
 # Russian verb and adjective endings Uzbek words of this length do not have:
 # "принимает", "беспокоит", "давайте", "удобное". Counted like the Uzbek
@@ -72,7 +75,7 @@ def _cyrillic_scores(lowered: str) -> tuple[int, int]:
         uzbek += 2
         lowered = _NUMBER_LOCATIVE.sub(" ", lowered)
     for word in _WORD.findall(lowered):
-        if word in _UZBEK_WORDS:
+        if word in _UZBEK_WORDS or _GREETING.match(word):
             uzbek += 2
         elif word in _RUSSIAN_WORDS:
             russian += 2

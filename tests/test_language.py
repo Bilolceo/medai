@@ -1,3 +1,5 @@
+import pytest
+
 from app.rag.llm import ChatMessage
 from app.services.language import conversation_script, reply_fits, reply_script
 
@@ -112,3 +114,17 @@ def test_switching_to_cyrillic_is_answered_in_cyrillic() -> None:
     answered in Latin."""
     history: list[ChatMessage] = [{"role": "user", "content": "Qabulga qanday yozilsam bo`ladi?"}]
     assert conversation_script(history, "Пенил оператсия  неча пул") == "uz-cyrl"
+
+
+@pytest.mark.parametrize(
+    "greeting",
+    ["Ассаллому аллайкум", "Ассалому алайкум", "Асаламу алейкум", "Ассаллом", "Салом"],
+)
+def test_the_greeting_is_uzbek_however_it_is_spelled(greeting: str) -> None:
+    """ "Ассаллому аллайкум" ends like a Russian adjective and was answered in
+    Russian, twice (live, 2026-10-24)."""
+    assert reply_script(greeting) == "uz-cyrl"
+
+
+def test_a_russian_greeting_is_still_russian() -> None:
+    assert reply_script("Здравствуйте, сколько стоит приём?") == "ru"
