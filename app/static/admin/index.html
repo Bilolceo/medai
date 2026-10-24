@@ -624,6 +624,18 @@
   .msg.operator small { color: currentColor; opacity: .8; }
   .msg.undelivered { background: var(--danger-soft); color: var(--ink); border: 1px dashed var(--danger); }
   .msg.undelivered small { color: var(--danger); }
+  /* What the patient sent, where they sent it: photos, voice, video, reels. */
+  .att-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; white-space: normal; }
+  .att-img { padding: 0; border: 1px solid var(--rule); border-radius: var(--r-md); overflow: hidden; background: var(--panel-2); cursor: zoom-in; line-height: 0; }
+  .att-img img { display: block; width: 180px; height: 180px; object-fit: cover; }
+  .att-img.sticker img { width: 96px; height: 96px; object-fit: contain; background: transparent; }
+  .att-audio { width: 280px; max-width: 100%; height: 40px; display: block; }
+  .att-video { display: block; width: 260px; max-width: 100%; max-height: 420px; border-radius: var(--r-md); background: #000; }
+  .att-reel { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 12px 14px; border: 1px dashed var(--rule-strong); border-radius: var(--r-md); background: var(--panel-2); color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; max-width: 260px; text-align: left; }
+  .att-reel:hover { border-color: var(--accent); }
+  .att-reel span { font-weight: 400; font-size: var(--fs-xs); color: var(--ink-3); }
+  .att-file { font-weight: 600; }
+  .att-note { font-size: var(--fs-xs); color: var(--ink-3); }
   /* The post a comment was left under: cover, what the video is about, a link. */
   .post-card { align-self: flex-start; max-width: 82%; display: flex; gap: 12px; align-items: center; padding: 10px; border-radius: var(--r-md); background: var(--panel-2); border: 1px solid var(--rule); margin-bottom: -4px; }
   .post-card img { width: 56px; height: 56px; border-radius: 12px; object-fit: cover; flex-shrink: 0; background: var(--surface-sunk); }
@@ -2344,7 +2356,10 @@ function closeThread() {
   if (!document.getElementById("tab-chats").hidden) writeLocation("chats", null);
 }
 
+let CURRENT_THREAD = null;
+
 function renderThread(detail) {
+  CURRENT_THREAD = detail;
   document.getElementById("threadTitle").textContent =
     patientLabel(detail.conversation) + " — " + detail.conversation.channel;
   let shownPost = null;
@@ -2356,6 +2371,9 @@ function renderThread(detail) {
         "div",
         { class: "msg " + m.sender + (m.delivery_status && m.delivery_status !== "sent" ? " undelivered" : "") },
         m.content,
+        (m.attachments || []).length
+          ? el("div", { class: "att-list" }, ...m.attachments.map((a) => attachmentNode(a, detail)))
+          : null,
         el(
           "small",
           {},
@@ -2372,6 +2390,91 @@ function renderThread(detail) {
   document.getElementById("replyHint").textContent = detail.conversation.is_bot_enabled
     ? "Bot hali yoqilgan — javob yozsangiz ham bot javob berishda davom etadi."
     : "";
+}
+
+// --- what the patient sent, shown where they sent it ---------------------
+//
+// Photos open in the lightbox, voice messages and videos play in place, a
+// shared reel loads when somebody presses it (the server fetches and keeps
+// it then -- patients share dozens, mostly the clinic's own). Every node is
+// kept by attachment id and reused when the thread is redrawn, so a voice
+// message playing when the patient writes again keeps playing.
+const ATTACHMENT_NODES = new Map();
+
+function attachmentUrl(a) {
+  return `${API}/media/${a.id}/file`;
+}
+
+function attachmentNode(a, detail) {
+  const kept = ATTACHMENT_NODES.get(a.id);
+  if (kept) return kept;
+  const node = buildAttachment(a, detail);
+  ATTACHMENT_NODES.set(a.id, node);
+  return node;
+}
+
+function attachmentFailed(text) {
+  return el("span", { class: "att-note" }, text);
+}
+
+function playable(a, autoplay) {
+  const isImage = (a.content_type || "").startsWith("image/");
+  if (isImage) return photoButton(a, null);
+  const video = el("video", {
+    class: "att-video", src: attachmentUrl(a), controls: "", playsinline: "",
+    preload: autoplay ? "auto" : "metadata",
+  });
+  if (autoplay) video.autoplay = true;
+  // A shared post is sometimes a photo: try it as one before giving up.
+  video.addEventListener("error", () => {
+    const img = el("img", { src: attachmentUrl(a), alt: "" });
+    img.addEventListener("error", () => img.replaceWith(attachmentFailed("Ochib bo'lmadi — Instagram havolasi eskirgan")));
+    video.replaceWith(el("div", { class: "att-img" }, img));
+  }, { once: true });
+  return video;
+}
+
+function photoButton(a, detail) {
+  const img = el("img", { src: attachmentUrl(a), alt: "Bemor yuborgan rasm", loading: "lazy" });
+  const button = el("button", {
+    type: "button", class: "att-img" + (a.kind === "sticker" ? " sticker" : ""), title: "Kattalashtirish",
+  }, img);
+  img.addEventListener("error", () => button.replaceWith(attachmentFailed("📷 Rasm yuklanmadi")), { once: true });
+  button.addEventListener("click", () => {
+    const photos = (CURRENT_THREAD ? CURRENT_THREAD.messages : [])
+      .flatMap((m) => (m.attachments || []).filter((x) => x.kind === "image").map((x) => ({ ...x, created_at: m.created_at })));
+    const index = Math.max(0, photos.findIndex((x) => x.id === a.id));
+    const who = CURRENT_THREAD ? CURRENT_THREAD.conversation : {};
+    openLightbox({
+      name: who.patient_name, username: who.patient_username,
+      items: photos.map((x) => ({ id: x.id, created_at: x.created_at, available: true, status: "reviewed" })),
+    }, index);
+  });
+  return button;
+}
+
+function buildAttachment(a, detail) {
+  if (a.kind === "image" || a.kind === "sticker") return photoButton(a, detail);
+  if (a.kind === "audio") {
+    const audio = el("audio", { class: "att-audio", src: attachmentUrl(a), controls: "", preload: "metadata" });
+    audio.addEventListener("error", () => audio.replaceWith(attachmentFailed("🎤 Ovozli xabarni yuklab bo'lmadi")), { once: true });
+    return audio;
+  }
+  if (a.kind === "video") return playable(a, false);
+  if (a.kind === "file") {
+    return el("a", { class: "att-file", href: attachmentUrl(a), target: "_blank", rel: "noopener" }, "📎 Faylni ochish");
+  }
+  // A shared reel or a story: stored ones play at once, the rest on a press.
+  if (a.stored) return playable(a, false);
+  const label = a.kind === "story" ? "▶ Storyni ko'rish" : "▶ Reels / postni ko'rish";
+  const button = el("button", { type: "button", class: "att-reel" }, label,
+    a.title ? el("span", {}, a.title.length > 120 ? a.title.slice(0, 120) + "…" : a.title) : null);
+  button.addEventListener("click", () => {
+    const shown = playable(a, true);
+    ATTACHMENT_NODES.set(a.id, shown);
+    button.replaceWith(shown);
+  });
+  return button;
 }
 
 // --- the conversations tab keeps itself current --------------------------
@@ -2444,6 +2547,7 @@ async function openThread(id, options = {}) {
   if (!options.quiet) {
     CURRENT_CHAT = id;
     THREAD_SIGNATURE = "";
+    ATTACHMENT_NODES.clear();
   }
   const detail = await api(`/conversations/${id}`);
   // The operator may have opened another conversation, or closed this one,

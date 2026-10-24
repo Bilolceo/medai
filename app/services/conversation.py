@@ -17,7 +17,7 @@ the reply-window check had no real timestamp to measure against.
 
 import uuid
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.conversation import Conversation
 from app.models.message import DeliveryStatus, Message, MessageSender
+from app.models.patient_media import PatientMedia
 from app.models.user import User
 from app.rag.llm import ChatMessage
 from app.repositories.conversation import OPEN_STATUS, ConversationRepository
@@ -63,6 +64,23 @@ class InboundContext:
     # still recorded — a patient's words belong in the transcript regardless
     # of who answers them — but the bot must not reply on top of a human.
     is_bot_enabled: bool
+    # What the patient attached, recorded with the message (patient_media
+    # rows, bytes not yet downloaded), in the order Instagram sent them.
+    media_ids: list[uuid.UUID] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class Attachment:
+    """One thing attached to an inbound message, as the platform gave it."""
+
+    kind: str  # app.models.patient_media.MediaKind
+    url: str
+    title: str | None = None
+
+
+# Keys a patient message's meta carries that are about the message itself,
+# not about how to answer it; reply_context_for leaves them out.
+_NOT_ROUTING = frozenset({"attachments", "post_media_id"})
 
 
 async def _get_or_create_user(
@@ -122,6 +140,8 @@ async def register_inbound_message(
     text: str,
     reply_context: Mapping[str, Any] | None = None,
     wants_a_person: bool = True,
+    attachments: Sequence[Attachment] = (),
+    external_id: str | None = None,
 ) -> InboundContext:
     """Record one message from a patient and return the context to act on it.
 
@@ -141,15 +161,37 @@ async def register_inbound_message(
     the dashboard hours later can route their reply the same way the bot
     would have — for a Telegram Business conversation, over the same
     business connection.
+
+    `attachments` -- a photo, a voice message, a reel -- are recorded with
+    the message and named in its meta, so the conversation shows them where
+    they were sent. `external_id` is the platform's message id, which the
+    Graph API needs to hand out a fresh link once the original has expired.
     """
     user = await _get_or_create_user(session, channel_id=channel_id, external_id=sender_external_id)
     conversation = await _get_or_create_open_conversation(session, user_id=user.id)
+    meta: dict[str, Any] = dict(reply_context) if reply_context else {}
+    media: list[PatientMedia] = []
+    for index, attachment in enumerate(attachments):
+        row = PatientMedia(
+            tenant_id=user.tenant_id,
+            user_id=user.id,
+            conversation_id=conversation.id,
+            external_id=f"{external_id}:{index}" if external_id else None,
+            source_url=attachment.url,
+            kind=attachment.kind,
+            title=attachment.title,
+        )
+        session.add(row)
+        media.append(row)
+    if media:
+        await session.flush()
+        meta["attachments"] = [{"id": str(row.id), "kind": row.kind} for row in media]
     await MessageRepository(session).create(
         conversation_id=conversation.id,
         sender=MessageSender.PATIENT,
         content=text,
         channel=channel_type,
-        meta=dict(reply_context) if reply_context else {},
+        meta=meta,
     )
     # `wants_a_person` is False for a sticker or a ❤️: nothing in it for
     # anybody to answer, so it pins nothing.
@@ -165,6 +207,7 @@ async def register_inbound_message(
         conversation_id=conversation.id,
         user_id=user.id,
         is_bot_enabled=conversation.is_bot_enabled,
+        media_ids=[row.id for row in media],
     )
 
 
@@ -291,6 +334,9 @@ async def reply_context_for(
     """
     messages = await MessageRepository(session).list_recent(conversation_id, 20)
     for message in reversed(messages):
-        if message.sender == MessageSender.PATIENT and message.meta:
-            return dict(message.meta)
+        if message.sender != MessageSender.PATIENT or not message.meta:
+            continue
+        routing = {k: v for k, v in message.meta.items() if k not in _NOT_ROUTING}
+        if routing:
+            return routing
     return None

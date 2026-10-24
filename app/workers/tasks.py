@@ -38,6 +38,7 @@ from app.models.appointment import Appointment
 from app.models.channel import Channel
 from app.models.conversation import Conversation
 from app.models.message import DeliveryStatus, Message, MessageSender
+from app.models.patient_media import PatientMedia
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.rag.embeddings import EmbeddingProvider
@@ -1165,6 +1166,7 @@ async def handle_patient_media(
     sender_external_id: str,
     external_id: str | None,
     urls: list[str],
+    media_ids: list[str] | None = None,
 ) -> None:
     """ARQ job: a patient sent photos. Store them, acknowledge, tell the doctor.
 
@@ -1184,6 +1186,7 @@ async def handle_patient_media(
                 external_id=external_id,
                 urls=urls,
                 channel_id=uuid.UUID(channel_id),
+                media_ids=[uuid.UUID(m) for m in media_ids] if media_ids else None,
             )
             # Only a person can look at a photo; the conversation waits on one.
             await handoff.flag(session, uuid.UUID(conversation_id))
@@ -1217,6 +1220,42 @@ async def handle_patient_media(
             await _notify_doctor_of_media(session, tenant_uuid, user_id, media)
             logger.info(
                 "patient_media_handled", extra={"tenant_id": tenant_id, "count": len(media)}
+            )
+    finally:
+        reset_current_tenant(token)
+
+
+async def store_attachments(
+    ctx: dict[str, Any], tenant_id: str, channel_id: str, media_ids: list[str]
+) -> None:
+    """ARQ job: download a voice message, a video or a file a patient sent,
+    so the clinic can still play it after Instagram's link has expired.
+
+    Photos are stored by handle_patient_media, and shared reels when somebody
+    first opens one (app.api.admin.media); both are skipped here.
+    """
+    token = set_current_tenant(uuid.UUID(tenant_id))
+    try:
+        async with db_session() as session:
+            wanted = []
+            for media_id in media_ids:
+                media = await session.get(PatientMedia, uuid.UUID(media_id))
+                if media is not None and media.kind in patient_media.DOWNLOAD_ON_ARRIVAL:
+                    wanted.append(media.id)
+            if not wanted:
+                return
+            rows = await patient_media.fill(
+                session,
+                wanted,
+                token=await patient_media.channel_token(session, uuid.UUID(channel_id)),
+            )
+            logger.info(
+                "attachments_stored",
+                extra={
+                    "tenant_id": tenant_id,
+                    "stored": sum(r.size_bytes is not None for r in rows),
+                    "of": len(rows),
+                },
             )
     finally:
         reset_current_tenant(token)
@@ -1605,6 +1644,7 @@ class WorkerSettings:
         apply_admin_rule,
         apply_owner_rule,
         handle_patient_media,
+        store_attachments,
         answer_voice_note,
         answer_comment,
         note_clinic_reply,

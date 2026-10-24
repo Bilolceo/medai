@@ -907,3 +907,108 @@ async def test_an_attachment_greeting_waits_for_the_question_typed_under_it(
     [job] = await _answer_jobs(redis_pool)
     assert (await job.info()).function == "answer_attachment"  # type: ignore[union-attr]
     assert 12 <= await _deferred_seconds(job) <= 14.5
+
+
+# --- every attachment is kept with the message it came in -----------------------
+
+
+async def _patient_messages(session: AsyncSession, sender: str, seed: Seed) -> list[Message]:
+    user = await UserRepository(session).get_by_external_id(
+        channel_id=seed.a.channel.id, external_id=sender
+    )
+    assert user is not None
+    return list(
+        (
+            await session.execute(
+                select(Message)
+                .join(Conversation, Conversation.id == Message.conversation_id)
+                .where(Conversation.user_id == user.id, Message.sender == MessageSender.PATIENT)
+            )
+        ).scalars()
+    )
+
+
+@pytest.mark.parametrize(
+    ("attachment", "kind", "label"),
+    [
+        ({"type": "audio", "payload": {"url": "https://cdn.example/v.mp4"}}, "audio", "🎤"),
+        ({"type": "video", "payload": {"url": "https://cdn.example/x.mp4"}}, "video", "🎞"),
+        (
+            {
+                "type": "ig_reel",
+                "payload": {"url": "https://cdn.example/r.mp4", "title": "Prostatit haqida"},
+            },
+            "share",
+            "🔗",
+        ),
+    ],
+)
+async def test_a_voice_message_a_video_or_a_reel_is_kept_with_its_message(
+    client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    seed: Seed,
+    redis_pool: ArqRedis,
+    as_tenant: Callable[[UUID], AbstractContextManager[None]],
+    attachment: dict[str, Any],
+    kind: str,
+    label: str,
+) -> None:
+    """Owner, 2026-10-24: voice messages, videos and reels were a label in
+    the chat ("🎤 Ovozli xabar") that nobody could open. The attachment is now
+    recorded with the message, and its download queued."""
+    from app.models.patient_media import PatientMedia
+
+    page_id = seed.a.channel.external_id
+    sender = f"att-{kind}"
+    body = _event(page_id, sender, message={"mid": f"mid-{kind}", "attachments": [attachment]})
+
+    assert (await _post(client, body)).status_code == 200
+
+    with as_tenant(seed.tenant_a.id):
+        [message] = await _patient_messages(db_session, sender, seed)
+    assert message.content.startswith(label)
+    [named] = message.meta["attachments"]
+    assert named["kind"] == kind
+    media = await db_session.get(PatientMedia, uuid.UUID(named["id"]))
+    assert media is not None
+    assert media.kind == kind
+    assert media.source_url == attachment["payload"]["url"]
+    assert media.external_id == f"mid-{kind}:0"
+    assert media.conversation_id == message.conversation_id
+    assert media.title == attachment["payload"].get("title")
+    jobs = {(await job.info()).function: job for job in await _queued_jobs(redis_pool)}
+    assert "store_attachments" in jobs
+    assert (await jobs["store_attachments"].info()).args[2] == [named["id"]]
+
+
+async def test_a_photo_is_recorded_once_with_its_message_and_filled_by_the_job(
+    client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    seed: Seed,
+    redis_pool: ArqRedis,
+    as_tenant: Callable[[UUID], AbstractContextManager[None]],
+) -> None:
+    """The photo job is handed the row recorded with the message, so the
+    photo is stored once and shows both in the chat and on "Rasmlar"."""
+    page_id = seed.a.channel.external_id
+    body = _event(
+        page_id,
+        "photo-two",
+        message={
+            "mid": "mid-photo-2",
+            "attachments": [
+                {"type": "image", "payload": {"url": "https://cdn.example/1.jpg"}},
+                {"type": "image", "payload": {"url": "https://cdn.example/2.jpg"}},
+            ],
+        },
+    )
+
+    assert (await _post(client, body)).status_code == 200
+
+    with as_tenant(seed.tenant_a.id):
+        [message] = await _patient_messages(db_session, "photo-two", seed)
+    ids = [a["id"] for a in message.meta["attachments"]]
+    assert len(ids) == 2
+    jobs = {(await job.info()).function: job for job in await _queued_jobs(redis_pool)}
+    info = await jobs["handle_patient_media"].info()
+    assert info.kwargs["media_ids"] == ids

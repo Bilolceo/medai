@@ -26,9 +26,10 @@ from app.core.db import get_db_session
 from app.core.queue import get_arq_pool
 from app.core.redaction import preview
 from app.core.tenant_context import reset_current_tenant, set_current_tenant
+from app.models.patient_media import MediaKind
 from app.services import clinic_echoes, message_labels
 from app.services.admin_commands import parse_rule
-from app.services.conversation import register_inbound_message
+from app.services.conversation import Attachment, InboundContext, register_inbound_message
 from app.services.debounce import handle_inbound_message
 from app.services.idempotency import claim_event
 from app.services.tenant_resolution import (
@@ -55,6 +56,8 @@ class AttachmentPayload(BaseModel):
     url: str | None = None
     # Set on a sticker, which otherwise arrives looking like a photo.
     sticker_id: int | str | None = None
+    # A shared reel's caption.
+    title: str | None = None
 
 
 class WebhookAttachment(BaseModel):
@@ -305,8 +308,11 @@ async def _handle_event(
         channel_type=channel.channel_type,
         sender_external_id=event.sender.id,
         text=event.message.text,
+        attachments=_attachments_of(event.message),
+        external_id=event.message.mid,
     )
     await session.commit()
+    await _download_attachments(pool, channel, inbound)
 
     # Before every early return below, because the conversations an operator
     # answers by hand are exactly the ones that most need a name on them in
@@ -412,6 +418,8 @@ async def _handle_images(
         text=(
             f"📷 Rasm yubordi ({len(image_urls)} ta)" if len(image_urls) > 1 else "📷 Rasm yubordi"
         ),
+        attachments=_attachments_of(event.message),
+        external_id=event.message.mid,
     )
     await session.commit()
     logger.info(
@@ -430,6 +438,68 @@ async def _handle_images(
         event.sender.id,
         event.message.mid,
         image_urls,
+        media_ids=[
+            str(media_id)
+            for media_id, attachment in zip(
+                inbound.media_ids, _attachments_of(event.message), strict=False
+            )
+            if attachment.kind == MediaKind.IMAGE
+        ],
+    )
+    await _download_attachments(pool, channel, inbound)
+
+
+# What Instagram calls an attachment, by what the clinic is shown.
+_MEDIA_KIND_BY_TYPE = {
+    "image": MediaKind.IMAGE,
+    "audio": MediaKind.AUDIO,
+    "voice": MediaKind.AUDIO,
+    "video": MediaKind.VIDEO,
+    "file": MediaKind.FILE,
+    "share": MediaKind.SHARE,
+    "ig_reel": MediaKind.SHARE,
+    "reel": MediaKind.SHARE,
+    "ig_post": MediaKind.SHARE,
+    "post": MediaKind.SHARE,
+    "story_mention": MediaKind.STORY,
+    "sticker": MediaKind.STICKER,
+    "animated_image": MediaKind.STICKER,
+}
+
+
+def _attachments_of(message: WebhookMessage) -> list[Attachment]:
+    """Everything attached to the message that has something to show.
+
+    A ❤️ "like" and a template with no link are left out: nothing to open.
+    """
+    found = []
+    for attachment in message.attachments:
+        payload = attachment.payload
+        if payload is None or not payload.url:
+            continue
+        kind = _MEDIA_KIND_BY_TYPE.get(attachment.type)
+        if kind is None:
+            continue
+        if payload.sticker_id is not None:
+            kind = MediaKind.STICKER
+        title = payload.title.strip()[:500] if payload.title and payload.title.strip() else None
+        found.append(Attachment(kind=kind, url=payload.url, title=title))
+    return found
+
+
+async def _download_attachments(
+    pool: ArqRedis, channel: ResolvedChannel, inbound: InboundContext
+) -> None:
+    """Voice messages, videos and files are downloaded at once, off the
+    request: Instagram's links expire within days. (Photos go through
+    handle_patient_media; reels wait for somebody to open them.)"""
+    if not inbound.media_ids:
+        return
+    await pool.enqueue_job(
+        "store_attachments",
+        str(channel.tenant_id),
+        str(channel.channel_id),
+        [str(media_id) for media_id in inbound.media_ids],
     )
 
 
@@ -503,8 +573,11 @@ async def _handle_attachment(
         sender_external_id=event.sender.id,
         text=text,
         wants_a_person=kind in _FOR_A_PERSON,
+        attachments=_attachments_of(event.message),
+        external_id=event.message.mid,
     )
     await session.commit()
+    await _download_attachments(pool, channel, inbound)
     logger.info(
         "webhook_attachment_received",
         extra={
@@ -588,8 +661,11 @@ async def _handle_voice_note(
         channel_type=channel.channel_type,
         sender_external_id=event.sender.id,
         text="🎤 Ovozli xabar",
+        attachments=_attachments_of(event.message),
+        external_id=event.message.mid,
     )
     await session.commit()
+    await _download_attachments(pool, channel, inbound)
     logger.info("webhook_voice_note_received", extra={"tenant_id": str(channel.tenant_id)})
     await pool.enqueue_job(
         "resolve_username", str(channel.tenant_id), str(channel.channel_id), str(inbound.user_id)

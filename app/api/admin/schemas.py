@@ -105,6 +105,17 @@ class PostCommentGroup(BaseModel):
     comments: int
 
 
+class AttachmentOut(BaseModel):
+    """A photo, voice message, video or reel, served by /api/admin/media/{id}/file."""
+
+    id: uuid.UUID
+    kind: str  # app.models.patient_media.MediaKind
+    # Downloaded and kept. A reel is fetched the first time it is opened.
+    stored: bool
+    content_type: str | None = None
+    title: str | None = None
+
+
 class MessageOut(BaseModel):
     id: uuid.UUID
     sender: str
@@ -113,6 +124,7 @@ class MessageOut(BaseModel):
     created_at: datetime
     # For a comment: the post it was written under.
     post: PostOut | None = None
+    attachments: list[AttachmentOut] = []
     # "sent", "undeliverable", "failed". An answer that never reached the
     # patient is the thing the clinic most needs to see in a transcript,
     # and it used not to be written down at all.

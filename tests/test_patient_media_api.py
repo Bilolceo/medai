@@ -318,3 +318,214 @@ async def test_nothing_on_the_screen_marks_nothing(
     )
 
     assert response.json() == {"updated": 0}
+
+
+# --- everything a patient sent, in the conversation -----------------------------
+
+M4A = b"\x00\x00\x00\x18ftypM4A " + bytes(range(256)) * 4
+
+
+async def _attachment(
+    session: AsyncSession,
+    seed: Seed,
+    *,
+    kind: str,
+    content: bytes | None = None,
+    content_type: str | None = None,
+    created_at: datetime | None = None,
+) -> PatientMedia:
+    media = PatientMedia(
+        tenant_id=seed.tenant_a.id,
+        user_id=seed.a.user.id,
+        conversation_id=seed.a.conversation.id,
+        source_url="https://cdn.example/x",
+        kind=kind,
+        content=content,
+        content_type=content_type,
+        size_bytes=len(content) if content is not None else None,
+    )
+    if created_at is not None:
+        media.created_at = created_at
+    session.add(media)
+    await session.flush()
+    return media
+
+
+async def test_the_conversation_shows_what_each_message_carried(
+    client: httpx.AsyncClient, db_session: AsyncSession, seed: Seed, front_desk: Any
+) -> None:
+    """Owner, 2026-10-24: a voice message, a video or a reel could not be
+    opened from the conversation. Each message now lists its attachments."""
+    from app.models.message import Message
+
+    voice = await _attachment(db_session, seed, kind="audio", content=M4A, content_type="audio/mp4")
+    reel = await _attachment(db_session, seed, kind="share")
+    reel.title = "Prostatit haqida"
+    db_session.add_all(
+        [
+            Message(
+                conversation_id=seed.a.conversation.id,
+                sender="patient",
+                content="🎤 Ovozli xabar",
+                channel="instagram",
+                meta={"attachments": [{"id": str(voice.id), "kind": "audio"}]},
+            ),
+            Message(
+                conversation_id=seed.a.conversation.id,
+                sender="patient",
+                content="🔗 Post yoki reels ulashdi",
+                channel="instagram",
+                meta={"attachments": [{"id": str(reel.id), "kind": "share"}]},
+            ),
+        ]
+    )
+    await db_session.flush()
+    _login(client, front_desk)
+
+    detail = (await client.get(f"/api/admin/conversations/{seed.a.conversation.id}")).json()
+
+    shown = {m["content"]: m["attachments"] for m in detail["messages"]}
+    assert shown["🎤 Ovozli xabar"] == [
+        {
+            "id": str(voice.id),
+            "kind": "audio",
+            "stored": True,
+            "content_type": "audio/mp4",
+            "title": None,
+        }
+    ]
+    [shared] = shown["🔗 Post yoki reels ulashdi"]
+    assert shared["kind"] == "share" and shared["stored"] is False
+    assert shared["title"] == "Prostatit haqida"
+
+
+async def test_photos_from_before_the_link_are_put_back_under_their_message(
+    client: httpx.AsyncClient, db_session: AsyncSession, seed: Seed, front_desk: Any
+) -> None:
+    """Photos stored before 2026-10-24 name no message; the two that arrived
+    right after "📷 Rasm yubordi (2 ta)" are shown under it."""
+    from app.models.message import Message
+
+    sent = datetime.now(UTC) - timedelta(days=3)
+    db_session.add(
+        Message(
+            conversation_id=seed.a.conversation.id,
+            sender="patient",
+            content="📷 Rasm yubordi (2 ta)",
+            channel="instagram",
+            created_at=sent,
+        )
+    )
+    first = await _attachment(
+        db_session, seed, kind="image", content=PNG, content_type="image/png",
+        created_at=sent + timedelta(seconds=4),
+    )  # fmt: skip
+    second = await _attachment(
+        db_session, seed, kind="image", content=PNG, content_type="image/png",
+        created_at=sent + timedelta(seconds=6),
+    )  # fmt: skip
+    # A day later: somebody else's moment, not this message's.
+    await _attachment(
+        db_session, seed, kind="image", content=PNG, content_type="image/png",
+        created_at=sent + timedelta(days=1),
+    )  # fmt: skip
+    _login(client, front_desk)
+
+    detail = (await client.get(f"/api/admin/conversations/{seed.a.conversation.id}")).json()
+
+    [photos] = [m["attachments"] for m in detail["messages"] if m["content"].startswith("📷")]
+    assert [p["id"] for p in photos] == [str(first.id), str(second.id)]
+
+
+async def test_the_photo_screen_shows_photos_only(
+    client: httpx.AsyncClient, db_session: AsyncSession, seed: Seed, front_desk: Any
+) -> None:
+    photo = await _attachment(db_session, seed, kind="image", content=PNG, content_type="image/png")
+    await _attachment(db_session, seed, kind="audio", content=M4A, content_type="audio/mp4")
+    _login(client, front_desk)
+
+    patients = (await client.get("/api/admin/media")).json()
+
+    ids = [item["id"] for p in patients for item in p["items"]]
+    assert ids == [str(photo.id)]
+
+
+async def test_a_voice_message_is_served_in_byte_ranges_so_safari_can_play_it(
+    client: httpx.AsyncClient, db_session: AsyncSession, seed: Seed, front_desk: Any
+) -> None:
+    voice = await _attachment(db_session, seed, kind="audio", content=M4A, content_type="audio/mp4")
+    _login(client, front_desk)
+
+    whole = await client.get(f"/api/admin/media/{voice.id}/file")
+    assert whole.status_code == 200
+    assert whole.content == M4A
+    assert whole.headers["content-type"] == "audio/mp4"
+    assert whole.headers["accept-ranges"] == "bytes"
+
+    part = await client.get(f"/api/admin/media/{voice.id}/file", headers={"Range": "bytes=0-1"})
+    assert part.status_code == 206
+    assert part.content == M4A[:2]
+    assert part.headers["content-range"] == f"bytes 0-1/{len(M4A)}"
+
+    tail = await client.get(f"/api/admin/media/{voice.id}/file", headers={"Range": "bytes=100-"})
+    assert tail.status_code == 206 and tail.content == M4A[100:]
+
+    past = await client.get(f"/api/admin/media/{voice.id}/file", headers={"Range": "bytes=99999-"})
+    assert past.status_code == 200 and past.content == M4A
+
+
+async def test_a_reel_nobody_opened_is_fetched_on_first_open_and_kept(
+    client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    seed: Seed,
+    front_desk: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reel = await _attachment(db_session, seed, kind="share")
+    calls: list[str] = []
+
+    async def fake_fetch(url: str, **kwargs: Any) -> tuple[bytes, str]:
+        calls.append(kwargs["kind"])
+        return b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 64, "video/mp4"
+
+    monkeypatch.setattr(patient_media, "fetch", fake_fetch)
+    _login(client, front_desk)
+
+    first = await client.get(f"/api/admin/media/{reel.id}/file")
+    again = await client.get(f"/api/admin/media/{reel.id}/file")
+
+    assert first.status_code == 200 and first.headers["content-type"] == "video/mp4"
+    assert again.content == first.content
+    assert calls == ["share"]
+
+
+def _cdn(content_type: str, body: bytes, status_code: int = 200) -> httpx.AsyncClient:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status_code, content=body, headers={"content-type": content_type})
+
+    return httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+
+async def test_a_voice_message_downloads_as_audio_but_never_as_a_photo() -> None:
+    async with _cdn("audio/mp4", M4A) as http:
+        assert await patient_media.download("https://cdn/v", http, kind="audio") == (
+            M4A,
+            "audio/mp4",
+        )
+    async with _cdn("audio/mp4", M4A) as http:
+        # The photo screen's rules: an audio file is not a photo.
+        assert await patient_media.download("https://cdn/v", http, kind="image") is None
+    async with _cdn("image/svg+xml", SVG) as http:
+        assert await patient_media.download("https://cdn/v", http, kind="share") is None
+    async with _cdn("audio/mp4", M4A, status_code=404) as http:
+        assert await patient_media.download("https://cdn/v", http, kind="audio") is None
+
+
+async def test_a_file_larger_than_its_kind_allows_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(patient_media, "MAX_MEDIA_BYTES", 100)
+    async with _cdn("video/mp4", b"\x00" * 101) as http:
+        assert await patient_media.download("https://cdn/v", http, kind="video") is None
+    async with _cdn("video/mp4", b"\x00" * 100) as http:
+        assert await patient_media.download("https://cdn/v", http, kind="video") is not None

@@ -28,7 +28,7 @@ from app.channels.instagram.client import GRAPH_API_BASE_URL
 from app.core.config import get_settings
 from app.core.encryption import DecryptionError, decrypt
 from app.models.message import MessageSender
-from app.models.patient_media import PatientMedia
+from app.models.patient_media import MediaKind, PatientMedia
 from app.models.user import User
 from app.repositories.channel import ChannelRepository
 from app.repositories.message import MessageRepository
@@ -42,6 +42,9 @@ logger = logging.getLogger(__name__)
 # Larger than any photo a phone sends, small enough that a stray video link
 # cannot fill the database.
 MAX_IMAGE_BYTES = 15 * 1024 * 1024
+# A minute-long voice message is under a megabyte; a patient's own video or a
+# shared reel is a few. Anything larger is left as a link.
+MAX_MEDIA_BYTES = 60 * 1024 * 1024
 
 # One acknowledgement per burst of photos from the same conversation.
 ACK_WINDOW_SECONDS = 120
@@ -76,39 +79,79 @@ _BROWSER_HEADERS = {
 SAFE_IMAGE_TYPES = frozenset(
     {"image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif"}
 )
+# What a voice message, a video or a reel arrives as. Instagram serves voice
+# messages as audio/mp4 and, from some CDN nodes, as video/mp4.
+SAFE_AV_TYPES = frozenset(
+    {
+        "audio/mp4", "audio/mpeg", "audio/aac", "audio/ogg", "audio/wav", "audio/x-wav",
+        "audio/webm", "audio/x-m4a", "audio/m4a",
+        "video/mp4", "video/quicktime", "video/webm", "video/3gpp",
+    }
+)  # fmt: skip
+SAFE_FILE_TYPES = frozenset({"application/pdf"})
+SAFE_TYPES = SAFE_IMAGE_TYPES | SAFE_AV_TYPES | SAFE_FILE_TYPES
+
+# Downloaded as soon as they arrive: Instagram's links expire within days.
+# Shared reels and stories are not -- a patient shares dozens, mostly the
+# clinic's own -- and are fetched the first time somebody opens one.
+DOWNLOAD_ON_ARRIVAL = frozenset({MediaKind.AUDIO, MediaKind.VIDEO, MediaKind.FILE})
 
 
-async def download(url: str, http: httpx.AsyncClient | None = None) -> tuple[bytes, str] | None:
-    """The image and its content type, or None if it cannot be had."""
-    client = http or httpx.AsyncClient(timeout=30, follow_redirects=True, headers=_BROWSER_HEADERS)
+def accepts(kind: str) -> tuple[frozenset[str], int]:
+    """The content types and the size a kind of attachment may be stored at."""
+    if kind in (MediaKind.IMAGE, MediaKind.STICKER):
+        return SAFE_IMAGE_TYPES, MAX_IMAGE_BYTES
+    if kind == MediaKind.FILE:
+        return SAFE_FILE_TYPES, MAX_MEDIA_BYTES
+    # A shared post can be a photo; a story is either.
+    return SAFE_IMAGE_TYPES | SAFE_AV_TYPES, MAX_MEDIA_BYTES
+
+
+async def download(
+    url: str,
+    http: httpx.AsyncClient | None = None,
+    *,
+    kind: str = MediaKind.IMAGE,
+) -> tuple[bytes, str] | None:
+    """The file and its content type, or None if it cannot be had.
+
+    Streamed and cut off at the kind's size, so a link to something enormous
+    is refused without being held in memory first.
+    """
+    allowed, max_bytes = accepts(kind)
+    client = http or httpx.AsyncClient(timeout=60, follow_redirects=True, headers=_BROWSER_HEADERS)
+    status_code, content_type, body = 0, "", bytearray()
     try:
-        response = await client.get(url)
+        async with client.stream("GET", url) as response:
+            status_code = response.status_code
+            content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
+            if not response.is_error and content_type in allowed:
+                async for chunk in response.aiter_bytes():
+                    body.extend(chunk)
+                    if len(body) > max_bytes:
+                        break
     except httpx.HTTPError as exc:
         logger.warning("patient_media_download_failed", extra={"error": type(exc).__name__})
         return None
     finally:
         if http is None:
             await client.aclose()
-    content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
-    if (
-        response.is_error
-        or len(response.content) > MAX_IMAGE_BYTES
-        or content_type not in SAFE_IMAGE_TYPES
-    ):
+    if status_code >= 400 or content_type not in allowed or not body or len(body) > max_bytes:
         logger.warning(
             "patient_media_download_refused",
             extra={
-                "status_code": response.status_code,
-                "size": len(response.content),
+                "status_code": status_code,
+                "size": len(body),
                 "content_type": content_type,
+                "kind": kind,
             },
         )
         return None
-    return response.content, content_type
+    return bytes(body), content_type
 
 
 async def fresh_urls(access_token: str, message_id: str) -> list[str]:
-    """The message's image links as the Graph API gives them now."""
+    """The message's attachment links as the Graph API gives them now."""
     try:
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.get(
@@ -124,22 +167,34 @@ async def fresh_urls(access_token: str, message_id: str) -> list[str]:
     urls: list[str] = []
     for item in (response.json().get("attachments") or {}).get("data", []):
         image = item.get("image_data") or {}
-        url = image.get("url") or image.get("preview_url") or item.get("file_url")
+        video = item.get("video_data") or {}
+        url = (
+            image.get("url")
+            or video.get("url")
+            or item.get("file_url")
+            or image.get("preview_url")
+            or video.get("preview_url")
+        )
         if url:
             urls.append(url)
     return urls
 
 
 async def fetch(
-    url: str, *, access_token: str | None, message_id: str | None, index: int
+    url: str,
+    *,
+    access_token: str | None,
+    message_id: str | None,
+    index: int,
+    kind: str = MediaKind.IMAGE,
 ) -> tuple[bytes, str] | None:
-    """The photo, by its webhook link first and through the Graph API second."""
-    fetched = await download(url)
+    """The file, by its webhook link first and through the Graph API second."""
+    fetched = await download(url, kind=kind)
     if fetched is not None or not (access_token and message_id):
         return fetched
     urls = await fresh_urls(access_token, message_id)
     if index < len(urls):
-        fetched = await download(urls[index])
+        fetched = await download(urls[index], kind=kind)
         if fetched is not None:
             logger.info("patient_media_fetched_through_graph")
     return fetched
@@ -164,13 +219,15 @@ def message_id_of(media: PatientMedia) -> tuple[str | None, int]:
 
 
 async def repair(session: AsyncSession, media: PatientMedia, channel_id: uuid.UUID) -> bool:
-    """Try again to fetch a photo that could not be downloaded when it came."""
+    """Fetch now what was not downloaded when it came: a photo whose link
+    failed then, or a reel nobody had opened before."""
     mid, index = message_id_of(media)
     fetched = await fetch(
         media.source_url,
         access_token=await channel_token(session, channel_id),
         message_id=mid,
         index=index,
+        kind=media.kind,
     )
     if fetched is None:
         return False
@@ -196,9 +253,14 @@ async def store(
     external_id: str | None,
     urls: list[str],
     channel_id: uuid.UUID | None = None,
+    media_ids: list[uuid.UUID] | None = None,
 ) -> list[PatientMedia]:
-    stored: list[PatientMedia] = []
     token = await channel_token(session, channel_id) if channel_id else None
+    if media_ids:
+        # Recorded with the message already (app.services.conversation); only
+        # the bytes are missing.
+        return await fill(session, media_ids, token=token)
+    stored: list[PatientMedia] = []
     for index, url in enumerate(urls):
         fetched = await fetch(url, access_token=token, message_id=external_id, index=index)
         media = PatientMedia(
@@ -215,6 +277,29 @@ async def store(
         stored.append(media)
     await session.commit()
     return stored
+
+
+async def fill(
+    session: AsyncSession, media_ids: list[uuid.UUID], *, token: str | None
+) -> list[PatientMedia]:
+    """Download what these recorded attachments point at, where not done."""
+    rows: list[PatientMedia] = []
+    for media_id in media_ids:
+        media = await session.get(PatientMedia, media_id)
+        if media is None:
+            continue
+        rows.append(media)
+        if media.size_bytes is not None:
+            continue
+        mid, index = message_id_of(media)
+        fetched = await fetch(
+            media.source_url, access_token=token, message_id=mid, index=index, kind=media.kind
+        )
+        if fetched is not None:
+            media.content, media.content_type = fetched
+            media.size_bytes = len(fetched[0])
+    await session.commit()
+    return rows
 
 
 async def acknowledge(

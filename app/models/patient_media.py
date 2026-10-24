@@ -14,8 +14,23 @@ class PatientMediaStatus(StrEnum):
     REVIEWED = "reviewed"  # ko'rildi
 
 
+class MediaKind(StrEnum):
+    """What a patient sent. Only photos have their own screen ("Rasmlar");
+    every kind is shown where it was sent, in the conversation."""
+
+    IMAGE = "image"
+    AUDIO = "audio"  # a voice message
+    VIDEO = "video"  # a video the patient recorded or picked
+    SHARE = "share"  # a reel or a post shared from Instagram
+    STORY = "story"  # a story the patient mentioned the clinic in
+    STICKER = "sticker"
+    FILE = "file"
+
+
 class PatientMedia(Base):
-    """A photo a patient sent -- an analysis result, a prescription, a scan.
+    """Something a patient sent -- a photo of an analysis result, a voice
+    message, a video, a reel they shared. (The table predates everything but
+    photos; `kind` says which.)
 
     Kept apart from the transcript and the appointment book on purpose: a
     patient who sends a picture is waiting for a person to look at it, and
@@ -39,7 +54,7 @@ class PatientMedia(Base):
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
     )
     conversation_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("conversations.id"), nullable=True
+        UUID(as_uuid=True), ForeignKey("conversations.id"), nullable=True, index=True
     )
     # The platform's message id, so a redelivered webhook stores nothing twice.
     external_id: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
@@ -47,6 +62,11 @@ class PatientMedia(Base):
     # Deferred: a list of forty patients must not load forty images.
     content: Mapped[bytes | None] = deferred(mapped_column(LargeBinary, nullable=True))
     content_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    kind: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default=text(f"'{MediaKind.IMAGE}'")
+    )
+    # A shared reel's caption, as Instagram gives it.
+    title: Mapped[str | None] = mapped_column(Text, nullable=True)
     size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default=text(f"'{PatientMediaStatus.NEW}'")

@@ -8,6 +8,7 @@ turns it off and starts replying themselves.
 
 import re
 import uuid
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -17,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.admin.deps import require_patient_access, verify_csrf_header
 from app.api.admin.schemas import (
+    AttachmentOut,
     BotToggle,
     ConversationCounts,
     ConversationDetail,
@@ -36,6 +38,7 @@ from app.models.instagram_post import InstagramPost
 from app.models.lead import Lead
 from app.models.message import Message, MessageSender
 from app.models.operator import Operator
+from app.models.patient_media import MediaKind, PatientMedia
 from app.models.user import User
 from app.repositories.conversation import ConversationRepository
 from app.repositories.message import MessageRepository
@@ -504,6 +507,7 @@ async def get_conversation(
         if media_ids
         else {}
     )
+    attachments = await _attachments(session, conversation.id, messages)
     return ConversationDetail(
         conversation=summary,
         messages=[
@@ -516,10 +520,87 @@ async def get_conversation(
                 delivery_status=message.delivery_status,
                 delivery_error=message.delivery_error,
                 post=posts.get(str((message.meta or {}).get("post_media_id") or "")),
+                attachments=attachments.get(message.id, []),
             )
             for message in messages
         ],
     )
+
+
+# How long after a "📷 Rasm yubordi" line a photo stored before attachments
+# were linked to their message can have been saved and still be its photo.
+_LEGACY_PHOTO_WINDOW = timedelta(minutes=10)
+_PHOTO_COUNT = re.compile(r"\((\d+) ta\)")
+
+
+async def _attachments(
+    session: AsyncSession, conversation_id: uuid.UUID, messages: Sequence[Message]
+) -> dict[uuid.UUID, list[AttachmentOut]]:
+    """What each message carried, by message id.
+
+    Since 2026-10-24 a message names its attachments in its meta. Photos from
+    before then were stored on their own, linked to the conversation but not
+    to the message; they are put back under the "📷 Rasm yubordi" line they
+    belong to by time, so older conversations show their photos too.
+    """
+    rows = (
+        (
+            await session.execute(
+                select(PatientMedia)
+                .where(
+                    PatientMedia.tenant_id == get_current_tenant(),
+                    PatientMedia.conversation_id == conversation_id,
+                )
+                .order_by(PatientMedia.created_at)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not rows:
+        return {}
+    by_id = {row.id: row for row in rows}
+
+    def out(row: PatientMedia) -> AttachmentOut:
+        return AttachmentOut(
+            id=row.id,
+            kind=row.kind,
+            stored=row.size_bytes is not None,
+            content_type=row.content_type,
+            title=row.title,
+        )
+
+    found: dict[uuid.UUID, list[AttachmentOut]] = {}
+    linked: set[uuid.UUID] = set()
+    for message in messages:
+        for item in (message.meta or {}).get("attachments") or []:
+            try:
+                row = by_id.get(uuid.UUID(str(item.get("id"))))
+            except (ValueError, AttributeError):
+                row = None
+            if row is not None:
+                found.setdefault(message.id, []).append(out(row))
+                linked.add(row.id)
+
+    loose = [r for r in rows if r.id not in linked and r.kind == MediaKind.IMAGE]
+    for message in messages:
+        if not loose or message.id in found or message.sender != MessageSender.PATIENT:
+            continue
+        if not message.content.startswith("📷"):
+            continue
+        count = _PHOTO_COUNT.search(message.content)
+        wanted = int(count.group(1)) if count else 1
+        mine = [
+            r
+            for r in loose
+            if message.created_at - timedelta(seconds=5)
+            <= r.created_at
+            <= message.created_at + _LEGACY_PHOTO_WINDOW
+        ][:wanted]
+        if mine:
+            found[message.id] = [out(r) for r in mine]
+            loose = [r for r in loose if r not in mine]
+    return found
 
 
 @router.post(

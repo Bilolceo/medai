@@ -8,7 +8,7 @@ and marks them seen. A patient with anything unseen sorts to the top.
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,7 +18,7 @@ from app.api.admin.deps import require_patient_access, verify_csrf_header
 from app.core.db import get_db_session
 from app.core.tenant_context import get_current_tenant
 from app.models.operator import Operator
-from app.models.patient_media import PatientMedia, PatientMediaStatus
+from app.models.patient_media import MediaKind, PatientMedia, PatientMediaStatus
 from app.models.user import User
 from app.services import patient_media
 
@@ -60,7 +60,12 @@ async def list_patients(
         await session.execute(
             select(PatientMedia, User)
             .join(User, PatientMedia.user_id == User.id)
-            .where(PatientMedia.tenant_id == get_current_tenant())
+            # Photos only: a voice message or a reel is shown in its
+            # conversation, not on the photo screen.
+            .where(
+                PatientMedia.tenant_id == get_current_tenant(),
+                PatientMedia.kind == MediaKind.IMAGE,
+            )
             .order_by(PatientMedia.created_at.desc())
             .limit(2000)
         )
@@ -113,6 +118,7 @@ async def list_patients(
 @router.get("/{media_id}/file")
 async def file(
     media_id: uuid.UUID,
+    request: Request,
     operator: Operator = Depends(require_patient_access),
     session: AsyncSession = Depends(get_db_session),
 ) -> Response:
@@ -128,30 +134,61 @@ async def file(
         )
     ).scalar_one_or_none()
     if media is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rasm topilmadi")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fayl topilmadi")
     if media.content is None:
-        # Not downloaded when it arrived: try once more now, through the
-        # Graph API if the original link is refused.
+        # Not downloaded when it arrived -- a link that failed then, or a
+        # reel nobody had opened -- so fetched now, through the Graph API if
+        # the original link is refused, and kept.
         channel_id = (
             await session.execute(select(User.channel_id).where(User.id == media.user_id))
         ).scalar_one_or_none()
         if channel_id is None or not await patient_media.repair(session, media, channel_id):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rasm yuklanmadi")
-    content_type = (
-        media.content_type if media.content_type in patient_media.SAFE_IMAGE_TYPES else None
-    )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fayl yuklanmadi")
+    content_type = media.content_type if media.content_type in patient_media.SAFE_TYPES else None
+    body = media.content or b""
+    # Patient files: never cached by a shared proxy, never sniffed into
+    # something executable, and -- opened on their own in a tab, on the
+    # dashboard's origin -- never able to run anything even if they were.
+    headers = {
+        "Cache-Control": "private, max-age=3600",
+        "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "default-src 'none'; img-src 'self'; media-src 'self'; sandbox",
+        "Accept-Ranges": "bytes",
+    }
+    # Safari will not play a video or a voice message from a server that
+    # cannot answer a byte range; seeking in any browser needs it too.
+    wanted = _byte_range(request.headers.get("range"), len(body))
+    if wanted is not None:
+        start, end = wanted
+        headers["Content-Range"] = f"bytes {start}-{end}/{len(body)}"
+        return Response(
+            content=body[start : end + 1],
+            status_code=status.HTTP_206_PARTIAL_CONTENT,
+            media_type=content_type or "application/octet-stream",
+            headers=headers,
+        )
     return Response(
-        content=media.content,
-        media_type=content_type or "application/octet-stream",
-        # Patient photos: never cached by a shared proxy, never sniffed into
-        # something executable, and -- opened on their own in a tab, on the
-        # dashboard's origin -- never able to run anything even if they were.
-        headers={
-            "Cache-Control": "private, max-age=3600",
-            "X-Content-Type-Options": "nosniff",
-            "Content-Security-Policy": "default-src 'none'; img-src 'self'; sandbox",
-        },
+        content=body, media_type=content_type or "application/octet-stream", headers=headers
     )
+
+
+def _byte_range(header: str | None, size: int) -> tuple[int, int] | None:
+    """The one range a "bytes=start-end" header asks for, or None to send it
+    all. Several ranges, or one past the end, are answered with the whole."""
+    if not header or not header.startswith("bytes=") or "," in header or size == 0:
+        return None
+    first, _, last = header[len("bytes=") :].strip().partition("-")
+    try:
+        if first == "":
+            start, end = max(size - int(last), 0), size - 1  # the last N bytes
+        else:
+            start = int(first)
+            end = min(int(last), size - 1) if last else size - 1
+    except ValueError:
+        return None
+    if start > end or start >= size:
+        return None
+    return start, end
 
 
 @router.post("/{media_id}/status", dependencies=[Depends(verify_csrf_header)])
