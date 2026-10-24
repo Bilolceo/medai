@@ -19,6 +19,7 @@ from app.repositories.message import MessageRepository
 from app.services import message_labels, voice_notes
 from app.workers.tasks import (
     ATTACHMENT_GREETINGS,
+    RESEND_REQUESTS,
     answer_attachment,
     answer_voice_note,
     process_inbound_message,
@@ -554,3 +555,96 @@ async def test_a_voice_note_gets_no_bot_line_where_staff_have_taken_over(
 
     assert client.calls == []
     assert conversation.needs_doctor_since is not None
+
+
+# --- a view-once photo, a message Instagram cannot show -----------------------------
+
+EPHEMERAL_LABEL = message_labels.TEXT[message_labels.EPHEMERAL]
+
+
+async def test_a_view_once_photo_asks_the_patient_to_send_it_again(
+    db_session: AsyncSession, seed: Seed, as_tenant: AsTenant
+) -> None:
+    """Owner, 2026-10-24: a photo taken with Instagram's camera arrived as a
+    view-once photo nobody could open, and the patient was only greeted --
+    as if the clinic had seen it. The patient is told and asked to resend it
+    from the gallery, with a hello on the clinic's first word of the day."""
+    await _conversation(db_session, seed, as_tenant, [("patient", EPHEMERAL_LABEL)])
+
+    sent = await _attachment(db_session, seed, message_labels.EPHEMERAL)
+
+    request = RESEND_REQUESTS[message_labels.EPHEMERAL]["uz-latn"]
+    assert [text for _, _, text in sent] == [f"Assalomu alaykum. {request}"]
+    assert "galereya" in request and "bir marta" in request
+    # Nothing a doctor could look at: it pins nothing.
+    conversation = await db_session.get(Conversation, seed.a.conversation.id)
+    assert conversation is not None and conversation.needs_doctor_since is None
+
+
+async def test_a_burst_of_view_once_photos_is_one_request(
+    db_session: AsyncSession, seed: Seed, as_tenant: AsTenant
+) -> None:
+    await _conversation(
+        db_session, seed, as_tenant, [("patient", EPHEMERAL_LABEL), ("patient", EPHEMERAL_LABEL)]
+    )
+
+    first = await _attachment(db_session, seed, message_labels.EPHEMERAL)
+    second = await _attachment(db_session, seed, message_labels.EPHEMERAL)
+
+    assert len(first) == 1 and second == []
+
+
+async def test_a_view_once_photo_is_asked_about_in_the_patient_s_language_without_a_second_hello(
+    db_session: AsyncSession, seed: Seed, as_tenant: AsTenant
+) -> None:
+    """A question typed beside it does not silence the request -- the reply to
+    the words cannot know the photo never arrived -- and a clinic that has
+    already spoken today does not say hello again."""
+    await _conversation(
+        db_session,
+        seed,
+        as_tenant,
+        [
+            ("patient", "Здравствуйте"),
+            ("bot", "Здравствуйте! Чем помочь?"),
+            ("patient", "Посмотрите, пожалуйста"),
+            ("patient", EPHEMERAL_LABEL),
+        ],
+    )
+
+    sent = await _attachment(db_session, seed, message_labels.EPHEMERAL)
+
+    assert [text for _, _, text in sent] == [RESEND_REQUESTS[message_labels.EPHEMERAL]["ru"]]
+
+
+async def test_a_message_instagram_flags_unsupported_gets_its_own_request(
+    db_session: AsyncSession, seed: Seed, as_tenant: AsTenant
+) -> None:
+    await _conversation(
+        db_session,
+        seed,
+        as_tenant,
+        [
+            ("patient", "Salom"),
+            ("bot", "Assalomu alaykum."),
+            ("patient", message_labels.UNSUPPORTED),
+        ],
+    )
+
+    sent = await _attachment(db_session, seed, message_labels.UNSUPPORTED_KIND)
+
+    unsupported = RESEND_REQUESTS[message_labels.UNSUPPORTED_KIND]["uz-latn"]
+    assert [text for _, _, text in sent] == [unsupported]
+    assert unsupported != RESEND_REQUESTS[message_labels.EPHEMERAL]["uz-latn"]
+
+
+async def test_nobody_asks_for_a_resend_where_staff_have_taken_over(
+    db_session: AsyncSession, seed: Seed, as_tenant: AsTenant
+) -> None:
+    await _conversation(db_session, seed, as_tenant, [("patient", EPHEMERAL_LABEL)])
+    conversation = await db_session.get(Conversation, seed.a.conversation.id)
+    assert conversation is not None
+    conversation.is_bot_enabled = False
+    await db_session.flush()
+
+    assert await _attachment(db_session, seed, message_labels.EPHEMERAL) == []

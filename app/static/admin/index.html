@@ -634,6 +634,12 @@
   .att-reel { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 12px 14px; border: 1px dashed var(--rule-strong); border-radius: var(--r-md); background: var(--panel-2); color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; max-width: 260px; text-align: left; }
   .att-reel:hover { border-color: var(--accent); }
   .att-reel span { font-weight: 400; font-size: var(--fs-xs); color: var(--ink-3); }
+  /* A shared reel: the video when Instagram gives it, otherwise its cover,
+     caption and a link to open it on Instagram -- never an empty box. */
+  .att-share { display: flex; flex-direction: column; gap: 6px; max-width: 260px; padding: 8px; border: 1px solid var(--rule); border-radius: var(--r-md); background: var(--panel-2); }
+  .att-share img { display: block; width: 100%; max-height: 320px; object-fit: cover; border-radius: var(--r-sm, 8px); }
+  .att-share .att-caption { font-size: var(--fs-xs); color: var(--ink-2, var(--ink)); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .att-share a.att-open { font-weight: 600; font-size: var(--fs-xs); }
   .att-file { font-weight: 600; }
   .att-note { font-size: var(--fs-xs); color: var(--ink-3); }
   /* The post a comment was left under: cover, what the video is about, a link. */
@@ -2464,17 +2470,58 @@ function buildAttachment(a, detail) {
   if (a.kind === "file") {
     return el("a", { class: "att-file", href: attachmentUrl(a), target: "_blank", rel: "noopener" }, "📎 Faylni ochish");
   }
-  // A shared reel or a story: stored ones play at once, the rest on a press.
-  if (a.stored) return playable(a, false);
+  // A shared reel or a story: stored ones show at once, the rest on a press.
+  if (a.stored) return sharedCard(a, false, false);
   const label = a.kind === "story" ? "▶ Storyni ko'rish" : "▶ Reels / postni ko'rish";
   const button = el("button", { type: "button", class: "att-reel" }, label,
-    a.title ? el("span", {}, a.title.length > 120 ? a.title.slice(0, 120) + "…" : a.title) : null);
-  button.addEventListener("click", () => {
-    const shown = playable(a, true);
+    a.title ? el("span", {}, shortCaption(a.title)) : null);
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    let opened = a;
+    try {
+      // Fetched now and kept; what comes back says whether it is the video,
+      // its cover, or only its caption and Instagram link.
+      opened = await api(`/media/${a.id}/open`);
+    } catch (_) {
+      opened = a;
+    }
+    const shown = sharedCard(opened, true, !opened.stored);
     ATTACHMENT_NODES.set(a.id, shown);
     button.replaceWith(shown);
   });
   return button;
+}
+
+function shortCaption(text) {
+  return text.length > 200 ? text.slice(0, 200) + "…" : text;
+}
+
+// What a shared reel or story is shown as: the video (or a photo post) when
+// it was downloaded, the cover when only that was, and with either -- or
+// alone -- its caption and an "Instagram’da ochish" link.
+function sharedCard(a, autoplay, failed) {
+  const type = a.content_type || "";
+  let media = null;
+  if (a.stored && (type.startsWith("video/") || type.startsWith("audio/"))) {
+    media = playable(a, autoplay);
+  } else if (a.stored && type.startsWith("image/")) {
+    const img = el("img", { src: attachmentUrl(a), alt: "Reels muqovasi", loading: "lazy" });
+    img.addEventListener("error", () => img.remove(), { once: true });
+    media = a.link
+      ? el("a", { href: a.link, target: "_blank", rel: "noopener noreferrer", title: "Instagram’da ochish" }, img)
+      : img;
+  }
+  const parts = [media];
+  if (a.title) parts.push(el("div", { class: "att-caption" }, shortCaption(a.title)));
+  if (a.link) {
+    parts.push(el("a", { class: "att-open", href: a.link, target: "_blank", rel: "noopener noreferrer" }, "↗ Instagram’da ochish"));
+  }
+  if (!media) {
+    parts.push(attachmentFailed(failed || !a.stored
+      ? "Instagram videoni bermadi" + (a.link ? " — Instagram’da oching" : "")
+      : "Ochib bo'lmadi"));
+  }
+  return el("div", { class: "att-share" }, ...parts);
 }
 
 // --- the conversations tab keeps itself current --------------------------

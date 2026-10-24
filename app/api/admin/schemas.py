@@ -114,6 +114,9 @@ class AttachmentOut(BaseModel):
     stored: bool
     content_type: str | None = None
     title: str | None = None
+    # A shared reel or story: where it opens on Instagram itself. Shown with
+    # the caption when Instagram will not hand the video over.
+    link: str | None = None
 
 
 class MessageOut(BaseModel):

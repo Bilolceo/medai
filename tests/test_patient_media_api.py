@@ -3,6 +3,7 @@
 Who can fetch them, and what they can be once fetched.
 """
 
+import logging
 import uuid
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractContextManager
@@ -392,6 +393,7 @@ async def test_the_conversation_shows_what_each_message_carried(
             "stored": True,
             "content_type": "audio/mp4",
             "title": None,
+            "link": None,
         }
     ]
     [shared] = shown["🔗 Post yoki reels ulashdi"]
@@ -529,3 +531,268 @@ async def test_a_file_larger_than_its_kind_allows_is_refused(
         assert await patient_media.download("https://cdn/v", http, kind="video") is None
     async with _cdn("video/mp4", b"\x00" * 100) as http:
         assert await patient_media.download("https://cdn/v", http, kind="video") is not None
+
+
+# --- a shared reel whose link is a web page, not the video (2026-10-24) ----------
+
+LOOKASIDE = "https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=1804&signature=SECRET"
+MP4 = b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 64
+
+
+def _page(*tags: tuple[str, str]) -> bytes:
+    metas = "".join(f'<meta property="{k}" content="{v}" />' for k, v in tags)
+    return f"<!doctype html><html><head>{metas}</head><body>Instagram</body></html>".encode()
+
+
+def _route(monkeypatch: pytest.MonkeyPatch, routes: dict[str, tuple[int, str, bytes]]) -> list[str]:
+    """Every download goes to this fake Instagram, never the real one; the
+    links asked for are returned, without their query."""
+    asked: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        asked.append(url.split("?")[0])
+        status_code, content_type, body = routes.get(url, (404, "text/plain", b""))
+        return httpx.Response(status_code, content=body, headers={"content-type": content_type})
+
+    original = patient_media.download
+
+    async def routed(url: str, http: Any = None, **kwargs: Any) -> Any:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as fake:
+            return await original(url, fake, **kwargs)
+
+    async def no_fresh_urls(token: str, message_id: str) -> list[str]:
+        return []
+
+    async def a_token(session: Any, channel_id: Any) -> str:
+        return "page-token"
+
+    monkeypatch.setattr(patient_media, "download", routed)
+    monkeypatch.setattr(patient_media, "fresh_urls", no_fresh_urls)
+    monkeypatch.setattr(patient_media, "channel_token", a_token)
+    return asked
+
+
+async def _reel(session: AsyncSession, seed: Seed, *, media_id: str | None) -> PatientMedia:
+    reel = await _attachment(session, seed, kind="share")
+    reel.source_url = LOOKASIDE
+    reel.external_id = f"mid-reel-{uuid.uuid4()}:0"
+    reel.title = "Implant haqida"
+    reel.platform_media_id = media_id
+    await session.flush()
+    return reel
+
+
+async def test_a_reel_is_fetched_through_the_graph_api_by_its_own_id(
+    client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    seed: Seed,
+    front_desk: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Production, 2026-10-24: the ig_reel link answered with an HTML page and
+    the reel was an empty box. The reel's own id (reel_video_id) is asked
+    about through the Graph API, which gives the video and its link."""
+    reel = await _reel(db_session, seed, media_id="18047352619123456")
+    video_url = "https://scontent.cdninstagram.com/o1/v/reel.mp4"
+    asked = _route(
+        monkeypatch,
+        {
+            LOOKASIDE: (200, "text/html", _page()),
+            video_url: (200, "video/mp4", MP4),
+        },
+    )
+    graph: list[str] = []
+
+    async def fake_graph(token: str, media_id: str) -> dict[str, Any]:
+        graph.append(media_id)
+        return {
+            "media_type": "VIDEO",
+            "media_url": video_url,
+            "thumbnail_url": "https://scontent.cdninstagram.com/thumb.jpg",
+            "permalink": "https://www.instagram.com/reel/DAbc123/",
+            "caption": "Implant haqida batafsil",
+        }
+
+    monkeypatch.setattr(patient_media, "graph_media", fake_graph)
+    _login(client, front_desk)
+
+    opened = (await client.get(f"/api/admin/media/{reel.id}/open")).json()
+
+    assert graph == ["18047352619123456"]
+    assert opened["stored"] is True and opened["content_type"] == "video/mp4"
+    assert opened["link"] == "https://www.instagram.com/reel/DAbc123/"
+    assert opened["title"] == "Implant haqida"  # the webhook's caption is kept
+    served = await client.get(f"/api/admin/media/{reel.id}/file")
+    assert served.status_code == 200 and served.content == MP4
+    assert asked == [LOOKASIDE.split("?")[0], video_url]
+
+
+async def test_a_reel_page_naming_its_video_is_followed_to_it(
+    client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    seed: Seed,
+    front_desk: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reel = await _reel(db_session, seed, media_id=None)
+    video_url = "https://scontent.cdninstagram.com/v/page.mp4"
+    _route(
+        monkeypatch,
+        {
+            LOOKASIDE: (
+                200,
+                "text/html; charset=utf-8",
+                _page(
+                    ("og:url", "https://www.instagram.com/reel/DXyz/?igsh=tracking"),
+                    ("og:video", video_url),
+                ),
+            ),
+            video_url: (200, "video/mp4", MP4),
+        },
+    )
+    _login(client, front_desk)
+
+    opened = (await client.get(f"/api/admin/media/{reel.id}/open")).json()
+
+    assert opened["stored"] is True and opened["content_type"] == "video/mp4"
+    assert opened["link"] == "https://www.instagram.com/reel/DXyz/"
+
+
+async def test_a_page_never_sends_the_server_off_instagram(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A link written in a page is somebody's text: followed only to
+    Instagram's and Facebook's own hosts."""
+    asked = _route(
+        monkeypatch,
+        {
+            LOOKASIDE: (
+                200,
+                "text/html",
+                _page(("og:video", "http://169.254.169.254/latest/meta-data/")),
+            )
+        },
+    )
+    shared = patient_media.SharedMedia()
+
+    assert await patient_media.download(LOOKASIDE, kind="share", shared=shared) is None
+    assert asked == [LOOKASIDE.split("?")[0]]
+    assert shared.video_url is None
+
+
+async def test_a_reel_instagram_will_not_hand_over_still_shows_its_cover_caption_and_link(
+    client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    seed: Seed,
+    front_desk: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Somebody else's reel: the Graph API refuses it and the link is a page
+    with no video. The conversation shows the cover, the caption and an
+    "Instagram'da ochish" link -- not an empty box -- and the log says what
+    came back and from where, without the signed link."""
+    from app.models.message import Message
+
+    reel = await _reel(db_session, seed, media_id="18047352619999999")
+    reel.title = None
+    db_session.add(
+        Message(
+            conversation_id=seed.a.conversation.id,
+            sender="patient",
+            content="🔗 Post yoki reels ulashdi",
+            channel="instagram",
+            meta={"attachments": [{"id": str(reel.id), "kind": "share"}]},
+        )
+    )
+    await db_session.flush()
+    cover = "https://scontent.cdninstagram.com/v/cover.jpg"
+    _route(
+        monkeypatch,
+        {
+            LOOKASIDE: (
+                200,
+                "text/html",
+                _page(
+                    ("og:url", "https://www.instagram.com/reel/DOther/"),
+                    ("og:title", "Boshqa klinika: tish implanti"),
+                    ("og:image", cover),
+                ),
+            ),
+            cover: (200, "image/jpeg", PNG),
+        },
+    )
+
+    async def refused(token: str, media_id: str) -> None:
+        return None
+
+    monkeypatch.setattr(patient_media, "graph_media", refused)
+    _login(client, front_desk)
+
+    with caplog.at_level(logging.INFO, logger="app.services.patient_media"):
+        opened = (await client.get(f"/api/admin/media/{reel.id}/open")).json()
+
+    assert opened["stored"] is True and opened["content_type"] == "image/jpeg"
+    assert opened["link"] == "https://www.instagram.com/reel/DOther/"
+    assert opened["title"] == "Boshqa klinika: tish implanti"
+    detail = (await client.get(f"/api/admin/conversations/{seed.a.conversation.id}")).json()
+    [shown] = [a for m in detail["messages"] for a in m["attachments"] if a["id"] == str(reel.id)]
+    assert shown["link"] == opened["link"] and shown["stored"] is True
+
+    [refusal] = [r for r in caplog.records if r.getMessage() == "patient_media_download_refused"]
+    assert refusal.__dict__["host"] == "lookaside.fbsbx.com"
+    assert refusal.__dict__["content_type"] == "text/html"
+    assert refusal.__dict__["kind"] == "share"
+    assert refusal.__dict__["status_code"] == 200
+    assert refusal.__dict__["page_had_permalink"] is True
+    for record in caplog.records:
+        assert "SECRET" not in str(record.__dict__)
+    [resolved] = [r for r in caplog.records if r.getMessage() == "shared_media_resolved"]
+    assert resolved.__dict__["outcome"] == "thumbnail"
+
+
+async def test_a_reel_with_nothing_to_show_still_opens_on_instagram(
+    client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    seed: Seed,
+    front_desk: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Not even a page to read: the press still answers with the caption the
+    webhook carried and the link Instagram sent, never a bare 404."""
+    reel = await _reel(db_session, seed, media_id=None)
+    _route(monkeypatch, {LOOKASIDE: (200, "text/html", b"<html></html>")})
+    _login(client, front_desk)
+
+    response = await client.get(f"/api/admin/media/{reel.id}/open")
+
+    assert response.status_code == 200
+    opened = response.json()
+    assert opened["stored"] is False
+    assert opened["title"] == "Implant haqida"
+    assert opened["link"] == LOOKASIDE
+    assert (await client.get(f"/api/admin/media/{reel.id}/file")).status_code == 404
+
+
+def test_only_instagram_pages_are_permalinks() -> None:
+    assert (
+        patient_media.instagram_permalink("https://www.instagram.com/reel/DAbc/?igsh=x")
+        == "https://www.instagram.com/reel/DAbc/"
+    )
+    assert patient_media.instagram_permalink("https://instagram.com/p/Cx1/") == (
+        "https://www.instagram.com/p/Cx1/"
+    )
+    assert patient_media.instagram_permalink("https://evil.example/reel/DAbc/") is None
+    assert patient_media.instagram_permalink("https://www.instagram.com/accounts/login/") is None
+    assert patient_media.instagram_permalink("javascript:alert(1)") is None
+
+
+async def test_a_photo_or_a_voice_message_offers_no_instagram_link(
+    db_session: AsyncSession, seed: Seed
+) -> None:
+    photo = await _attachment(db_session, seed, kind="image")
+    photo.source_url = LOOKASIDE
+    assert patient_media.open_link(photo) is None
+    share = await _attachment(db_session, seed, kind="share")
+    assert patient_media.open_link(share) is None  # not one of Meta's hosts

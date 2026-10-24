@@ -14,7 +14,9 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import undefer
 
+from app.api.admin.conversations import patient_media_out
 from app.api.admin.deps import require_patient_access, verify_csrf_header
+from app.api.admin.schemas import AttachmentOut
 from app.core.db import get_db_session
 from app.core.tenant_context import get_current_tenant
 from app.models.operator import Operator
@@ -113,6 +115,35 @@ async def list_patients(
     # Unseen first, then most recent.
     patients.sort(key=lambda p: (p.unseen == 0, -p.last_at.timestamp()))
     return patients
+
+
+@router.get("/{media_id}/open", response_model=AttachmentOut)
+async def open_attachment(
+    media_id: uuid.UUID,
+    operator: Operator = Depends(require_patient_access),
+    session: AsyncSession = Depends(get_db_session),
+) -> AttachmentOut:
+    """An attachment somebody pressed to open -- a shared reel, usually: it
+    is fetched now if it was not on arrival, and what the conversation should
+    show is returned: the video, or failing that the reel's cover, caption
+    and Instagram link, so the press never ends in an empty box."""
+    media = (
+        await session.execute(
+            select(PatientMedia).where(
+                PatientMedia.id == media_id, PatientMedia.tenant_id == get_current_tenant()
+            )
+        )
+    ).scalar_one_or_none()
+    if media is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fayl topilmadi")
+    if media.size_bytes is None:
+        channel_id = (
+            await session.execute(select(User.channel_id).where(User.id == media.user_id))
+        ).scalar_one_or_none()
+        if channel_id is not None:
+            await patient_media.repair(session, media, channel_id)
+            await session.refresh(media)
+    return patient_media_out(media)
 
 
 @router.get("/{media_id}/file")

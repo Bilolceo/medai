@@ -56,8 +56,13 @@ class AttachmentPayload(BaseModel):
     url: str | None = None
     # Set on a sticker, which otherwise arrives looking like a photo.
     sticker_id: int | str | None = None
-    # A shared reel's caption.
+    # A shared reel's or post's caption.
     title: str | None = None
+    # The shared media's own id, which the Graph API can be asked about
+    # when the link above is not the video itself (an ig_reel's often is an
+    # HTML page): "reel_video_id" on a reel, "ig_post_media_id" on a post.
+    reel_video_id: int | str | None = None
+    ig_post_media_id: int | str | None = None
 
 
 class WebhookAttachment(BaseModel):
@@ -483,7 +488,11 @@ def _attachments_of(message: WebhookMessage) -> list[Attachment]:
         if payload.sticker_id is not None:
             kind = MediaKind.STICKER
         title = payload.title.strip()[:500] if payload.title and payload.title.strip() else None
-        found.append(Attachment(kind=kind, url=payload.url, title=title))
+        shared_id = payload.reel_video_id or payload.ig_post_media_id
+        media_id = str(shared_id).strip()[:64] if shared_id is not None else None
+        found.append(
+            Attachment(kind=kind, url=payload.url, title=title, platform_media_id=media_id or None)
+        )
     return found
 
 
@@ -527,9 +536,18 @@ _ATTACHMENT_GREETING_DELAY_SECONDS = 2
 
 
 def _attachment_kind(message: WebhookMessage) -> str | None:
-    """The label for a message with no text, or None for one we cannot name."""
-    if message.is_unsupported:
-        return None
+    """The label for a message with no text, or None for one we cannot name.
+
+    A view-once photo is named before anything else: Instagram may flag it
+    unsupported as well, and the patient has to be told something different
+    -- send it again from the gallery -- from somebody whose message we
+    merely could not read.
+    """
+    types = {attachment.type for attachment in message.attachments}
+    if "ephemeral" in types:
+        return message_labels.EPHEMERAL
+    if message.is_unsupported or "unsupported_type" in types:
+        return message_labels.UNSUPPORTED_KIND
     for attachment in message.attachments:
         if attachment.payload is not None and attachment.payload.sticker_id is not None:
             return message_labels.STICKER
@@ -555,7 +573,10 @@ async def _handle_attachment(
     * every one of them -- video, file, reel, sticker, story mention, or
       something unnamed -- is answered with a greeting and an offer of help,
       once a day (app.workers.tasks.answer_attachment), because the
-      assistant cannot open it and must not pretend to.
+      assistant cannot open it and must not pretend to;
+    * except a view-once photo, or a message Instagram flags unsupported:
+      nobody at the clinic can open those either, so the patient is asked to
+      send it again in a form that arrives.
     """
     assert event.message is not None
     if event.message.mid is not None and not await claim_event(
@@ -565,7 +586,7 @@ async def _handle_attachment(
         event_id=event.message.mid,
     ):
         return
-    text = message_labels.TEXT[kind] if kind is not None else message_labels.UNSUPPORTED
+    text = message_labels.TEXT.get(kind or "", message_labels.UNSUPPORTED)
     inbound = await register_inbound_message(
         session,
         channel_id=channel.channel_id,

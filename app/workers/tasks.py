@@ -1310,6 +1310,10 @@ async def answer_attachment(
     a greeting and an offer of help, once a day: "Qaysi masala bo'yicha
     yubordingiz?" under somebody's shared reel read as an interrogation.
     A video or a file still waits on the doctor, as a photo does.
+
+    A view-once photo, or a message Instagram flags unsupported, is the
+    exception: nobody can open it, so instead of the greeting the patient is
+    asked to send it again (RESEND_REQUESTS).
     """
     tenant_uuid = uuid.UUID(tenant_id)
     conversation_uuid = uuid.UUID(conversation_id)
@@ -1330,6 +1334,18 @@ async def answer_attachment(
             ):
                 return
             if kind == message_labels.REACTION:
+                return
+            resend = RESEND_REQUESTS.get(kind)
+            if resend is not None:
+                await _ask_to_send_again(
+                    session,
+                    channel_id=uuid.UUID(channel_id),
+                    conversation_id=conversation_uuid,
+                    sender_external_id=sender_external_id,
+                    kind=kind,
+                    lines=resend,
+                    adapter=adapter,
+                )
                 return
             window = await debounce_window(session, tenant_uuid)
             if window is None:
@@ -1369,6 +1385,117 @@ async def answer_attachment(
             )
     finally:
         reset_current_tenant(token)
+
+
+# A view-once photo, or a message Instagram flags unsupported, cannot be
+# opened by anybody at the clinic: Instagram sends no link at all
+# ("Disappearing media (view once, allow replay) is not supported on
+# Instagram media webhooks"). The greeting would leave the patient believing
+# the clinic had seen it, so the patient is told and asked to send it again
+# in a form that arrives -- the in-app camera sends view-once by default.
+RESEND_REQUESTS = {
+    message_labels.EPHEMERAL: {
+        "uz-latn": (
+            "Rasm «bir marta ko‘rish» rejimida keldi, biz uni ocha olmaymiz. "
+            "Iltimos, galereyadan oddiy rasm qilib qayta yuboring."
+        ),
+        "uz-cyrl": (
+            "Расм «бир марта кўриш» режимида келди, биз уни оча олмаймиз. "
+            "Илтимос, галереядан оддий расм қилиб қайта юборинг."
+        ),
+        "ru": (
+            "Фото пришло в режиме «одноразовый просмотр», мы не можем его открыть. "
+            "Пожалуйста, отправьте его ещё раз обычным фото из галереи."
+        ),
+    },
+    message_labels.UNSUPPORTED_KIND: {
+        "uz-latn": (
+            "Xabaringiz bizga ochilmadi. Rasm bo‘lsa, galereyadan oddiy rasm qilib "
+            "yuboring, savol bo‘lsa, yozib yuboring."
+        ),
+        "uz-cyrl": (
+            "Хабарингиз бизга очилмади. Расм бўлса, галереядан оддий расм қилиб "
+            "юборинг, савол бўлса, ёзиб юборинг."
+        ),
+        "ru": (
+            "Ваше сообщение у нас не открылось. Если это фото, отправьте его обычным "
+            "фото из галереи, если вопрос, напишите его текстом."
+        ),
+    },
+}
+# The greeting a resend request opens with on the first word of the day.
+_HELLO = {"uz-latn": "Assalomu alaykum.", "uz-cyrl": "Ассалому алайкум.", "ru": "Здравствуйте."}
+# A burst of view-once photos is one request, not one per photo; a second
+# one an hour later is asked about again.
+_RESEND_REPEAT_SECONDS = 10 * 60
+
+
+async def _ask_to_send_again(
+    session: AsyncSession,
+    *,
+    channel_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+    sender_external_id: str,
+    kind: str,
+    lines: dict[str, str],
+    adapter: ChannelAdapter | None,
+) -> None:
+    """Ask the patient to resend what could not be opened.
+
+    Sent even when the patient typed something around it -- the debounced
+    reply answers the words, but cannot know the photo never arrived -- and
+    not on top of the same request a few minutes ago. Opens with the
+    greeting when the clinic has not written to the patient today, as the
+    greeting it stands in for would have.
+    """
+    since = datetime.now(UTC) - timedelta(seconds=_RESEND_REPEAT_SECONDS)
+    recent = (
+        await session.execute(
+            select(Message.content).where(
+                Message.conversation_id == conversation_id,
+                Message.sender != MessageSender.PATIENT,
+                Message.created_at >= since,
+            )
+        )
+    ).scalars()
+    every_request = [line for texts in RESEND_REQUESTS.values() for line in texts.values()]
+    if any(line in content for content in recent for line in every_request):
+        logger.info("attachment_resend_skipped_repeat", extra={"kind": kind})
+        return
+    script = await patient_media.patient_script(session, conversation_id)
+    text = lines[script]
+    if not await _clinic_wrote_today(session, conversation_id):
+        text = f"{_HELLO[script]} {text}"
+    delivered = await send_reply(
+        session,
+        channel_id=channel_id,
+        recipient_external_id=sender_external_id,
+        text=text,
+        last_user_message_at=await last_inbound_at(session, conversation_id) or datetime.now(UTC),
+        reply_context=await reply_context_for(session, conversation_id),
+        adapter=adapter,
+    )
+    if delivered is not None:
+        await record_outbound_message(
+            session, conversation_id=conversation_id, channel_type=delivered, text=text
+        )
+        await session.commit()
+    logger.info("attachment_resend_asked", extra={"kind": kind, "delivered": delivered is not None})
+
+
+async def _clinic_wrote_today(session: AsyncSession, conversation_id: uuid.UUID) -> bool:
+    """Whether anything went to the patient here in the last day."""
+    since = datetime.now(UTC) - timedelta(hours=24)
+    found = await session.execute(
+        select(Message.id)
+        .where(
+            Message.conversation_id == conversation_id,
+            Message.sender != MessageSender.PATIENT,
+            Message.created_at >= since,
+        )
+        .limit(1)
+    )
+    return found.first() is not None
 
 
 # How far back answer_attachment looks for words the patient typed, beyond

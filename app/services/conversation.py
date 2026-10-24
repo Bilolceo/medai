@@ -76,6 +76,9 @@ class Attachment:
     kind: str  # app.models.patient_media.MediaKind
     url: str
     title: str | None = None
+    # A shared reel's or post's own id on Instagram (reel_video_id,
+    # ig_post_media_id), for asking the Graph API about it later.
+    platform_media_id: str | None = None
 
 
 # Keys a patient message's meta carries that are about the message itself,
@@ -180,6 +183,7 @@ async def register_inbound_message(
             source_url=attachment.url,
             kind=attachment.kind,
             title=attachment.title,
+            platform_media_id=attachment.platform_media_id,
         )
         session.add(row)
         media.append(row)

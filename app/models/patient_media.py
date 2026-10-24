@@ -67,6 +67,12 @@ class PatientMedia(Base):
     )
     # A shared reel's caption, as Instagram gives it.
     title: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # A shared reel's or post's own id on Instagram (the webhook's
+    # reel_video_id / ig_post_media_id), and where it can be opened on
+    # instagram.com once that is known. A reel whose video Instagram will not
+    # hand over is still shown by its caption, cover and this link.
+    platform_media_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    permalink: Mapped[str | None] = mapped_column(Text, nullable=True)
     size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default=text(f"'{PatientMediaStatus.NEW}'")

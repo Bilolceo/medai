@@ -18,11 +18,14 @@ SHARE = "🔗"
 STORY = "📣"
 STICKER = "🏷"
 REACTION = "💟"
+# A view-once ("bir marta ko‘rish") or replayable disappearing photo or video.
+# Instagram sends only the word "ephemeral" -- no link, nothing to open.
+EPHEMERAL = "📸"
 # An Instagram comment, kept in the conversation with the commenter's own
 # words after it -- the patient writing, so not one of the labels below.
 COMMENT_PREFIX = "💬 Izoh: "
 
-_PREFIXES = (PHOTO, VOICE, VIDEO, FILE, SHARE, STORY, STICKER, REACTION)
+_PREFIXES = (PHOTO, VOICE, VIDEO, FILE, SHARE, STORY, STICKER, REACTION, EPHEMERAL)
 
 # Rendered in Uzbek Latin whatever the patient writes: these are read by the
 # clinic in its dashboard, not by the patient.
@@ -33,8 +36,13 @@ TEXT = {
     STORY: "📣 Storisida klinikani belgiladi",
     STICKER: "🏷 Stiker yubordi",
     REACTION: "💟 Reaksiya bildirdi",
+    EPHEMERAL: "📸 Bir marta ko‘riladigan rasm yoki video yubordi — Instagram uni ko‘rsatmaydi",
 }
 UNSUPPORTED = "📎 Instagram ko'rsatmaydigan xabar yubordi"
+# Not a label prefix (the label above starts with FILE's): the kind the
+# answer job is told for a message Instagram flagged is_unsupported, which is
+# answered differently from a message we merely have no name for.
+UNSUPPORTED_KIND = "unsupported"
 
 
 def is_label(text: str | None) -> bool:

@@ -1012,3 +1012,136 @@ async def test_a_photo_is_recorded_once_with_its_message_and_filled_by_the_job(
     jobs = {(await job.info()).function: job for job in await _queued_jobs(redis_pool)}
     info = await jobs["handle_patient_media"].info()
     assert info.kwargs["media_ids"] == ids
+
+
+# --- view-once photos and reels Instagram will not hand over (2026-10-24) ---------
+
+
+@pytest.mark.parametrize(
+    ("message", "label", "kind"),
+    [
+        # A photo taken with Instagram's own camera is view-once by default;
+        # Instagram sends the type and no link.
+        (
+            {"attachments": [{"type": "ephemeral"}]},
+            "📸 Bir marta ko‘riladigan rasm yoki video yubordi — Instagram uni ko‘rsatmaydi",
+            "📸",
+        ),
+        # Named first even when Instagram flags it unsupported as well.
+        (
+            {"is_unsupported": True, "attachments": [{"type": "ephemeral"}]},
+            "📸 Bir marta ko‘riladigan rasm yoki video yubordi — Instagram uni ko‘rsatmaydi",
+            "📸",
+        ),
+        (
+            {"is_unsupported": True},
+            "📎 Instagram ko'rsatmaydigan xabar yubordi",
+            "unsupported",
+        ),
+        (
+            {"attachments": [{"type": "unsupported_type"}]},
+            "📎 Instagram ko'rsatmaydigan xabar yubordi",
+            "unsupported",
+        ),
+        # A type nobody has a name for yet is still only greeted.
+        (
+            {"attachments": [{"type": "something_new"}]},
+            "📎 Instagram ko'rsatmaydigan xabar yubordi",
+            "",
+        ),
+    ],
+)
+async def test_a_view_once_photo_is_named_and_handed_to_the_answer_job(
+    client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    seed: Seed,
+    redis_pool: ArqRedis,
+    as_tenant: Callable[[UUID], AbstractContextManager[None]],
+    message: dict[str, Any],
+    label: str,
+    kind: str,
+) -> None:
+    """Owner, 2026-10-24: a photo sent from the phone showed only "Instagram
+    ko'rsatmaydigan xabar" -- it was a view-once photo, which Instagram never
+    shows to an app. It now says so, and the answer job is told which it was,
+    so the patient can be asked to send it again."""
+    from app.models.patient_media import PatientMedia
+    from app.services import message_labels
+
+    page_id = seed.a.channel.external_id
+    sender = f"once-{kind or 'x'}-{len(message)}"
+    body = _event(page_id, sender, message={"mid": f"mid-{sender}", **message})
+
+    assert (await _post(client, body)).status_code == 200
+
+    assert await _transcript(db_session, seed, as_tenant, sender) == [label]
+    assert message_labels.is_label(label)
+    [job] = [j for j in await _answer_jobs(redis_pool)]
+    info = await job.info()
+    assert info is not None and info.function == "answer_attachment"
+    assert info.args[4] == kind
+    # Nothing to download: no row waits for bytes that will never come.
+    with as_tenant(seed.tenant_a.id):
+        [recorded] = await _patient_messages(db_session, sender, seed)
+    assert "attachments" not in (recorded.meta or {})
+    rows = (
+        await db_session.execute(
+            select(PatientMedia).where(PatientMedia.conversation_id == recorded.conversation_id)
+        )
+    ).scalars()
+    assert list(rows) == []
+
+
+@pytest.mark.parametrize(
+    ("attachment", "media_id"),
+    [
+        (
+            {
+                "type": "ig_reel",
+                "payload": {
+                    "url": "https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=1&signature=s",
+                    "title": "Implant haqida",
+                    "reel_video_id": 18047352619123456,
+                },
+            },
+            "18047352619123456",
+        ),
+        (
+            {
+                "type": "ig_post",
+                "payload": {
+                    "url": "https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=2&signature=s",
+                    "title": "Tish oqartirish",
+                    "ig_post_media_id": "18139494541428835",
+                },
+            },
+            "18139494541428835",
+        ),
+    ],
+)
+async def test_a_shared_reel_keeps_its_own_id_for_the_graph_api(
+    client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    seed: Seed,
+    as_tenant: Callable[[UUID], AbstractContextManager[None]],
+    attachment: dict[str, Any],
+    media_id: str,
+) -> None:
+    from app.models.patient_media import PatientMedia
+
+    page_id = seed.a.channel.external_id
+    sender = f"reel-{media_id[-4:]}"
+    body = _event(page_id, sender, message={"mid": f"mid-{sender}", "attachments": [attachment]})
+
+    assert (await _post(client, body)).status_code == 200
+
+    with as_tenant(seed.tenant_a.id):
+        [message] = await _patient_messages(db_session, sender, seed)
+    assert message.content == "🔗 Post yoki reels ulashdi"
+    [named] = message.meta["attachments"]
+    media = await db_session.get(PatientMedia, uuid.UUID(named["id"]))
+    assert media is not None
+    assert media.kind == "share"
+    assert media.platform_media_id == media_id
+    assert media.title == attachment["payload"]["title"]
+    assert media.permalink is None  # learnt when somebody opens it

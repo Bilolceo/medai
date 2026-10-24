@@ -42,7 +42,7 @@ from app.models.patient_media import MediaKind, PatientMedia
 from app.models.user import User
 from app.repositories.conversation import ConversationRepository
 from app.repositories.message import MessageRepository
-from app.services import handoff, message_labels, search
+from app.services import handoff, message_labels, patient_media, search
 from app.services.conversation import (
     record_outbound_message,
     reply_context_for,
@@ -533,6 +533,18 @@ _LEGACY_PHOTO_WINDOW = timedelta(minutes=10)
 _PHOTO_COUNT = re.compile(r"\((\d+) ta\)")
 
 
+def patient_media_out(row: PatientMedia) -> AttachmentOut:
+    """One attachment as the conversation (and /api/admin/media/{id}/open) shows it."""
+    return AttachmentOut(
+        id=row.id,
+        kind=row.kind,
+        stored=row.size_bytes is not None,
+        content_type=row.content_type,
+        title=row.title,
+        link=patient_media.open_link(row),
+    )
+
+
 async def _attachments(
     session: AsyncSession, conversation_id: uuid.UUID, messages: Sequence[Message]
 ) -> dict[uuid.UUID, list[AttachmentOut]]:
@@ -561,15 +573,6 @@ async def _attachments(
         return {}
     by_id = {row.id: row for row in rows}
 
-    def out(row: PatientMedia) -> AttachmentOut:
-        return AttachmentOut(
-            id=row.id,
-            kind=row.kind,
-            stored=row.size_bytes is not None,
-            content_type=row.content_type,
-            title=row.title,
-        )
-
     found: dict[uuid.UUID, list[AttachmentOut]] = {}
     linked: set[uuid.UUID] = set()
     for message in messages:
@@ -579,7 +582,7 @@ async def _attachments(
             except (ValueError, AttributeError):
                 row = None
             if row is not None:
-                found.setdefault(message.id, []).append(out(row))
+                found.setdefault(message.id, []).append(patient_media_out(row))
                 linked.add(row.id)
 
     loose = [r for r in rows if r.id not in linked and r.kind == MediaKind.IMAGE]
@@ -598,7 +601,7 @@ async def _attachments(
             <= message.created_at + _LEGACY_PHOTO_WINDOW
         ][:wanted]
         if mine:
-            found[message.id] = [out(r) for r in mine]
+            found[message.id] = [patient_media_out(r) for r in mine]
             loose = [r for r in loose if r not in mine]
     return found
 
