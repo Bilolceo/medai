@@ -117,6 +117,8 @@ class AttachmentOut(BaseModel):
     # A shared reel or story: where it opens on Instagram itself. Shown with
     # the caption when Instagram will not hand the video over.
     link: str | None = None
+    # Instagram's embeddable player for that page, shown in the conversation.
+    embed_url: str | None = None
 
 
 class MessageOut(BaseModel):

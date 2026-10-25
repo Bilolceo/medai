@@ -640,6 +640,8 @@
   .att-share img { display: block; width: 100%; max-height: 320px; object-fit: cover; border-radius: var(--r-sm, 8px); }
   .att-share .att-caption { font-size: var(--fs-xs); color: var(--ink-2, var(--ink)); white-space: pre-wrap; overflow-wrap: anywhere; }
   .att-share a.att-open { font-weight: 600; font-size: var(--fs-xs); }
+  .att-share:has(.att-embed) { max-width: 344px; }
+  .att-embed { display: block; width: 326px; max-width: 100%; height: 580px; border: 0; border-radius: var(--r-md); background: #fff; }
   .att-file { font-weight: 600; }
   .att-note { font-size: var(--fs-xs); color: var(--ink-3); }
   /* The post a comment was left under: cover, what the video is about, a link. */
@@ -2472,6 +2474,9 @@ function buildAttachment(a, detail) {
   }
   // A shared reel or a story: stored ones show at once, the rest on a press.
   if (a.stored) return sharedCard(a, false, false);
+  // A public reel or post plays in Instagram's own player: Instagram never
+  // hands another account's video to the clinic, only its page.
+  if (a.embed_url) return embedButton(a);
   const label = a.kind === "story" ? "▶ Storyni ko'rish" : "▶ Reels / postni ko'rish";
   const button = el("button", { type: "button", class: "att-reel" }, label,
     a.title ? el("span", {}, shortCaption(a.title)) : null);
@@ -2486,6 +2491,25 @@ function buildAttachment(a, detail) {
       opened = a;
     }
     const shown = sharedCard(opened, true, !opened.stored);
+    ATTACHMENT_NODES.set(a.id, shown);
+    button.replaceWith(shown);
+  });
+  return button;
+}
+
+function embedButton(a) {
+  const button = el("button", { type: "button", class: "att-reel" }, "▶ Reelsni ko'rish",
+    a.title ? el("span", {}, shortCaption(a.title)) : null);
+  button.addEventListener("click", () => {
+    const frame = el("iframe", {
+      class: "att-embed", src: a.embed_url, title: "Instagram reels", loading: "lazy",
+      allow: "autoplay; encrypted-media; picture-in-picture; fullscreen",
+      sandbox: "allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-presentation",
+      referrerpolicy: "strict-origin-when-cross-origin",
+    });
+    const parts = [frame];
+    if (a.link) parts.push(el("a", { class: "att-open", href: a.link, target: "_blank", rel: "noopener noreferrer" }, "↗ Instagram’da ochish"));
+    const shown = el("div", { class: "att-share" }, ...parts);
     ATTACHMENT_NODES.set(a.id, shown);
     button.replaceWith(shown);
   });

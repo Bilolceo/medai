@@ -72,6 +72,9 @@ _SECURITY_HEADERS = {
     "Content-Security-Policy": (
         "default-src 'self'; img-src 'self' data:; "
         "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; "
+        # Instagram's own player, for a reel a patient shared: it arrives as
+        # a link to the reel, never as a video file.
+        "frame-src https://www.instagram.com; "
         "frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
     ),
 }

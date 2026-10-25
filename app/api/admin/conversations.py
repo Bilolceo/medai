@@ -542,6 +542,7 @@ def patient_media_out(row: PatientMedia) -> AttachmentOut:
         content_type=row.content_type,
         title=row.title,
         link=patient_media.open_link(row),
+        embed_url=patient_media.embed_url(row),
     )
 
 

@@ -394,6 +394,7 @@ async def test_the_conversation_shows_what_each_message_carried(
             "content_type": "audio/mp4",
             "title": None,
             "link": None,
+            "embed_url": None,
         }
     ]
     [shared] = shown["🔗 Post yoki reels ulashdi"]
@@ -796,3 +797,28 @@ async def test_a_photo_or_a_voice_message_offers_no_instagram_link(
     assert patient_media.open_link(photo) is None
     share = await _attachment(db_session, seed, kind="share")
     assert patient_media.open_link(share) is None  # not one of Meta's hosts
+
+
+@pytest.mark.parametrize(
+    ("url", "embed"),
+    [
+        ("https://www.instagram.com/reel/De1XU--uuaQ/", "https://www.instagram.com/reel/De1XU--uuaQ/embed/"),
+        ("https://www.instagram.com/reels/De1XU--uuaQ/?igsh=abc", "https://www.instagram.com/reel/De1XU--uuaQ/embed/"),
+        ("https://instagram.com/p/Cx12345/", "https://www.instagram.com/p/Cx12345/embed/"),
+        ("https://www.instagram.com/stories/someone/123456789/", None),
+        ("https://evil.example/reel/De1XU--uuaQ/", None),
+        ("https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=1", None),
+    ],
+)  # fmt: skip
+def test_a_shared_reel_plays_in_instagrams_own_player(url: str, embed: str | None) -> None:
+    """Owner, 2026-10-25: reels still could not be watched. Instagram sends a
+    shared reel as its page and never hands over another account's video,
+    so it plays in Instagram's embeddable player -- built only from an
+    instagram.com reel or post page, never from any other link."""
+    media = PatientMedia(kind="share", source_url=url)
+    assert patient_media.embed_url(media) == embed
+
+
+def test_a_photo_is_never_framed() -> None:
+    media = PatientMedia(kind="image", source_url="https://www.instagram.com/p/Cx12345/")
+    assert patient_media.embed_url(media) is None

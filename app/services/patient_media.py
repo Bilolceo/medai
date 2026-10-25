@@ -502,6 +502,25 @@ async def _fetch_shared(media: PatientMedia, token: str | None) -> tuple[bytes, 
     return fetched
 
 
+# Instagram's own player for a public reel or post, which it makes for
+# embedding elsewhere. A patient's shared reel arrives only as its page --
+# neither the webhook nor the Graph API hands out another account's video
+# (checked against production, 2026-10-25) -- so this is how it plays in the
+# conversation. Stories have no embed.
+_EMBEDDABLE = re.compile(r"^https://www\.instagram\.com/(reel|reels|p|tv)/([A-Za-z0-9_-]{5,64})/?$")
+
+
+def embed_url(media: PatientMedia) -> str | None:
+    if media.kind not in _SHARED_KINDS:
+        return None
+    page = instagram_permalink(media.permalink) or instagram_permalink(media.source_url)
+    found = _EMBEDDABLE.match(page or "")
+    if found is None:
+        return None
+    kind = "reel" if found.group(1) == "reels" else found.group(1)
+    return f"https://www.instagram.com/{kind}/{found.group(2)}/embed/"
+
+
 def open_link(media: PatientMedia) -> str | None:
     """Where the clinic can open a shared reel or story on Instagram itself:
     its instagram.com page once known, otherwise the link Instagram sent
