@@ -85,6 +85,13 @@ async def _security_headers(request: Request, call_next: Any) -> Response:
     response: Response = await call_next(request)
     for header, value in _SECURITY_HEADERS.items():
         response.headers.setdefault(header, value)
+    # The dashboard is one HTML file holding all its code. Without this a
+    # browser kept showing yesterday's copy after a deploy (owner,
+    # 2026-10-25: reels "still not working" on a page that predated the
+    # fix). Revalidated every time; unchanged, it is a 304 and costs nothing.
+    path = request.url.path
+    if path in ("/admin", "/admin/", "/admin/index.html", "/login", "/admin/login.html"):
+        response.headers["Cache-Control"] = "no-cache"
     # Only over HTTPS: sent on a plain-HTTP response it is ignored, and in
     # local development it would pin localhost to HTTPS for months.
     #

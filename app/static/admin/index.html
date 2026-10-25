@@ -2365,17 +2365,24 @@ function closeThread() {
 }
 
 let CURRENT_THREAD = null;
+const MESSAGE_NODES = new Map();
 
 function renderThread(detail) {
   CURRENT_THREAD = detail;
   document.getElementById("threadTitle").textContent =
     patientLabel(detail.conversation) + " — " + detail.conversation.channel;
   let shownPost = null;
-  document.getElementById("thread").replaceChildren(
-    ...detail.messages.flatMap((m) => {
-      const card = m.post && m.post.media_id !== shownPost ? [postCard(m.post)] : [];
+  const nodes = detail.messages.flatMap((m) => {
+      const showCard = Boolean(m.post && m.post.media_id !== shownPost);
       if (m.post) shownPost = m.post.media_id;
-      return [...card, el(
+      // Each message's nodes are kept and reused while it is unchanged, so a
+      // redraw for a new message leaves the ones above alone -- a reel
+      // playing in Instagram's frame would restart if its frame were moved.
+      const key = m.id + "|" + (m.delivery_status || "") + "|" + showCard;
+      const kept = MESSAGE_NODES.get(m.id);
+      if (kept && kept.key === key) return kept.nodes;
+      const card = showCard ? [postCard(m.post)] : [];
+      const built = [...card, el(
         "div",
         { class: "msg " + m.sender + (m.delivery_status && m.delivery_status !== "sent" ? " undelivered" : "") },
         m.content,
@@ -2393,8 +2400,14 @@ function renderThread(detail) {
              m.delivery_status === "failed" ? " · ⚠️ yuborishda xato" : "")
         )
       )];
-    })
-  );
+      MESSAGE_NODES.set(m.id, { key, nodes: built });
+      return built;
+    });
+  const thread = document.getElementById("thread");
+  const current = [...thread.childNodes];
+  const appendOnly = current.length <= nodes.length && current.every((node, i) => node === nodes[i]);
+  if (appendOnly) thread.append(...nodes.slice(current.length));
+  else thread.replaceChildren(...nodes);
   document.getElementById("replyHint").textContent = detail.conversation.is_bot_enabled
     ? "Bot hali yoqilgan — javob yozsangiz ham bot javob berishda davom etadi."
     : "";
@@ -2474,9 +2487,11 @@ function buildAttachment(a, detail) {
   }
   // A shared reel or a story: stored ones show at once, the rest on a press.
   if (a.stored) return sharedCard(a, false, false);
-  // A public reel or post plays in Instagram's own player: Instagram never
-  // hands another account's video to the clinic, only its page.
-  if (a.embed_url) return embedButton(a);
+  // A public reel or post plays in Instagram's own player, shown at once:
+  // Instagram never hands another account's video to the clinic, only its
+  // page. The frame loads lazily, so a thread of thirty reels loads only the
+  // ones scrolled to.
+  if (a.embed_url) return embedPlayer(a);
   const label = a.kind === "story" ? "▶ Storyni ko'rish" : "▶ Reels / postni ko'rish";
   const button = el("button", { type: "button", class: "att-reel" }, label,
     a.title ? el("span", {}, shortCaption(a.title)) : null);
@@ -2497,23 +2512,16 @@ function buildAttachment(a, detail) {
   return button;
 }
 
-function embedButton(a) {
-  const button = el("button", { type: "button", class: "att-reel" }, "▶ Reelsni ko'rish",
-    a.title ? el("span", {}, shortCaption(a.title)) : null);
-  button.addEventListener("click", () => {
-    const frame = el("iframe", {
-      class: "att-embed", src: a.embed_url, title: "Instagram reels", loading: "lazy",
-      allow: "autoplay; encrypted-media; picture-in-picture; fullscreen",
-      sandbox: "allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-presentation",
-      referrerpolicy: "strict-origin-when-cross-origin",
-    });
-    const parts = [frame];
-    if (a.link) parts.push(el("a", { class: "att-open", href: a.link, target: "_blank", rel: "noopener noreferrer" }, "↗ Instagram’da ochish"));
-    const shown = el("div", { class: "att-share" }, ...parts);
-    ATTACHMENT_NODES.set(a.id, shown);
-    button.replaceWith(shown);
+function embedPlayer(a) {
+  const frame = el("iframe", {
+    class: "att-embed", src: a.embed_url, title: "Instagram reels", loading: "lazy",
+    allow: "autoplay; encrypted-media; picture-in-picture; fullscreen",
+    sandbox: "allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-presentation",
+    referrerpolicy: "strict-origin-when-cross-origin",
   });
-  return button;
+  const parts = [frame];
+  if (a.link) parts.push(el("a", { class: "att-open", href: a.link, target: "_blank", rel: "noopener noreferrer" }, "↗ Instagram’da ochish"));
+  return el("div", { class: "att-share" }, ...parts);
 }
 
 function shortCaption(text) {
@@ -2619,6 +2627,7 @@ async function openThread(id, options = {}) {
     CURRENT_CHAT = id;
     THREAD_SIGNATURE = "";
     ATTACHMENT_NODES.clear();
+    MESSAGE_NODES.clear();
   }
   const detail = await api(`/conversations/${id}`);
   // The operator may have opened another conversation, or closed this one,

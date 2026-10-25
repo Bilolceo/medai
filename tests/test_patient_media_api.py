@@ -822,3 +822,17 @@ def test_a_shared_reel_plays_in_instagrams_own_player(url: str, embed: str | Non
 def test_a_photo_is_never_framed() -> None:
     media = PatientMedia(kind="image", source_url="https://www.instagram.com/p/Cx12345/")
     assert patient_media.embed_url(media) is None
+
+
+async def test_the_dashboard_page_is_never_shown_from_a_stale_cache(
+    client: httpx.AsyncClient,
+) -> None:
+    """Owner, 2026-10-25: reels "still not working" on a browser holding the
+    page from before the fix. The page revalidates on every open, and its
+    policy lets in Instagram's player and no other frame."""
+    response = await client.get("/admin/")
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-cache"
+    policy = response.headers["content-security-policy"]
+    assert "frame-src https://www.instagram.com;" in policy
+    assert "frame-ancestors 'none'" in policy
