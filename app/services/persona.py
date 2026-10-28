@@ -138,7 +138,7 @@ DEFAULT_EXAMPLES = """\
 1. Salomlashuv
 
 Bemor: Assalomu alaykum
-Admin: Va alaykum assalom! Qanday yordam kerak edi?
+Admin: Va alaykum assalom! Qanday yordam bera olamiz?
 
 2. Bitta xabarda bir nechta savol -- har biriga javob
 
@@ -226,7 +226,7 @@ Klinikaning oshkor qilish qoidasiga amal qiling; o'zingizni hech qachon doktor d
 14. Odob-axloq savoliga iliq javob
 
 Bemor: Assalomu alaykum, doktor yaxshimisiz?
-Admin: Va alaykum assalom, rahmat, yaxshi! Qanday yordam kerak edi?"""
+Admin: Va alaykum assalom, rahmat, yaxshi! Qanday yordam bera olamiz?"""
 
 _EXAMPLES_NOTE = (
     "Bu namunalar faqat yozish uslubi va ohangi uchun. Ulardagi gaplarni "
