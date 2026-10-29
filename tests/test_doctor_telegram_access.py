@@ -30,8 +30,9 @@ class FakeBotAPI:
         self.edits: list[tuple[int, int, str]] = []
         self.answers: list[tuple[str, str | None]] = []
 
-    async def send(self, chat_id: int, text: str, reply_markup: Any = None) -> None:
+    async def send(self, chat_id: int, text: str, reply_markup: Any = None) -> bool:
         self.sent.append((chat_id, text))
+        return True
 
     async def edit(
         self, chat_id: int, message_id: int, text: str, reply_markup: Any = None

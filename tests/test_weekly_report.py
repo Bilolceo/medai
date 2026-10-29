@@ -306,10 +306,11 @@ class FakeBotAPI:
         self.sent: list[tuple[int, str]] = []
         self.fail_for = fail_for or set()
 
-    async def send(self, chat_id: int, text: str, reply_markup: Any = None) -> None:
+    async def send(self, chat_id: int, text: str, reply_markup: Any = None) -> bool:
         if chat_id in self.fail_for:
             raise RuntimeError("chat gone")
         self.sent.append((chat_id, text))
+        return True
 
 
 async def test_the_week_goes_out_once_and_only_when_somebody_can_read_it(
@@ -356,7 +357,7 @@ async def test_the_report_button_sends_the_last_seven_days_to_whoever_asked(
     update = {
         "message": {
             "chat": {"id": 555},
-            "from": {"username": "dr_alisher"},
+            "from": {"id": 9, "username": "dr_alisher"},
             "text": doctor_telegram.BTN_REPORT,
         }
     }
@@ -367,7 +368,10 @@ async def test_the_report_button_sends_the_last_seven_days_to_whoever_asked(
     assert "Hisobot tayyorlanyapti" in api.sent[0][1]
     assert "Haftalik hisobot" in "\n".join(text for _, text in api.sent)
     # A stranger gets nothing.
-    stranger = {**update, "message": {**update["message"], "from": {"username": "someone"}}}
+    stranger = {
+        **update,
+        "message": {**update["message"], "from": {"id": 10, "username": "someone"}},
+    }
     api.sent.clear()
     await doctor_telegram.handle_update(api, db_session, seed.tenant_a, stranger)  # type: ignore[arg-type]
     assert all("Haftalik" not in text for _, text in api.sent)

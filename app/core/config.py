@@ -156,6 +156,9 @@ class Settings(BaseSettings):
     # told it is not for them, since it lists patients by name and number.
     doctor_telegram_bot_token: str | None = Field(default=None, alias="DOCTOR_TELEGRAM_BOT_TOKEN")
     doctor_telegram_usernames: str = Field(default="", alias="DOCTOR_TELEGRAM_USERNAMES")
+    # Handles (or numeric Telegram ids) that may look but not cancel: an
+    # assistant who answers the phone, not the person who closes the day.
+    doctor_telegram_viewers: str = Field(default="", alias="DOCTOR_TELEGRAM_VIEWERS")
 
     @property
     def owner_rule_recipient_usernames(self) -> list[str]:
@@ -322,6 +325,7 @@ class Settings(BaseSettings):
         "owner_rule_recipients",
         "doctor_telegram_bot_token",
         "doctor_telegram_usernames",
+        "doctor_telegram_viewers",
         "seed_faqs_from",
         "seed_doctors_from",
         "public_base_url",
