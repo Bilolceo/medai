@@ -83,3 +83,24 @@ def strip(reply: str, clinic_phone_numbers: str | None) -> str:
             cleaned,
         )
     return re.sub(r"[ \t]{2,}", " ", cleaned).strip()
+
+
+def foreign_numbers(text: str, allowed_digits: set[str]) -> list[str]:
+    """The Uzbek numbers written in ``text`` that are not the clinic's, as
+    nine digits each. The same reading of "a number" as ``strip``, so what the
+    guard removes from the bot's replies is what the weekly report counts in
+    the operators'. Hidden markers are skipped: they carry the patient's own
+    number."""
+    found: list[str] = []
+    for part in _MARKER.split(text):
+        if part.startswith("[["):
+            continue
+        for match in _NUMBER.finditer(part):
+            digits = digits_of(match.group(0))
+            if (
+                len(digits) == 9
+                and digits[:2] in _UZ_OPERATOR_CODES
+                and digits not in allowed_digits
+            ):
+                found.append(digits)
+    return found

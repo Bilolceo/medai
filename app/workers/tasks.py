@@ -12,7 +12,7 @@ import logging
 import uuid
 from collections.abc import Callable, Iterable, Mapping
 from contextlib import AbstractAsyncContextManager, suppress
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
 from typing import Any
 
 from arq import Retry, cron
@@ -59,6 +59,7 @@ from app.services import (
     small_talk,
     turn,
     voice_notes,
+    weekly_report,
 )
 from app.services.admin_commands import handle_instruction, is_admin, parse_rule
 from app.services.answer import generate_answer
@@ -646,6 +647,33 @@ async def send_appointment_reminders(
         logger.info(
             "appointment_reminders_run",
             extra={"sent": run.sent, "failed": run.failed, "skipped": run.skipped},
+        )
+
+
+async def send_weekly_report(ctx: dict[str, Any]) -> None:
+    """ARQ cron: last week's report to the doctor's Telegram.
+
+    Runs every hour and acts once: from Monday 09:00 (Tashkent) it sends the
+    week that has just ended, unless that week has gone out already. Hourly
+    rather than "Monday at nine" so a worker that was down at nine, or a doctor
+    who opens the bot on Wednesday, still gets the report -- a missed cron
+    tick is not retried, and a report that never comes is worse than a late one.
+    """
+    settings = get_settings()
+    token = settings.doctor_telegram_bot_token
+    if not token:
+        return
+    now = datetime.now(UTC)
+    local = now.astimezone(CLINIC_TIMEZONE)
+    monday = local.date() - timedelta(days=local.weekday())
+    if local < datetime.combine(monday, time(9, 0), tzinfo=CLINIC_TIMEZONE):
+        return
+    async with db_session() as session:
+        tenant = await doctor_telegram._tenant(session, settings)
+        if tenant is None:
+            return
+        await doctor_telegram.deliver_weekly_report(
+            doctor_telegram.BotAPI(token), session, tenant, weekly_report.last_full_week(now)
         )
 
 
@@ -1787,6 +1815,8 @@ class WorkerSettings:
     # reminder lands inside its window rather than about not losing one.
     cron_jobs = [
         cron(send_appointment_reminders, minute=set(range(0, 60, 5))),
+        # Hourly at :40; the job decides whether this hour is the one.
+        cron(send_weekly_report, minute={40}),
         # 03:20 rather than on the hour: nothing else the clinic depends
         # on runs then, and Meta is quietest.
         cron(refresh_channel_tokens, hour={3}, minute={20}),

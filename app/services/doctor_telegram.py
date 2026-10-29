@@ -47,6 +47,7 @@ from app.models.lead import Lead
 from app.models.message import Message, MessageSender
 from app.models.tenant import Tenant
 from app.models.user import User
+from app.services import weekly_report
 from app.services.appointment import CLINIC_TIMEZONE, DAYS_OFF_KEY, days_off_from
 from app.services.complaints import patient_words
 from app.services.conversation import last_inbound_at, record_outbound_message, reply_context_for
@@ -66,16 +67,20 @@ LEADS_NOTIFIED_UNTIL_KEY = "doctor_telegram_leads_notified_until"
 # Kept here rather than in the button data, because a button that says "the
 # third patient" names somebody else the moment a booking lands before them.
 PICKS_KEY = "doctor_telegram_picks"
+# The last day of the week whose report went out, so a week is sent once.
+WEEKLY_SENT_KEY = "doctor_telegram_weekly_sent"
 
 BTN_LIST = "📋 Qabullar"
 BTN_DAY_OFF = "🚫 Kunni bekor qilish"
 BTN_PICK = "👤 Bemorni bekor qilish"
 BTN_CLOSED = "🔓 Yopilgan kunlar"
+BTN_REPORT = "📊 Hisobot"
 
 MAIN_KEYBOARD = {
     "keyboard": [
         [{"text": BTN_LIST}, {"text": BTN_DAY_OFF}],
         [{"text": BTN_PICK}, {"text": BTN_CLOSED}],
+        [{"text": BTN_REPORT}],
     ],
     "resize_keyboard": True,
     "is_persistent": True,
@@ -484,8 +489,9 @@ _HOME = (
     "📋 <b>Qabullar</b> — bugungi va ertangi bemorlar\n"
     "🚫 <b>Kunni bekor qilish</b> — kun bo'yi kela olmasangiz\n"
     "👤 <b>Bemorni bekor qilish</b> — faqat ayrim bemorlarni\n"
-    "🔓 <b>Yopilgan kunlar</b> — yopilgan kunni qayta ochish\n\n"
-    "🆕 Yangi qabullar shu yerga o'zi keladi."
+    "🔓 <b>Yopilgan kunlar</b> — yopilgan kunni qayta ochish\n"
+    "📊 <b>Hisobot</b> — oxirgi 7 kun: bot va operatorlar\n\n"
+    "🆕 Yangi qabullar va haftalik hisobot (dushanba) shu yerga o'zi keladi."
 )
 
 
@@ -794,6 +800,18 @@ async def handle_update(
         screen = _choose_day("👤 <b>Bemorni bekor qilish</b>", "p", today)
     elif text == BTN_CLOSED:
         screen = _closed_screen(tenant, today)
+    elif text == BTN_REPORT:
+        # Whenever asked, for the last seven days, to whoever asked.
+        await api.send(chat_id, "⏳ <i>Hisobot tayyorlanyapti…</i>")
+        await deliver_weekly_report(
+            api,
+            session,
+            tenant,
+            weekly_report.rolling_week(datetime.now(UTC)),
+            chat_ids=[chat_id],
+            once=False,
+        )
+        return
     elif _ABSENT.search(text):
         day = today + timedelta(days=1) if _TOMORROW.search(text) else today
         bookings = await _in_tenant(tenant, bookings_on(session, tenant.id, day))
@@ -830,6 +848,51 @@ async def notify_patient_media(
                 item.content_type or "image/jpeg",
                 caption if index == 0 else "",
             )
+
+
+async def deliver_weekly_report(
+    api: BotAPI,
+    session: AsyncSession,
+    tenant: Tenant,
+    window: "weekly_report.Window",
+    *,
+    chat_ids: Sequence[int] | None = None,
+    once: bool = True,
+) -> bool:
+    """Send the week's report to the doctor. True when it went out.
+
+    The Monday one (``once``) is sent a single time per week: the day it
+    covers is remembered. It is not marked sent when nobody has opened the bot
+    yet, so it still arrives, late, once somebody does.
+    """
+    chats = (
+        list(chat_ids)
+        if chat_ids is not None
+        else [c for c in tenant.settings.get(CHATS_KEY, []) if isinstance(c, int)]
+    )
+    if once and tenant.settings.get(WEEKLY_SENT_KEY) == window.last_day.isoformat():
+        return False
+    if not chats:
+        logger.info("doctor_telegram_weekly_no_chats", extra={"tenant_id": str(tenant.id)})
+        return False
+    report = await weekly_report.collect(session, tenant, window)
+    messages = weekly_report.render(report)
+    delivered = False
+    for chat_id in chats:
+        try:
+            for text in messages:
+                await api.send(chat_id, text)
+            delivered = True
+        except Exception:  # noqa: BLE001 - one chat must not stop the others
+            logger.warning("doctor_telegram_weekly_failed", exc_info=True)
+    if delivered and once:
+        tenant.settings = {**tenant.settings, WEEKLY_SENT_KEY: window.last_day.isoformat()}
+        await session.commit()
+    logger.info(
+        "doctor_telegram_weekly_report",
+        extra={"window": window.label(), "chats": len(chats), "delivered": delivered},
+    )
+    return delivered
 
 
 async def _patient_reason(session: AsyncSession, appointment: Appointment) -> str | None:
