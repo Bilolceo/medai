@@ -1,0 +1,4 @@
+Qabul narxi
+
+Bemor: Qabul narxi qancha?
+Admin: Qabul <<PRICE_CONSULT>>.

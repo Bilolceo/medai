@@ -148,6 +148,22 @@ async def test_the_session_endpoint_reports_the_operators_own_tenant(
     assert body["tenant_id"] == str(seed.tenant_a.id)
     assert body["tenant_name"] == "Clinic A"
     assert body["csrf_token"]
+    # The dashboard is headed with the doctor's own name: the account's name
+    # until the account says otherwise.
+    assert body["brand_title"] == "Clinic A"
+    assert body["brand_subtitle"] == ""
+
+
+async def test_the_dashboard_is_headed_with_the_doctors_own_name(
+    client: httpx.AsyncClient, seed: Seed, db_session: AsyncSession
+) -> None:
+    seed.tenant_a.settings = {"brand_title": "Dr. Vali", "brand_subtitle": "Urolog"}
+    await db_session.commit()
+    _login_as(client, seed.a.operator)
+
+    body = (await client.get("/api/admin/session")).json()
+
+    assert (body["brand_title"], body["brand_subtitle"]) == ("Dr. Vali", "Urolog")
 
 
 async def test_an_operator_only_ever_sees_their_own_clinics_records(

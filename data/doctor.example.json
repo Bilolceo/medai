@@ -1,0 +1,25 @@
+{
+  "DOCTOR_FULL_NAME_OF": "Aliyev Vali Salimovichning",
+  "DOCTOR_SHORT": "doktor Vali",
+  "SPECIALTY": "urolog",
+  "CITY_TO": "Toshkentga",
+  "TELEGRAM": "@dr_vali_example",
+  "PHONES": "+998 90 000 00 01, +998 90 000 00 02",
+  "ADDRESS": "Toshkent shahri, Chilonzor tumani, Bunyodkor ko'chasi 1-uy",
+  "LANDMARK": "Metro Chilonzor yonida",
+  "WORK_HOURS": "Dushanbadan jumagacha 10:00–18:00, shanba va yakshanba dam olish",
+
+  "WORK_DAYS": "1,2,3,4,5",
+  "WORK_START": "10:00",
+  "WORK_END": "18:00",
+  "SLOT_MINUTES": "30",
+
+  "PRICE_CONSULT": "300 000 so'm",
+  "PRICE_FAST": "taxminan 1000 $ atrofida",
+  "PRICE_IMPLANT": "taxminan 30 mln so'm atrofida",
+  "SERVICES_CHOICE": "qabulmi, operatsiyami yoki implantmi",
+  "SIZE_PROCEDURES": "ligamentotomiya, liposaksiya va filling",
+
+  "BRAND_TITLE": "Dr. Vali",
+  "BOT_ENABLED": "false"
+}

@@ -1,0 +1,6 @@
+Bemor raqam qoldirdi
+
+Bemor: 93 123 45 67, Jasur
+Admin: Rahmat, Jasur. Qaysi vaqtda qo'ng'iroq qilsak qulay?
+Bemor: Ertaga 14:30 larda
+Admin: Bo'ldi, ertaga 14:30 larda qo'ng'iroq qilishadi.

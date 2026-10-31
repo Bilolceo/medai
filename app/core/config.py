@@ -83,10 +83,16 @@ class Settings(BaseSettings):
     # "Dushanbadan shanbagacha 09:00 dan 18:00 gacha", say.
     clinic_work_hours: str | None = Field(default=None, alias="CLINIC_WORK_HOURS")
 
+    # What the sign-in page calls the product. It is shown before anybody is
+    # logged in, so it is not read from a doctor's account: one sign-in page
+    # serves every deployment, and a deployment that wants the doctor's name
+    # there sets it.
+    product_name: str = Field(default="medai", alias="PRODUCT_NAME")
+
     # Whose inbox this is, when the deployment answers one doctor's own
-    # Instagram rather than the clinic's -- "Axmadaliyev Temur G'iyosiddin
-    # o'g'li" and "urolog-androlog", say. Both set switches the assistant from
-    # the clinic's front desk to the person who runs that doctor's inbox (see
+    # Instagram rather than the clinic's -- the doctor's full name and
+    # "urolog-androlog", say. Both set switches the assistant from the
+    # clinic's front desk to the person who runs that doctor's inbox (see
     # app.services.answer._opening). Unset keeps the clinic voice.
     doctor_name: str | None = Field(default=None, alias="DOCTOR_NAME")
     doctor_specialty: str | None = Field(default=None, alias="DOCTOR_SPECIALTY")
@@ -317,6 +323,7 @@ class Settings(BaseSettings):
         "clinic_phone_numbers",
         "clinic_address",
         "clinic_work_hours",
+        "product_name",
         "doctor_name",
         "doctor_specialty",
         "doctor_background",

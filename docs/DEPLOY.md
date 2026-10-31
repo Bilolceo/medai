@@ -18,8 +18,8 @@ Four services in one Railway project:
 
 | Service    | What it is                     | Source                          |
 | ---------- | ------------------------------ | ------------------------------- |
-| `web`      | FastAPI — webhooks + dashboard | this repo, root dir `instagram` |
-| `worker`   | arq — answers and reminders    | this repo, root dir `instagram` |
+| `web`      | FastAPI — webhooks + dashboard | this repo, repository root      |
+| `worker`   | arq — answers and reminders    | this repo, repository root      |
 | `postgres` | Postgres 16 **with pgvector**  | image `pgvector/pgvector:pg16`  |
 | `redis`    | Redis 7                        | image `redis:7-alpine`          |
 
@@ -36,7 +36,7 @@ of the Dockerfile.
 
 ## Step 1 — Generate the three secrets
 
-Run this once, on your own machine, from the `instagram/` directory:
+Run this once, on your own machine, from the repository root:
 
 ```powershell
 ../.venv/Scripts/python.exe scripts/generate_secrets.py
@@ -76,8 +76,10 @@ Name it `postgres`. The name becomes its private hostname
 
 ## Step 3 — Create the `web` service
 
-1. **+ New** → **GitHub Repo** → this repo, branch `second`.
-2. **Settings → Root Directory**: `instagram`
+1. **+ New** → **GitHub Repo** → this repo. Branch: `main` for a new doctor;
+   the first clinic's project tracks `stable`, which is promoted from `main`
+   after a day or two in use.
+2. **Settings → Root Directory**: leave it empty (the repository root)
 3. **Settings → Networking → Generate Domain**. Copy the result — something
    like `https://web-production-a1b2.up.railway.app`. This is your
    `PUBLIC_BASE_URL`, and every webhook URL below is built from it.
@@ -104,7 +106,7 @@ and Railway substitutes the running Redis URL.
 
 ## Step 4 — Create the `worker` service
 
-Same repo, same branch, same root directory. Then:
+Same repo, same branch, same (empty) root directory. Then:
 
 - **Variables**: the same block as `web`, plus **`APP_ROLE=worker`**.
 - **No** pre-deploy command, **no** healthcheck, **no** domain. It has no
@@ -159,7 +161,7 @@ anyone with access to the project. Changing it in the dashboard is safe:
 provisioning never resets an account that already exists, so the next deploy
 will not put the old one back.
 
-Then load the FAQs. Set `SEED_FAQS_FROM=data/faqs.json` on `web`, redeploy,
+Then load the FAQs. Set `SEED_FAQS_FROM=<the doctor's FAQ file>` on `web` (see `data/faqs.example.json`), redeploy,
 watch for `seeded_faqs tenant_id=… rows=…`, then **remove the variable
 again** — left set, every redeploy re-embeds the whole file.
 

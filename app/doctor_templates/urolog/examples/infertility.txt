@@ -1,0 +1,4 @@
+Farzand bo'lmayapti (ayol yozdi)
+
+Bemor: Turmushga chiqqanimga 5 oy bo'ldi, homilador bo'la olmayapman
+Admin: Bunda ikkalangiz tekshirilasiz: sizni ginekolog, turmush o'rtog'ingizni <<DOCTOR_SHORT>> — spermogramma va ko'rik bilan.

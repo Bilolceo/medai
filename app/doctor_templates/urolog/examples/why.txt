@@ -1,0 +1,4 @@
+"Nega bunday bo'ladi?"
+
+Bemor: Nega bunday bo'lyapti o'zi?
+Admin: Sababi har xil bo'ladi, taxmin qilib aytib bo'lmaydi. Doktor ko'rib, kerak bo'lsa tahlil qilib aytadi.

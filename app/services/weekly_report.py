@@ -37,7 +37,7 @@ from app.models.message import Message, MessageSender
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.services import message_labels, phone_guard
-from app.services.appointment import CLINIC_TIMEZONE, WORK_DAYS, WORK_END, WORK_START
+from app.services.appointment import CLINIC_TIMEZONE, DEFAULT_SCHEDULE, Schedule, schedule_for
 
 TELEGRAM_LIMIT = 3800  # under Telegram's 4096, with room for the markup
 # A reply to a message inside this long is "answering" it; later is a new
@@ -125,9 +125,8 @@ def rolling_week(now: datetime) -> Window:
     return Window(today - timedelta(days=6), today)
 
 
-def is_after_hours(moment: datetime) -> bool:
-    local = moment.astimezone(CLINIC_TIMEZONE)
-    return local.weekday() not in WORK_DAYS or not (WORK_START <= local.time() < WORK_END)
+def is_after_hours(moment: datetime, schedule: Schedule = DEFAULT_SCHEDULE) -> bool:
+    return not schedule.is_open(moment.astimezone(CLINIC_TIMEZONE))
 
 
 # --- the figures ------------------------------------------------------------------
@@ -221,6 +220,7 @@ async def _figures(
     session: AsyncSession, tenant: Tenant, window: Window, allowed: set[str]
 ) -> Figures:
     figures = Figures()
+    week = schedule_for(tenant)
     rows = (
         await session.execute(
             select(Message.conversation_id, Message.sender, Message.content, Message.created_at)
@@ -288,7 +288,7 @@ async def _figures(
                 pending = pending or at
         elif row.sender == MessageSender.BOT:
             figures.bot_replies += 1
-            figures.bot_after_hours += is_after_hours(at)
+            figures.bot_after_hours += is_after_hours(at, week)
             if pending is not None:
                 gap = at - pending
                 if gap <= BOT_REPLY_CEILING:
@@ -307,7 +307,7 @@ async def _figures(
                 answered = answered or first_words is not None
                 continue
             figures.operator_messages += 1
-            figures.operator_after_hours += is_after_hours(at)
+            figures.operator_after_hours += is_after_hours(at, week)
             operator_conversations.add(row.conversation_id)
             strangers = phone_guard.foreign_numbers(row.content, allowed)
             figures.foreign_numbers.update(strangers)
@@ -316,7 +316,7 @@ async def _figures(
                 gap = at - pending
                 if gap <= OPERATOR_REPLY_CEILING:
                     figures.operator_seconds.append(gap.total_seconds())
-                    if not is_after_hours(pending):
+                    if not is_after_hours(pending, week):
                         figures.operator_work_seconds.append(gap.total_seconds())
                 pending = None
             answered = answered or first_words is not None

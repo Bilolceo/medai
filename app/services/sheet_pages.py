@@ -117,10 +117,11 @@ def tile_position(month: int) -> tuple[int, int]:
     return _FIRST_TILE_ROW + (index // 4) * 3, _TILE_COLUMNS[index % 4]
 
 
-def home_values(year: int, book_gid: int) -> dict[tuple[int, int], str]:
-    """Cell (row, column) -> what it holds."""
+def home_values(year: int, book_gid: int, brand: str = "") -> dict[tuple[int, int], str]:
+    """Cell (row, column) -> what it holds. `brand` is the doctor's name for
+    the title (see app.services.branding)."""
     cells: dict[tuple[int, int], str] = {
-        (1, 1): "Dr. Temur — qabullar",
+        (1, 1): f"{brand} — qabullar" if brand else "Qabullar",
         (2, 1): "Oyni tanlang: o‘sha oyning qabullari Qabullar varag‘ida ochiladi.",
         (_YEAR_ROW, 1): str(year),
     }
@@ -347,8 +348,9 @@ def _grid(cells: dict[tuple[int, int], str], separator: str) -> list[list[str]]:
 class SheetPages:
     """Builds Home in the clinic's spreadsheet."""
 
-    def __init__(self, mirror: SheetsMirror | None = None) -> None:
+    def __init__(self, mirror: SheetsMirror | None = None, *, brand: str = "") -> None:
         self._mirror = mirror or SheetsMirror()
+        self._brand = brand
 
     async def _batch(
         self, client: httpx.AsyncClient, requests: list[dict[str, Any]]
@@ -421,7 +423,7 @@ class SheetPages:
                 "PUT",
                 f"/values/'{HOME_SHEET}'!A1",
                 params={"valueInputOption": "USER_ENTERED"},
-                json={"values": _grid(home_values(year, book_gid), separator)},
+                json={"values": _grid(home_values(year, book_gid, self._brand), separator)},
             )
             await self._batch(client, home_requests(gid, year, separator))
             logger.info("sheet_home_built year=%d removed_tabs=%d", year, len(old_tabs))
@@ -429,7 +431,12 @@ class SheetPages:
 
 
 async def _main(argv: Sequence[str]) -> None:
-    await SheetPages().publish(int(argv[0]))
+    from app.core.db import db_session
+    from app.services import branding
+
+    async with db_session() as session:
+        brand = branding.title(await branding.the_tenant(session))
+    await SheetPages(brand=brand).publish(int(argv[0]))
 
 
 if __name__ == "__main__":  # pragma: no cover - a command, run by hand

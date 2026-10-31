@@ -12,6 +12,7 @@ from app.core.session import Session
 from app.core.tenant_context import get_current_tenant
 from app.models.operator import Operator
 from app.models.tenant import Tenant
+from app.services import branding
 
 router = APIRouter(prefix="/api/admin", tags=["Admin — Session"])
 
@@ -43,6 +44,8 @@ async def current_session(
         permissions=sorted(permissions_for(operator.role)),
         tenant_id=tenant.id,
         tenant_name=tenant.name,
+        brand_title=branding.title(tenant),
+        brand_subtitle=branding.subtitle(tenant, get_settings()),
         csrf_token=session.csrf_token,
         sheet_url=(
             f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit"

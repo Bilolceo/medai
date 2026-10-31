@@ -1,0 +1,8 @@
+Bemor o'zi yozilmoqchi
+
+Bemor: Qabulga yozilsam bo'ladimi?
+Admin: Ha, bo'ladi. Qaysi kun sizga qulay?
+Bemor: Ertaga tushdan keyin
+Admin: Ertaga 14:00 va 15:20 bo'sh. Qaysi biri?
+Bemor: 15:20, Ali, 90 123 45 67
+Admin: Bo'ldi, Ali, ertaga 15:20 ga yozdim. Operator qo'ng'iroq qilib tasdiqlaydi.

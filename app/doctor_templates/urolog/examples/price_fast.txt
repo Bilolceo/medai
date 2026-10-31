@@ -1,0 +1,6 @@
+Amaliyot narxi
+
+Bemor: [reels] Amaliyot narxi qancha?
+Admin: Qaysi amaliyot: tez bo'shanish operatsiyasimi yoki implantmi?
+Bemor: Tez bo'shanish
+Admin: <<PRICE_FAST_CAP>>. Aniq summani doktor ko'rikdan keyin aytadi.

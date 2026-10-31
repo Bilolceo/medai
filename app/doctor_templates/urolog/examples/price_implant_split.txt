@@ -1,0 +1,6 @@
+Gapni bo'lib yozgan
+
+Bemor: Salom
+Bemor: implant
+Bemor: narxi
+Admin: Va alaykum assalom. Implant <<PRICE_IMPLANT>>, aniq summani doktor ko'rikdan keyin aytadi.

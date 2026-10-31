@@ -247,14 +247,13 @@ async def _appointment_book(session: AsyncSession, doctor_count: int) -> str:
     imports from app.services.appointment, and keeping this one-way avoids a
     cycle through the worker.
     """
-    from app.services.appointment import slot_capacity
+    from app.services.appointment import schedule, slot_capacity
     from app.services.booking import free_slots, render
 
     now = datetime.now(UTC)
-    slots = await free_slots(
-        AppointmentRepository(session), now, capacity=slot_capacity(doctor_count)
-    )
-    return render(slots, now)
+    repo = AppointmentRepository(session)
+    slots = await free_slots(repo, now, capacity=slot_capacity(doctor_count))
+    return render(slots, now, await schedule(repo))
 
 
 _CORRECTION = """

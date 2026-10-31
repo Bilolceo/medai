@@ -58,10 +58,8 @@ from app.services import doctor_watch, weekly_report
 from app.services.appointment import (
     CLINIC_TIMEZONE,
     DAYS_OFF_KEY,
-    WORK_DAYS,
-    WORK_END,
-    WORK_START,
     days_off_from,
+    schedule_for,
 )
 from app.services.complaints import patient_words
 from app.services.conversation import last_inbound_at, record_outbound_message, reply_context_for
@@ -1220,8 +1218,8 @@ def _warn_no_chats(tenant: Tenant) -> None:
         logger.warning("doctor_telegram_no_chats", extra={"tenant_id": str(tenant.id)})
 
 
-def _in_work_hours(local: datetime) -> bool:
-    return local.weekday() in WORK_DAYS and WORK_START <= local.time() < WORK_END
+def _in_work_hours(tenant: Tenant, local: datetime) -> bool:
+    return schedule_for(tenant).is_open(local)
 
 
 def _booking_lines(
@@ -1464,7 +1462,7 @@ async def escalate_waiting(
     to. Told once per wait, in working hours only -- what piled up overnight
     arrives at nine as one message.
     """
-    if not _in_work_hours(now.astimezone(CLINIC_TIMEZONE)):
+    if not _in_work_hours(tenant, now.astimezone(CLINIC_TIMEZONE)):
         return
     waiting, _old = await doctor_watch.waiting_chats(
         session, tenant, now, longer_than=doctor_watch.ESCALATE_AFTER
@@ -1525,7 +1523,7 @@ async def watch_assistant(
             await _remember(
                 session, tenant, **{BOT_OFF_ALERT_KEY: {"since": now.isoformat(), "told": False}}
             )
-        elif not state.get("told") and _in_work_hours(local):
+        elif not state.get("told") and _in_work_hours(tenant, local):
             since = datetime.fromisoformat(state["since"])
             if now - since >= timedelta(minutes=30) and await _tell(
                 api,
@@ -1540,7 +1538,7 @@ async def watch_assistant(
             await _tell(api, chats, "✅ <b>Yordamchi yana yoqildi</b> — bemorlarga javob beryapti.")
         await _remember(session, tenant, **{BOT_OFF_ALERT_KEY: {}})
 
-    if not _in_work_hours(local):
+    if not _in_work_hours(tenant, local):
         return
     silent_at = _watermark(tenant, SILENT_ALERT_KEY)
     if silent_at is not None and now - silent_at < timedelta(hours=3):
@@ -1566,7 +1564,7 @@ async def morning_summary(
     local = now.astimezone(CLINIC_TIMEZONE)
     today = local.date()
     if (
-        local.weekday() not in WORK_DAYS
+        local.weekday() not in schedule_for(tenant).work_days
         or tenant.settings.get(SUMMARY_SENT_KEY) == today.isoformat()
         or not (SUMMARY_FROM <= local.time() < SUMMARY_UNTIL)
     ):

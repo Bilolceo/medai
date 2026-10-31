@@ -1,0 +1,158 @@
+{
+  "name": "urolog",
+  "description": "Urolog / androlog: Instagram yordamchisi (prompt, namunalar, qat'iy qoidalar).",
+  "required": [
+    "DOCTOR_FULL_NAME_OF",
+    "DOCTOR_SHORT",
+    "SPECIALTY",
+    "CITY_TO",
+    "TELEGRAM",
+    "PHONES",
+    "ADDRESS",
+    "WORK_HOURS"
+  ],
+  "optional": [
+    "LANDMARK",
+    "WORK_DAYS",
+    "WORK_START",
+    "WORK_END",
+    "SLOT_MINUTES",
+    "PRICE_CONSULT",
+    "PRICE_FAST",
+    "PRICE_IMPLANT",
+    "SERVICES_CHOICE",
+    "SIZE_PROCEDURES"
+  ],
+  "prompt": "prompt.txt",
+  "examples": [
+    {
+      "file": "examples/greeting.txt"
+    },
+    {
+      "file": "examples/complaint.txt"
+    },
+    {
+      "file": "examples/wants_to_book.txt"
+    },
+    {
+      "file": "examples/instagram_order_button.txt"
+    },
+    {
+      "file": "examples/price_consult.txt",
+      "needs": [
+        "PRICE_CONSULT"
+      ]
+    },
+    {
+      "file": "examples/price_unclear.txt",
+      "needs": [
+        "SERVICES_CHOICE"
+      ]
+    },
+    {
+      "file": "examples/price_fast.txt",
+      "needs": [
+        "PRICE_FAST",
+        "PRICE_IMPLANT"
+      ]
+    },
+    {
+      "file": "examples/price_implant_split.txt",
+      "needs": [
+        "PRICE_IMPLANT"
+      ]
+    },
+    {
+      "file": "examples/abroad.txt"
+    },
+    {
+      "file": "examples/declined.txt"
+    },
+    {
+      "file": "examples/medicine.txt"
+    },
+    {
+      "file": "examples/size_procedures.txt",
+      "needs": [
+        "SIZE_PROCEDURES"
+      ]
+    },
+    {
+      "file": "examples/why.txt"
+    },
+    {
+      "file": "examples/voice_note.txt"
+    },
+    {
+      "file": "examples/embarrassed_wife.txt"
+    },
+    {
+      "file": "examples/off_topic.txt"
+    },
+    {
+      "file": "examples/are_you_a_bot.txt"
+    },
+    {
+      "file": "examples/emergency.txt"
+    },
+    {
+      "file": "examples/infertility.txt"
+    },
+    {
+      "file": "examples/left_a_number.txt"
+    },
+    {
+      "file": "examples/asked_for_a_call.txt"
+    }
+  ],
+  "rules": [
+    {
+      "file": "rules/telegram_and_phones.txt"
+    },
+    {
+      "file": "rules/only_these_phones.txt"
+    },
+    {
+      "file": "rules/contact_channels.txt"
+    },
+    {
+      "file": "rules/voice_notes.txt"
+    },
+    {
+      "file": "rules/medicine.txt"
+    },
+    {
+      "file": "rules/price_consult.txt",
+      "needs": [
+        "PRICE_CONSULT"
+      ]
+    },
+    {
+      "file": "rules/price_fast.txt",
+      "needs": [
+        "PRICE_FAST"
+      ]
+    },
+    {
+      "file": "rules/price_implant.txt",
+      "needs": [
+        "PRICE_IMPLANT"
+      ]
+    },
+    {
+      "file": "rules/offer_once.txt"
+    },
+    {
+      "file": "rules/size_words.txt"
+    },
+    {
+      "file": "rules/services_not_listed.txt"
+    },
+    {
+      "file": "rules/implant_types.txt",
+      "needs": [
+        "PRICE_IMPLANT"
+      ]
+    }
+  ]
+}

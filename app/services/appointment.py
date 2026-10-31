@@ -1,7 +1,8 @@
 import logging
 import uuid
 from collections import Counter
-from collections.abc import Collection, Iterator, Sequence
+from collections.abc import Collection, Iterator, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
@@ -21,18 +22,147 @@ from app.repositories.appointment import AppointmentRepository
 
 logger = logging.getLogger(__name__)
 
-# TODO(IGB-?): move onto Tenant.settings once the admin/dashboard panel
-# exists, so each clinic can tune its own hours/slot length instead of every
-# tenant sharing these — same pattern as
-# core.config.Settings.debounce_window_seconds.
 CLINIC_TIMEZONE = ZoneInfo("Asia/Tashkent")
-# Dr. Temur's week: Monday to Saturday, 09:00-17:00, a strict 20 minutes a
-# patient -- 09:00, 09:20, ... 16:40. Sunday is a day off.
-SLOT_MINUTES = 20
-WORK_START = time(9, 0)
-WORK_END = time(17, 0)
-# date.weekday() numbers: Monday is 0, Sunday is 6.
-WORK_DAYS = frozenset({0, 1, 2, 3, 4, 5})
+
+
+@dataclass(frozen=True)
+class Schedule:
+    """When the doctor sees patients: which weekdays, from when to when, and
+    how long one appointment takes. Every slot the assistant offers, every
+    booking the dashboard accepts and every "after hours" figure in a report
+    is measured against the same one of these."""
+
+    slot_minutes: int = 20
+    work_start: time = time(9, 0)
+    work_end: time = time(17, 0)
+    # date.weekday() numbers: Monday is 0, Sunday is 6.
+    work_days: frozenset[int] = frozenset({0, 1, 2, 3, 4, 5})
+
+    def is_open(self, local: datetime) -> bool:
+        """Whether the clinic is seeing patients at this local moment."""
+        return local.weekday() in self.work_days and (
+            self.work_start <= local.time() < self.work_end
+        )
+
+    def day_slots(self, local_date: date) -> Iterator[datetime]:
+        """Every slot start on local_date, tz-aware in CLINIC_TIMEZONE."""
+        if local_date.weekday() not in self.work_days:
+            return
+        current = datetime.combine(local_date, self.work_start, tzinfo=CLINIC_TIMEZONE)
+        end = datetime.combine(local_date, self.work_end, tzinfo=CLINIC_TIMEZONE)
+        step = timedelta(minutes=self.slot_minutes)
+        while current < end:
+            yield current
+            current += step
+
+    def hours_text(self) -> str:
+        return f"{self.work_start:%H:%M} – {self.work_end:%H:%M}"
+
+
+# The first clinic's week, and what every clinic gets until it says otherwise:
+# Monday to Saturday, 09:00-17:00, a strict 20 minutes a patient -- 09:00,
+# 09:20, ... 16:40. Sunday is a day off.
+DEFAULT_SCHEDULE = Schedule()
+SLOT_MINUTES = DEFAULT_SCHEDULE.slot_minutes
+WORK_START = DEFAULT_SCHEDULE.work_start
+WORK_END = DEFAULT_SCHEDULE.work_end
+WORK_DAYS = DEFAULT_SCHEDULE.work_days
+
+# Where a clinic's own week is kept, in Tenant.settings: "work_days" as ISO
+# weekday numbers (1 is Monday, 7 is Sunday -- the numbers people write),
+# "work_start" and "work_end" as "HH:MM", "slot_minutes" as a number. Set by
+# scripts/apply_template.py or the dashboard; an unset or unreadable value
+# falls back to DEFAULT_SCHEDULE for that field alone, and says so in the log,
+# so a typo in one field cannot close the clinic.
+_SLOT_MINUTES_RANGE = range(5, 241)
+
+
+def _parse_time(value: object) -> time | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        return time.fromisoformat(value.strip())
+    except ValueError:
+        return None
+
+
+def _parse_days(value: object) -> frozenset[int] | None:
+    if isinstance(value, str):
+        value = [part for part in value.replace(";", ",").split(",") if part.strip()]
+    if not isinstance(value, list | tuple | set | frozenset) or not value:
+        return None
+    days: set[int] = set()
+    for item in value:
+        try:
+            iso = int(str(item).strip())
+        except ValueError:
+            return None
+        if iso not in range(1, 8):
+            return None
+        days.add(iso - 1)
+    return frozenset(days)
+
+
+def schedule_from(settings: Mapping[str, Any]) -> Schedule:
+    """The clinic's week from its settings, DEFAULT_SCHEDULE where unset."""
+    base = DEFAULT_SCHEDULE
+    bad: list[str] = []
+
+    start = base.work_start
+    if "work_start" in settings:
+        parsed = _parse_time(settings["work_start"])
+        if parsed is None:
+            bad.append("work_start")
+        else:
+            start = parsed
+    end = base.work_end
+    if "work_end" in settings:
+        parsed = _parse_time(settings["work_end"])
+        if parsed is None:
+            bad.append("work_end")
+        else:
+            end = parsed
+    if start >= end:
+        bad.append("work_start>=work_end")
+        start, end = base.work_start, base.work_end
+
+    minutes = base.slot_minutes
+    if "slot_minutes" in settings:
+        raw = settings["slot_minutes"]
+        if isinstance(raw, bool) or not isinstance(raw, int | str):
+            bad.append("slot_minutes")
+        else:
+            try:
+                candidate = int(str(raw).strip())
+            except ValueError:
+                candidate = -1
+            if candidate in _SLOT_MINUTES_RANGE:
+                minutes = candidate
+            else:
+                bad.append("slot_minutes")
+
+    days = base.work_days
+    if "work_days" in settings:
+        parsed_days = _parse_days(settings["work_days"])
+        if parsed_days is None:
+            bad.append("work_days")
+        else:
+            days = parsed_days
+
+    if bad:
+        logger.warning("schedule_setting_ignored", extra={"fields": bad})
+    return Schedule(slot_minutes=minutes, work_start=start, work_end=end, work_days=days)
+
+
+def schedule_for(tenant: Tenant | None) -> Schedule:
+    return schedule_from(tenant.settings or {}) if tenant is not None else DEFAULT_SCHEDULE
+
+
+async def schedule(repo: AppointmentRepository) -> Schedule:
+    """The current tenant's week."""
+    return schedule_for(await repo.session.get(Tenant, get_current_tenant()))
+
+
 # Used when a booking names no doctor at all. The clinic's real clinicians
 # now live in the doctors table (app.models.doctor), so this is no longer a
 # stand-in for "multi-doctor support does not exist" — it is the fallback for
@@ -116,10 +246,10 @@ def _to_local(scheduled_at: datetime) -> datetime:
     return scheduled_at.astimezone(CLINIC_TIMEZONE)
 
 
-def is_within_working_hours(scheduled_at: datetime) -> bool:
+def is_within_working_hours(scheduled_at: datetime, schedule: Schedule = DEFAULT_SCHEDULE) -> bool:
     """Whether scheduled_at (any tz) lands on a bookable slot: inside
-    [WORK_START, WORK_END) local clinic time, and aligned to the
-    SLOT_MINUTES grid measured from WORK_START.
+    [work_start, work_end) local clinic time, and aligned to the
+    slot_minutes grid measured from work_start.
 
     A time that's merely *inside* working hours but off-grid (e.g. 9:17) is
     not a valid slot — the bot/dashboard only ever offer grid-aligned times,
@@ -127,19 +257,17 @@ def is_within_working_hours(scheduled_at: datetime) -> bool:
     wrong.
     """
     local = _to_local(scheduled_at)
-    if local.weekday() not in WORK_DAYS:
-        return False
-    if not (WORK_START <= local.time() < WORK_END):
+    if not schedule.is_open(local):
         return False
     if local.second or local.microsecond:
         return False
     minutes_since_open = (local.hour * 60 + local.minute) - (
-        WORK_START.hour * 60 + WORK_START.minute
+        schedule.work_start.hour * 60 + schedule.work_start.minute
     )
-    return minutes_since_open % SLOT_MINUTES == 0
+    return minutes_since_open % schedule.slot_minutes == 0
 
 
-def day_slots(local_date: date) -> Iterator[datetime]:
+def day_slots(local_date: date, schedule: Schedule = DEFAULT_SCHEDULE) -> Iterator[datetime]:
     """Every bookable local slot start on local_date, tz-aware in CLINIC_TIMEZONE.
 
     Public because app.services.booking walks the same grid to list what is
@@ -147,27 +275,20 @@ def day_slots(local_date: date) -> Iterator[datetime]:
     times a patient is offered cannot drift from the times that can be
     booked.
     """
-    if local_date.weekday() not in WORK_DAYS:
-        return
-    current = datetime.combine(local_date, WORK_START, tzinfo=CLINIC_TIMEZONE)
-    end = datetime.combine(local_date, WORK_END, tzinfo=CLINIC_TIMEZONE)
-    step = timedelta(minutes=SLOT_MINUTES)
-    while current < end:
-        yield current
-        current += step
+    return schedule.day_slots(local_date)
 
 
-def _first_slot_on_or_after(local_dt: datetime) -> datetime:
+def _first_slot_on_or_after(local_dt: datetime, schedule: Schedule) -> datetime:
     """The first grid-aligned local slot start that is >= local_dt — rolls
     to the next day's opening slot if local_dt is after today's last slot.
     """
-    for slot in day_slots(local_dt.date()):
+    for slot in schedule.day_slots(local_dt.date()):
         if slot >= local_dt:
             return slot
     # The next working day's opening slot -- not simply tomorrow's, which on
     # a Saturday evening is a Sunday with no slots at all.
     for offset in range(1, 8):
-        opening = next(iter(day_slots(local_dt.date() + timedelta(days=offset))), None)
+        opening = next(iter(schedule.day_slots(local_dt.date() + timedelta(days=offset))), None)
         if opening is not None:
             return opening
     raise ValueError("no working day in the coming week")
@@ -231,7 +352,7 @@ async def check_availability(
     and the insert. That race is resolved by the DB's partial unique index,
     not by this function.
     """
-    if not is_within_working_hours(scheduled_at):
+    if not is_within_working_hours(scheduled_at, await schedule(repo)):
         return False
     return len(await repo.list_active_at(scheduled_at)) < capacity
 
@@ -249,13 +370,14 @@ async def find_next_free_slot(
     Fetches the whole window's busy slots in a single query, then walks the
     local slot grid in memory — not one query per candidate slot.
     """
-    local_start = _first_slot_on_or_after(_to_local(from_datetime))
+    week = await schedule(repo)
+    local_start = _first_slot_on_or_after(_to_local(from_datetime), week)
     last_day = local_start.date() + timedelta(days=horizon_days)
-    # Bounded by the *end* of the last day checked (WORK_END), not
+    # Bounded by the *end* of the last day checked (work_end), not
     # local_start's time-of-day N days out — otherwise the busy-set query
     # would cut off mid-afternoon on the last day and a real booking late in
     # the horizon could be missed, making an actually-taken slot look free.
-    window_end_local = datetime.combine(last_day, WORK_END, tzinfo=CLINIC_TIMEZONE)
+    window_end_local = datetime.combine(last_day, week.work_end, tzinfo=CLINIC_TIMEZONE)
 
     # Counted, not collected into a set: a slot is full only once every
     # doctor in it is taken.
@@ -271,7 +393,7 @@ async def find_next_free_slot(
         day = local_start.date() + timedelta(days=day_offset)
         if day in closed:
             continue
-        for slot in day_slots(day):
+        for slot in week.day_slots(day):
             if slot < local_start:
                 continue
             candidate_utc = slot.astimezone(UTC)
@@ -311,7 +433,7 @@ async def create_appointment(
     """
     if user_id is None and not patient_name:
         raise MissingPatientIdentityError()
-    if not is_within_working_hours(scheduled_at):
+    if not is_within_working_hours(scheduled_at, await schedule(repo)):
         raise OutsideWorkingHoursError(scheduled_at)
     if _to_local(scheduled_at).date() in await days_off(repo):
         raise DoctorDayOffError(scheduled_at)

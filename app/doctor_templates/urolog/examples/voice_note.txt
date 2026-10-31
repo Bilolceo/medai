@@ -1,0 +1,4 @@
+Ovozli xabar
+
+Bemor: [ovozli xabar]
+Admin: Ovozli xabarni eshita olmayman, yozib yuboring.

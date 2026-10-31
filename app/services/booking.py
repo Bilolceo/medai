@@ -50,13 +50,14 @@ from app.repositories.appointment import AppointmentRepository
 from app.repositories.doctor import DoctorRepository
 from app.services.appointment import (
     CLINIC_TIMEZONE,
-    SLOT_MINUTES,
+    DEFAULT_SCHEDULE,
+    Schedule,
     SlotAlreadyBookedError,
     assign_doctor,
     create_appointment,
-    day_slots,
     days_off,
     is_within_working_hours,
+    schedule,
 )
 from app.services.patient_profile import looks_like_a_name, normalise_phone
 
@@ -170,12 +171,13 @@ async def free_slots(
     )
 
     closed = await days_off(repo)
+    week = await schedule(repo)
     slots: list[datetime] = []
     for day_offset in range(horizon_days + 1):
         day = local_now.date() + timedelta(days=day_offset)
         if day in closed:
             continue
-        for slot in day_slots(day):
+        for slot in week.day_slots(day):
             # Far enough ahead to be kept: offering a slot that started ten
             # minutes ago is how a patient ends up told to come at a time
             # that has already passed, and offering one that starts in two
@@ -208,7 +210,7 @@ def _day_label(slot: datetime, local_now: datetime) -> str:
     return f"{named} — {dated}" if named else dated
 
 
-def render(slots: Sequence[datetime], now: datetime) -> str:
+def render(slots: Sequence[datetime], now: datetime, schedule: Schedule = DEFAULT_SCHEDULE) -> str:
     """The free slots as a prompt section, in clinic-local time."""
     local_now = now.astimezone(CLINIC_TIMEZONE)
     header = (
@@ -224,7 +226,7 @@ def render(slots: Sequence[datetime], now: datetime) -> str:
         by_day.setdefault(_day_label(local, local_now), []).append(f"{local:%H:%M}")
 
     lines = [f"- {day}: {', '.join(times)}" for day, times in by_day.items()]
-    return f"{header}\n- Free slots, {SLOT_MINUTES} minutes each:\n" + "\n".join(lines)
+    return f"{header}\n- Free slots, {schedule.slot_minutes} minutes each:\n" + "\n".join(lines)
 
 
 def extract(reply: str) -> tuple[str, datetime | None, str | None]:
@@ -374,10 +376,12 @@ async def settle(
 
     # Re-checked here because the model can write any time into a marker, and
     # a booking moved (below) skips create_appointment's own checks. A closed
-    # day, a Sunday or a time off the 20-minute grid is
+    # day, a day off the clinic's week or a time off its slot grid is
     # answered as a lost slot -- the patient is asked again rather than told
     # they are booked.
-    if not is_within_working_hours(slot) or slot.date() in await days_off(session_repo):
+    if not is_within_working_hours(slot, await schedule(session_repo)) or slot.date() in (
+        await days_off(session_repo)
+    ):
         logger.warning("booking_slot_refused conversation_id=%s slot=%s", conversation_id, slot)
         return text + SLOT_LOST_NOTICE, None
 

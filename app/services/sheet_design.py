@@ -27,7 +27,7 @@ from typing import Any
 
 import httpx
 
-from app.services.appointment import SLOT_MINUTES, WORK_END, WORK_START
+from app.services.appointment import DEFAULT_SCHEDULE, Schedule
 from app.services.sheet_months import LINE_FILL, LINE_INK, MARKER
 from app.services.sheet_pages import HOME_SHEET, localise, separator_for
 from app.services.sheet_report import REPORT_SHEET, report_layout
@@ -79,14 +79,14 @@ CARDS = (
 WEEKDAYS = ("Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Shanba", "Yakshanba")
 
 
-def slots() -> list[time]:
+def slots(week: Schedule = DEFAULT_SCHEDULE) -> list[time]:
     """09:00, 09:20, ... 16:40: the clinic's day."""
     out: list[time] = []
-    minutes = WORK_START.hour * 60 + WORK_START.minute
-    end = WORK_END.hour * 60 + WORK_END.minute
+    minutes = week.work_start.hour * 60 + week.work_start.minute
+    end = week.work_end.hour * 60 + week.work_end.minute
     while minutes < end:
         out.append(time(minutes // 60, minutes % 60))
-        minutes += SLOT_MINUTES
+        minutes += week.slot_minutes
     return out
 
 
@@ -94,11 +94,11 @@ def _fraction(at: time) -> float:
     return (at.hour * 60 + at.minute) / (24 * 60)
 
 
-def _per_day() -> int:
-    return 24 * 60 // SLOT_MINUTES
+def _per_day(week: Schedule = DEFAULT_SCHEDULE) -> int:
+    return 24 * 60 // week.slot_minutes
 
 
-def _in_slot(row: int) -> str:
+def _in_slot(row: int, week: Schedule = DEFAULT_SCHEDULE) -> str:
     """Qabullar rows booked on the chosen day, into this row's slot.
 
     A booking at an odd minute (an operator typing 15:10) falls into the slot
@@ -109,13 +109,17 @@ def _in_slot(row: int) -> str:
         f"{book}!$C$2:$C=${DATE_CELL[0]}${DATE_CELL[1:]},"
         # 1/10000, not 0.0001: on a ru_RU sheet the decimal mark is a comma
         # and "0.0001" is a parse error (#ERROR! in every slot, 2026-10-16).
-        f"IFERROR(INT({book}!$D$2:$D*{_per_day()}+1/10000),-1)=ROUND($B{row}*{_per_day()})"
+        f"IFERROR(INT({book}!$D$2:$D*{_per_day(week)}+1/10000),-1)"
+        f"=ROUND($B{row}*{_per_day(week)})"
     )
 
 
-def slot_formula(row: int, source: str) -> str:
+def slot_formula(row: int, source: str, week: Schedule = DEFAULT_SCHEDULE) -> str:
     book = f"'{APPOINTMENT_SHEET}'"
-    return f'=IFERROR(TEXTJOIN(", ",TRUE,FILTER({book}!${source}$2:${source},{_in_slot(row)})),"")'
+    return (
+        f'=IFERROR(TEXTJOIN(", ",TRUE,FILTER({book}!${source}$2:${source},'
+        f'{_in_slot(row, week)})),"")'
+    )
 
 
 def _count(status: str | None) -> str:
@@ -126,8 +130,8 @@ def _count(status: str | None) -> str:
     return f'COUNTIFS({day},{book}!$F:$F,"{status}")'
 
 
-def card_formulas() -> list[str]:
-    last = FIRST_SLOT_ROW + len(slots()) - 1
+def card_formulas(week: Schedule = DEFAULT_SCHEDULE) -> list[str]:
+    last = FIRST_SLOT_ROW + len(slots(week)) - 1
     day = f"${DATE_CELL[0]}${DATE_CELL[1:]}"
     return [
         "=" + _count(None),
@@ -143,37 +147,46 @@ def card_formulas() -> list[str]:
     ]
 
 
-def title_line() -> str:
+def title_line(week: Schedule = DEFAULT_SCHEDULE) -> str:
     day = f"${DATE_CELL[0]}${DATE_CELL[1:]}"
     names = ",".join(f'"{name}"' for name in WEEKDAYS)
-    hours = f"{WORK_START.strftime('%H:%M')} – {WORK_END.strftime('%H:%M')}"
+    # The days the clinic does not work, named: "Yakshanba — dam olish kuni".
+    closed = sorted(set(range(7)) - week.work_days)
+    off = ""
+    for weekday in closed:
+        off += (
+            f"&IF(WEEKDAY({day},2)={weekday + 1},"
+            f'"   |   {WEEKDAYS[weekday]} — dam olish kuni","")'
+        )
     return (
         f'="📅 "&CHOOSE(WEEKDAY({day},2),{names})&", "&TEXT({day},"dd.mm.yyyy")'
-        f'&"   |   ⏰ Qabul vaqti: {hours}   |   ⏱ Har bir qabul: {SLOT_MINUTES} daqiqa"'
-        f'&IF(WEEKDAY({day},2)=7,"   |   Yakshanba — dam olish kuni","")'
+        f'&"   |   ⏰ Qabul vaqti: {week.hours_text()}'
+        f'   |   ⏱ Har bir qabul: {week.slot_minutes} daqiqa"' + off
     )
 
 
-def schedule_values(separator: str) -> list[list[Any]]:
+def schedule_values(
+    separator: str, week: Schedule = DEFAULT_SCHEDULE, brand: str = ""
+) -> list[list[Any]]:
     """The tab's values from A1, formulas in the spreadsheet's own dialect."""
     blank = [""] * len(WIDTHS)
-    grid: list[list[Any]] = [list(blank) for _ in range(FIRST_SLOT_ROW - 1 + len(slots()))]
-    grid[1][1] = "Dr. Temur — Bemorlar Qabuli Jadvali"
+    grid: list[list[Any]] = [list(blank) for _ in range(FIRST_SLOT_ROW - 1 + len(slots(week)))]
+    grid[1][1] = f"{brand} — Bemorlar Qabuli Jadvali" if brand else "Bemorlar Qabuli Jadvali"
     grid[1][6] = "Kun:"
     grid[1][7] = "=TODAY()"
-    grid[2][1] = localise(title_line(), separator)
+    grid[2][1] = localise(title_line(week), separator)
     for index, (name, _) in enumerate(CARDS):
         grid[3][1 + index] = name
-    for index, formula in enumerate(card_formulas()):
+    for index, formula in enumerate(card_formulas(week)):
         grid[4][1 + index] = localise(formula, separator)
     for index, name in enumerate(HEADER):
         grid[5][1 + index] = name
-    for offset, at in enumerate(slots()):
+    for offset, at in enumerate(slots(week)):
         row = FIRST_SLOT_ROW + offset
         line = grid[row - 1]
         line[1] = _fraction(at)
         for index, source in enumerate(SOURCE):
-            line[2 + index] = localise(slot_formula(row, source), separator)
+            line[2 + index] = localise(slot_formula(row, source, week), separator)
     return grid
 
 
@@ -243,9 +256,11 @@ def _status_rule(gid: int, rows: dict[str, int], status: str) -> dict[str, Any]:
     }
 
 
-def schedule_requests(gid: int, separator: str) -> list[dict[str, Any]]:
+def schedule_requests(
+    gid: int, separator: str, week: Schedule = DEFAULT_SCHEDULE
+) -> list[dict[str, Any]]:
     """Every format, size, rule and guard the tab has."""
-    count = len(slots())
+    count = len(slots(week))
     first = FIRST_SLOT_ROW - 1
     requests: list[dict[str, Any]] = [
         {
@@ -407,7 +422,7 @@ def schedule_requests(gid: int, separator: str) -> list[dict[str, Any]]:
                                 {
                                     "userEnteredValue": localise(
                                         f"=AND($H$2=TODAY(),ROUND($B{FIRST_SLOT_ROW}"
-                                        f"*{_per_day()})=INT(MOD(NOW(),1)*{_per_day()}))",
+                                        f"*{_per_day(week)})=INT(MOD(NOW(),1)*{_per_day(week)}))",
                                         separator,
                                     )
                                 }
@@ -456,8 +471,16 @@ def marker_requests(gid: int, rows: list[int]) -> list[dict[str, Any]]:
 
 
 class SheetDesign:
-    def __init__(self, mirror: SheetsMirror | None = None) -> None:
+    def __init__(
+        self,
+        mirror: SheetsMirror | None = None,
+        *,
+        week: Schedule = DEFAULT_SCHEDULE,
+        brand: str = "",
+    ) -> None:
         self._mirror = mirror or SheetsMirror()
+        self._week = week
+        self._brand = brand
 
     async def _batch(self, client: httpx.AsyncClient, requests: list[dict[str, Any]]) -> None:
         if requests:
@@ -523,7 +546,7 @@ class SheetDesign:
                                 "properties": {
                                     "title": SCHEDULE_SHEET,
                                     "gridProperties": {
-                                        "rowCount": FIRST_SLOT_ROW + len(slots()) + 10,
+                                        "rowCount": FIRST_SLOT_ROW + len(slots(self._week)) + 10,
                                         "columnCount": len(WIDTHS) + 2,
                                     },
                                 }
@@ -538,9 +561,9 @@ class SheetDesign:
             "PUT",
             f"/values/'{SCHEDULE_SHEET}'!A1",
             params={"valueInputOption": "USER_ENTERED"},
-            json={"values": schedule_values(separator)},
+            json={"values": schedule_values(separator, self._week, self._brand)},
         )
-        await self._batch(client, schedule_requests(gid, separator))
+        await self._batch(client, schedule_requests(gid, separator, self._week))
 
     async def _report(self, client: httpx.AsyncClient, sheet: dict[str, Any]) -> None:
         gid = int(sheet["properties"]["sheetId"])
@@ -584,7 +607,18 @@ class SheetDesign:
         )
 
 
+async def _main() -> None:
+    from app.core.db import db_session
+    from app.services import branding
+    from app.services.appointment import schedule_for
+
+    async with db_session() as session:
+        tenant = await branding.the_tenant(session)
+        week, brand = schedule_for(tenant), branding.title(tenant)
+    await SheetDesign(week=week, brand=brand).apply()
+
+
 if __name__ == "__main__":  # pragma: no cover - a command, run by hand
     logging.basicConfig(level=logging.INFO)
-    asyncio.run(SheetDesign().apply())
+    asyncio.run(_main())
     print("done")

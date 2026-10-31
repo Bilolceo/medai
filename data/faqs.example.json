@@ -1,0 +1,17 @@
+[
+  {
+    "question": "Qabul narxi qancha?",
+    "answer": "Qabul narxini doktor ko'rikdan keyin aytadi. Aniq ma'lumot uchun klinika raqamlariga murojaat qiling.",
+    "category": "narx"
+  },
+  {
+    "question": "Manzilingiz qayerda?",
+    "answer": "Manzil: <shaharingiz, ko'cha, uy>. Mo'ljal: <mo'ljal>.",
+    "category": "manzil"
+  },
+  {
+    "question": "Ish vaqtingiz qanday?",
+    "answer": "Dushanbadan shanbagacha 09:00 dan 17:00 gacha. Yakshanba dam olish kuni.",
+    "category": "ish vaqti"
+  }
+]

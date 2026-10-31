@@ -28,6 +28,9 @@ from app.services.login_rate_limit import (
 )
 
 templates = Jinja2Templates(directory="app/templates")
+# The sign-in page is shown before anybody is logged in, so it carries the
+# product's name rather than a doctor's (see app.services.branding).
+templates.env.globals["product_name"] = get_settings().product_name
 
 router = APIRouter()
 

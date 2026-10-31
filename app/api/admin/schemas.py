@@ -7,9 +7,10 @@ meant to publish, like a channel's credentials.
 """
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, time
+from typing import Self
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.core.roles import Permission
 from app.models.appointment import AppointmentStatus
@@ -33,6 +34,10 @@ class SessionInfo(BaseModel):
     role: str
     tenant_id: uuid.UUID
     tenant_name: str
+    # The name at the top of the dashboard and the line under it: this
+    # doctor's own (see app.services.branding).
+    brand_title: str
+    brand_subtitle: str = ""
     # What this account may do, resolved from its role by app.core.roles.
     # Sent so the dashboard can hide a control it would only be refused for,
     # and sent as permissions rather than as a role so the mapping lives in
@@ -309,7 +314,37 @@ class TenantSettings(BaseModel):
     clinic_work_hours: str | None = None
     clinic_latitude: float | None = Field(default=None, ge=-90, le=90)
     clinic_longitude: float | None = Field(default=None, ge=-180, le=180)
+    # The doctor's name over the dashboard and the line under it.
+    brand_title: str | None = Field(default=None, max_length=80)
+    brand_subtitle: str | None = Field(default=None, max_length=80)
+    # The clinic's week, as app.services.appointment.schedule_from reads it:
+    # ISO weekday numbers (1 Monday .. 7 Sunday), "HH:MM", minutes a patient.
+    work_days: list[int] | None = Field(default=None, min_length=1, max_length=7)
+    work_start: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")
+    work_end: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")
+    slot_minutes: int | None = Field(default=None, ge=5, le=240)
     strict_rules: list[str] | None = None
+
+    @field_validator("work_days")
+    @classmethod
+    def _iso_weekdays(cls, value: list[int] | None) -> list[int] | None:
+        if value is not None and any(day not in range(1, 8) for day in value):
+            raise ValueError("work_days are ISO weekday numbers, 1 (Monday) to 7 (Sunday)")
+        return sorted(set(value)) if value is not None else None
+
+    @field_validator("work_start", "work_end")
+    @classmethod
+    def _clock_time(cls, value: str | None) -> str | None:
+        if value is not None:
+            time.fromisoformat(value)  # raises ValueError on 25:70
+        return value
+
+    @model_validator(mode="after")
+    def _opens_before_it_closes(self) -> Self:
+        if self.work_start and self.work_end and self.work_start >= self.work_end:
+            raise ValueError("work_start must be before work_end")
+        return self
+
     # The bot's persona and its example conversations, in the clinic's own
     # words (see app.services.persona). null puts the default back; for the
     # examples an empty string is a choice -- no examples -- and is kept.

@@ -1,0 +1,4 @@
+Mavzudan tashqari
+
+Bemor: Dunyoda nechta materik bor?
+Admin: Bunga javob berolmayman, men faqat <<DOCTOR_SHORT>> qabuli bo'yicha yordam beraman.

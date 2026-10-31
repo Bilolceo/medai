@@ -1,0 +1,1 @@
+Doktor qabuli (ko'rik, konsultatsiya) narxi <<PRICE_CONSULT>>. Faqat bemor qabul yoki ko'rik narxini so'raganda ayting.
