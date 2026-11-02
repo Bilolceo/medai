@@ -1156,6 +1156,9 @@
   }
   @media print { .tabbar { display: none !important; } }
 
+  /* a list that is being refetched steps back; the rows replace it when they land */
+  tbody.loading { opacity: .45; transition: opacity .15s; pointer-events: none; }
+
   /* older browsers, or "reduce transparency": solid stands in for glass */
   @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     .sidebar, .topbar, .icon-btn.bordered, button.act, a.act, label.act, .more-btn, .btn-lg.glass, label.check { background: rgba(255, 255, 255, .92); }
@@ -2413,17 +2416,32 @@ document.getElementById("chatScope").addEventListener("click", (e) => {
   loadChats().catch((err) => toast(err.message, true));
 });
 
+// The list dims the moment a filter is pressed and clears when the rows land:
+// from Tashkent each round trip to the server is ~0.4 s, and a click with no
+// visible answer for that long reads as a click that did not take.
 async function loadChats(options = {}) {
+  const list = document.getElementById("chatRows");
+  list.classList.add("loading");
+  try {
+    return await _loadChats(options);
+  } finally {
+    list.classList.remove("loading");
+  }
+}
+
+async function _loadChats(options = {}) {
   const seq = ++CHATS_SEQ;
-  await loadBotSwitch();
   markChatScope();
   const params = new URLSearchParams(LIST_PARAMS.conversations);
   if (CHAT_SEARCH) params.set("q", CHAT_SEARCH);
   params.set("limit", String(CHATS_LIMIT));
+  // The bot switch is fetched alongside the list, not before it: one round
+  // trip, not two, between the click and the rows.
   const [rows, counts, byPost] = await Promise.all([
     api("/conversations?" + params),
     settle(api("/conversations/counts"), null),
     chatScope() === "comments" ? settle(api("/conversations/by-post"), []) : [],
+    settle(loadBotSwitch(), null),
   ]);
   if (seq !== CHATS_SEQ) return;
   renderByPost(byPost);
