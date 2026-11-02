@@ -27,7 +27,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.channels.base import ChannelType
-from app.channels.instagram.client import GRAPH_API_BASE_URL, is_placeholder_credential
+from app.channels.instagram.client import (
+    GRAPH_API_BASE_URL,
+    is_facebook_token,
+    is_placeholder_credential,
+)
 from app.core.encryption import decrypt, encrypt
 from app.models.channel import Channel
 
@@ -79,6 +83,13 @@ async def refresh_instagram_tokens(
             token = decrypt(channel.credentials)
             if is_placeholder_credential(token):
                 run.skipped += 1
+                continue
+            if is_facebook_token(token):
+                # A Facebook Login token is not renewed at this endpoint: the
+                # Instagram host does not even parse it. Its long-lived form is
+                # obtained once, by exchange, when the account is connected.
+                run.skipped += 1
+                logger.info("instagram_token_refresh_skipped_facebook channel=%s", channel.id)
                 continue
             try:
                 response = await http.get(

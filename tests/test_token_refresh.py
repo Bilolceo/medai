@@ -68,6 +68,17 @@ async def test_a_channel_awaiting_its_real_token_is_left_alone() -> None:
     assert run.failed == 0
 
 
+async def test_a_facebook_login_token_is_not_sent_to_the_instagram_host() -> None:
+    """New apps get Facebook Login tokens, which graph.instagram.com cannot
+    parse: sending one would log a failed renewal every day for a token that
+    is fine."""
+    run, session = await _run(httpx.Response(400), [_channel("EAAZCTiJ5BuVkB")])
+
+    assert run.skipped == 1
+    assert run.failed == 0
+    assert session.committed is False
+
+
 @pytest.mark.parametrize(
     "reply",
     [
