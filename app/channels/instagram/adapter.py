@@ -12,7 +12,7 @@ from datetime import datetime
 from functools import lru_cache
 from typing import Any
 
-from app.channels.base import ChannelAdapter, ChannelType, DeliveryBlocked
+from app.channels.base import CHANNEL_EXTERNAL_ID, ChannelAdapter, ChannelType, DeliveryBlocked
 from app.channels.instagram.client import (
     InstagramClient,
     get_instagram_client,
@@ -40,13 +40,17 @@ class InstagramAdapter(ChannelAdapter):
         credentials: str,
         recipient_external_id: str,
         text: str,
-        # Instagram routes a reply by the recipient's id alone, so there is
-        # nothing here to carry. Accepted so the adapter satisfies the
-        # shared contract.
+        # Of the context only the channel's own id is read: a Facebook Login
+        # token has to name the account it sends from (see
+        # app.channels.instagram.client.GRAPH_FACEBOOK_BASE_URL).
         reply_context: Mapping[str, Any] | None = None,
     ) -> None:
+        sender = (reply_context or {}).get(CHANNEL_EXTERNAL_ID)
         await self._resolve_client().send_text(
-            access_token=credentials, recipient_igsid=recipient_external_id, text=text
+            access_token=credentials,
+            recipient_igsid=recipient_external_id,
+            text=text,
+            sender_igsid=str(sender) if sender else None,
         )
 
     def delivery_block_reason(

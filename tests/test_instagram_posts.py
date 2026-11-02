@@ -32,13 +32,17 @@ class PostClient(InstagramClient):
         self.fetches = 0
         self.downloads: list[str] = []
 
-    async def send_text(self, *, access_token: str, recipient_igsid: str, text: str) -> None:
+    async def send_text(
+        self, *, access_token: str, recipient_igsid: str, text: str, sender_igsid: str | None = None
+    ) -> None:
         pass
 
     async def reply_to_comment(self, *, access_token: str, comment_id: str, text: str) -> None:
         pass
 
-    async def send_private_reply(self, *, access_token: str, comment_id: str, text: str) -> None:
+    async def send_private_reply(
+        self, *, access_token: str, comment_id: str, text: str, sender_igsid: str | None = None
+    ) -> None:
         pass
 
     async def fetch_username(self, *, access_token: str, igsid: str) -> str | None:

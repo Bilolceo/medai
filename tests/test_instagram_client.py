@@ -8,6 +8,7 @@ import pytest
 from app.channels.instagram.client import (
     GraphAPIInstagramClient,
     InstagramSendError,
+    is_facebook_token,
     is_placeholder_credential,
     is_within_messaging_window,
 )
@@ -205,3 +206,87 @@ async def test_a_network_failure_is_also_just_a_missing_handle() -> None:
     client = _client_over(handler)
 
     assert await client.fetch_username(access_token="t", igsid="1") is None
+
+
+# --- which Graph host a token belongs to ---
+
+
+def _mocked(client: GraphAPIInstagramClient, handler) -> list[httpx.Request]:  # type: ignore[no-untyped-def]
+    """Both hosts answer through `handler`; the requests it saw come back."""
+    seen: list[httpx.Request] = []
+
+    def record(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return handler(request)
+
+    transport = httpx.MockTransport(record)
+    client._http = httpx.AsyncClient(base_url=client._http.base_url, transport=transport)
+    client._facebook_http = httpx.AsyncClient(
+        base_url=client._facebook_http.base_url, transport=transport
+    )
+    return seen
+
+
+def test_a_facebook_login_token_is_told_apart_by_its_prefix() -> None:
+    assert is_facebook_token("EAAZCTiJ5BuVkB...") is True
+    assert is_facebook_token("IGAAQZBn...") is False
+    assert is_facebook_token("placeholder") is False
+
+
+async def test_an_instagram_login_token_sends_as_me_on_the_instagram_host() -> None:
+    client = GraphAPIInstagramClient()
+    seen = _mocked(client, lambda r: httpx.Response(200, json={"message_id": "m"}))
+
+    await client.send_text(access_token="IGAAtoken", recipient_igsid="p1", text="salom")
+
+    [request] = seen
+    assert request.url.host == "graph.instagram.com"
+    assert request.url.path.endswith("/me/messages")
+
+
+async def test_a_facebook_login_token_sends_from_the_account_id_on_the_facebook_host() -> None:
+    """Meta issues only these to new apps. On graph.facebook.com "/me" is the
+    Facebook user, so the Instagram account is named by its id."""
+    client = GraphAPIInstagramClient()
+    seen = _mocked(client, lambda r: httpx.Response(200, json={"message_id": "m"}))
+
+    await client.send_text(
+        access_token="EAAtoken", recipient_igsid="p1", text="salom", sender_igsid="17841400000"
+    )
+    await client.send_private_reply(
+        access_token="EAAtoken", comment_id="c1", text="salom", sender_igsid="17841400000"
+    )
+    await client.fetch_username(access_token="EAAtoken", igsid="p1")
+
+    assert [r.url.host for r in seen] == ["graph.facebook.com"] * 3
+    assert seen[0].url.path.endswith("/17841400000/messages")
+    assert seen[1].url.path.endswith("/17841400000/messages")
+    assert json.loads(seen[1].content) == {
+        "recipient": {"comment_id": "c1"},
+        "message": {"text": "salom"},
+    }
+
+
+async def test_a_facebook_login_token_without_the_account_id_is_refused_not_misrouted() -> None:
+    client = GraphAPIInstagramClient()
+    seen = _mocked(client, lambda r: httpx.Response(200, json={}))
+
+    with pytest.raises(InstagramSendError, match="account id"):
+        await client.send_text(access_token="EAAtoken", recipient_igsid="p1", text="salom")
+    with pytest.raises(InstagramSendError, match="account id"):
+        await client.send_text(
+            access_token="EAAtoken", recipient_igsid="p1", text="salom", sender_igsid="me"
+        )
+    assert seen == []
+
+
+async def test_the_sender_id_is_also_honoured_on_the_instagram_host() -> None:
+    client = GraphAPIInstagramClient()
+    seen = _mocked(client, lambda r: httpx.Response(200, json={"message_id": "m"}))
+
+    await client.send_text(
+        access_token="IGAAtoken", recipient_igsid="p1", text="salom", sender_igsid="1784"
+    )
+
+    assert seen[0].url.host == "graph.instagram.com"
+    assert seen[0].url.path.endswith("/1784/messages")

@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.channels  # noqa: F401  - registers the built-in adapters
 from app.channels.base import (
+    CHANNEL_EXTERNAL_ID,
     ChannelAdapter,
     ChannelType,
     DeliveryBlocked,
@@ -143,7 +144,10 @@ async def test_send_reply_dispatches_on_the_channels_type(
         )
 
     assert delivered_over == "telegram"
-    assert adapter.calls == [("tg-bot-token", "chat-42", "Assalom alaykum", None)]
+    # The channel's own id rides along for adapters that must name the sender.
+    assert adapter.calls == [
+        ("tg-bot-token", "chat-42", "Assalom alaykum", {CHANNEL_EXTERNAL_ID: channel.external_id})
+    ]
 
 
 async def test_send_reply_returns_none_when_the_platform_blocks_it(

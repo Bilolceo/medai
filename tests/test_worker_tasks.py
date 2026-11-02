@@ -52,7 +52,9 @@ class FakeInstagramClient(InstagramClient):
         self.comment_replies: list[tuple[str, str]] = []
         self.private_replies: list[tuple[str, str]] = []
 
-    async def send_text(self, *, access_token: str, recipient_igsid: str, text: str) -> None:
+    async def send_text(
+        self, *, access_token: str, recipient_igsid: str, text: str, sender_igsid: str | None = None
+    ) -> None:
         self.calls.append((access_token, recipient_igsid, text))
 
     async def fetch_username(self, *, access_token: str, igsid: str) -> str | None:
@@ -63,7 +65,9 @@ class FakeInstagramClient(InstagramClient):
     async def reply_to_comment(self, *, access_token: str, comment_id: str, text: str) -> None:
         self.comment_replies.append((comment_id, text))
 
-    async def send_private_reply(self, *, access_token: str, comment_id: str, text: str) -> None:
+    async def send_private_reply(
+        self, *, access_token: str, comment_id: str, text: str, sender_igsid: str | None = None
+    ) -> None:
         self.private_replies.append((comment_id, text))
 
 

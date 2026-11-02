@@ -352,7 +352,9 @@ class _FakeInstagramClient(InstagramClient):
     def __init__(self) -> None:
         self.calls: list[tuple[str, str]] = []
 
-    async def send_text(self, *, access_token: str, recipient_igsid: str, text: str) -> None:
+    async def send_text(
+        self, *, access_token: str, recipient_igsid: str, text: str, sender_igsid: str | None = None
+    ) -> None:
         self.calls.append((recipient_igsid, text))
 
     async def fetch_username(self, *, access_token: str, igsid: str) -> str | None:
@@ -361,7 +363,9 @@ class _FakeInstagramClient(InstagramClient):
     async def reply_to_comment(self, *, access_token: str, comment_id: str, text: str) -> None:
         raise NotImplementedError
 
-    async def send_private_reply(self, *, access_token: str, comment_id: str, text: str) -> None:
+    async def send_private_reply(
+        self, *, access_token: str, comment_id: str, text: str, sender_igsid: str | None = None
+    ) -> None:
         raise NotImplementedError
 
 

@@ -23,7 +23,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.channels.base import ChannelAdapter, get_adapter
+from app.channels.base import CHANNEL_EXTERNAL_ID, ChannelAdapter, get_adapter
 from app.core.encryption import decrypt
 from app.repositories.channel import ChannelRepository
 
@@ -95,7 +95,9 @@ async def send_reply(
         credentials=credentials,
         recipient_external_id=recipient_external_id,
         text=text,
-        reply_context=reply_context,
+        # The channel's own platform id rides along with whatever the caller
+        # gave: a platform that must name the sender finds it here.
+        reply_context={**(reply_context or {}), CHANNEL_EXTERNAL_ID: channel.external_id},
     )
     logger.info(
         "reply_sent",

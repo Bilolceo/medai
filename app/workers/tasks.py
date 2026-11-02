@@ -27,7 +27,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # separate process from the web app, so it must do this itself.
 from app import channels  # noqa: F401  - importing it registers the adapters
 from app.channels.base import ChannelAdapter
-from app.channels.instagram.client import InstagramClient, get_instagram_client
+from app.channels.instagram.client import (
+    InstagramClient,
+    get_instagram_client,
+    is_facebook_token,
+)
 from app.core.config import get_settings
 from app.core.db import db_session
 from app.core.encryption import decrypt
@@ -846,7 +850,11 @@ async def apply_owner_rule(
                 return
             instagram = client or get_instagram_client()
             access_token = decrypt(channel.credentials)
-            username = await instagram.fetch_username(access_token=access_token, igsid="me")
+            username = await instagram.fetch_username(
+                access_token=access_token,
+                # On the Facebook host "me" is the Facebook user, not the account.
+                igsid=channel.external_id if is_facebook_token(access_token) else "me",
+            )
             recipient = await instagram.fetch_username(
                 access_token=access_token, igsid=recipient_external_id
             )
@@ -1763,7 +1771,10 @@ async def answer_comment(
             answered_in_direct = False
             try:
                 await instagram.send_private_reply(
-                    access_token=access_token, comment_id=comment_id, text=reply
+                    access_token=access_token,
+                    comment_id=comment_id,
+                    text=reply,
+                    sender_igsid=channel.external_id,
                 )
                 answered_in_direct = True
             except Exception:  # noqa: BLE001 - the public line must still go out

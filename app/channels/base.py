@@ -19,6 +19,10 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any, ClassVar
 
+# The reply_context key under which app.services.delivery passes the
+# channel's own platform id (Channel.external_id) to every adapter.
+CHANNEL_EXTERNAL_ID = "channel_external_id"
+
 
 class ChannelType(StrEnum):
     """The values Channel.type may hold.
@@ -79,6 +83,10 @@ class ChannelAdapter(ABC):
         reply_context: Mapping[str, Any] | None = None,
     ) -> None:
         """Deliver `text` to recipient_external_id on this platform.
+
+        `reply_context` always carries CHANNEL_EXTERNAL_ID, the channel's own
+        id on its platform (app.services.delivery puts it there), for a
+        platform that has to name the sender as well as the recipient.
 
         `credentials` is the decrypted value from Channel.credentials, and
         `recipient_external_id` the platform's own id for the patient (an
