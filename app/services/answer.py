@@ -418,9 +418,12 @@ async def generate_answer(
         script=script,
     )
     # The rules' prices are said only to a patient asking one; any other
-    # message is answered with no sum at all.
+    # message is answered with no sum at all -- except the sums of a rule
+    # that says they are given unasked, as a step of a flow.
     previous = [turn["content"] for turn in history or [] if turn.get("role") == "user"]
-    quotable = rules if price_guard.asks_price(user_message, previous) else []
+    quotable = (
+        rules if price_guard.asks_price(user_message, previous) else price_guard.unprompted(rules)
+    )
     reply = await _enforce_price(
         reply,
         provider=provider,

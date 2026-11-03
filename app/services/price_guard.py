@@ -129,6 +129,18 @@ def allowed(rules: Iterable[str]) -> set[Decimal]:
     return {value for rule in rules for _, value in amounts(rule)}
 
 
+# A rule that says its price is given without being asked -- "so'ralmasa
+# ham aytiladi" -- is one the administrator quotes as part of a flow (an
+# online consultation's price once a time is agreed), not only in answer to
+# "narxi qancha?". Every other rule's sums stay behind the question.
+_UNPROMPTED = re.compile(r"so['‘ʻ’`]?ralmasa\s+ham|сўралмаса\s+ҳам|без\s+вопроса", re.IGNORECASE)
+
+
+def unprompted(rules: Iterable[str]) -> list[str]:
+    """The rules whose sums may be said to a patient who did not ask a price."""
+    return [rule for rule in rules if _UNPROMPTED.search(rule)]
+
+
 def check(reply: str, rules: Sequence[str]) -> list[str]:
     """The sums in `reply` that no rule gives, as written. Empty when fine."""
     permitted = allowed(rules)

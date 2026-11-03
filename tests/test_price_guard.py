@@ -204,3 +204,19 @@ def test_a_follow_up_to_a_follow_up_still_asks_the_price() -> None:
     assert price_guard.asks_price("operatsiyachi", ["narxi qancha", "qabul"])
     assert price_guard.asks_price("implant-chi", ["narxi qancha", "qabul", "operatsiyachi"])
     assert not price_guard.asks_price("rahmat", ["narxi qancha", "qabul"])
+
+
+def test_only_a_rule_that_says_so_gives_its_price_unasked() -> None:
+    """The online consultation's price is a step of its flow, said once a
+    time is agreed whether or not the patient asked; every other rule's
+    sums stay behind the question."""
+    flow = (
+        "Vaqt kelishilgach narx so'ralmasa ham aytiladi: onlayn konsultatsiya "
+        "500 000 so'm, oldindan to'lov 250 000 so'm."
+    )
+    plain = "Qabul 330 000 so'm, faqat so'ralganda."
+    assert price_guard.unprompted([plain, flow]) == [flow]
+    assert price_guard.check("Narxi 500 000 so'm, 50% = 250 000 so'm.", [flow]) == []
+    assert price_guard.check("Qabul 330 000 so'm.", price_guard.unprompted([plain, flow])) == [
+        "330 000 so'm"
+    ]
