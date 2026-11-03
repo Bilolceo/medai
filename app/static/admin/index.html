@@ -4453,12 +4453,33 @@ const LOADERS = {
 // hash rather than in storage so it also survives being bookmarked or pasted
 // to a colleague, and so two tabs can sit on two different screens.
 //
-// replaceState, not a new history entry per click: the back button should
-// leave the dashboard, not walk back through every tab visited.
+// Every tab or conversation opened is a history entry of its own, so the back
+// button -- and the back swipe on a phone or trackpad -- returns to the screen
+// before it instead of leaving the dashboard for the login page. The first
+// screen after loading replaces the bare "/admin/" entry rather than adding to
+// it, and while a back or forward step is being applied the address bar
+// already holds the target, so the screen only catches up with it.
+let APPLYING_HISTORY = false;
 function writeLocation(tab, chatId) {
   const hash = "#" + tab + (chatId ? "/" + chatId : "");
-  if (window.location.hash !== hash) history.replaceState(null, "", hash);
+  if (window.location.hash === hash) return;
+  if (APPLYING_HISTORY || !window.location.hash) history.replaceState(null, "", hash);
+  else history.pushState(null, "", hash);
 }
+
+window.addEventListener("popstate", async () => {
+  APPLYING_HISTORY = true;
+  try {
+    const where = readLocation();
+    await showTab(where.tab);
+    if (where.tab === "chats" && where.chatId) await openThread(where.chatId).catch(() => closeThread());
+    else if (CURRENT_CHAT !== null) closeThread();
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    APPLYING_HISTORY = false;
+  }
+});
 
 function readLocation() {
   const [tab, chatId] = window.location.hash.replace(/^#/, "").split("/");
