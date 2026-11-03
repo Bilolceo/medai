@@ -104,6 +104,9 @@
       "file": "rules/no_empathy_phrases.txt"
     },
     {
+      "file": "rules/plain_style.txt"
+    },
+    {
       "file": "rules/size_words.txt"
     },
     {
