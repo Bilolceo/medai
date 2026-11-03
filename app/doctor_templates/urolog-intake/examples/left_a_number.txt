@@ -1,0 +1,6 @@
+Bemor raqam qoldirsa
+
+Bemor: +998 90 123 45 67
+Admin: Rahmat. Qaysi vaqtda qo'ng'iroq qilsak qulay?
+Bemor: Kechki 7 da
+Admin: Bo'ldi, bugun kechki 7 da qo'ng'iroq qilishadi.

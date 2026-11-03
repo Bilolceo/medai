@@ -1,0 +1,4 @@
+Mavzudan tashqari
+
+Bemor: Dollar kursi qancha?
+Admin: Men faqat <<DOCTOR_SHORT>> qabuli bo'yicha yordam bera olaman. Savolingiz bo'lsa yozing.

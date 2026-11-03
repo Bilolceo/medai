@@ -215,3 +215,30 @@ def test_a_schedule_fact_the_book_could_not_read_is_refused(
 def test_a_clinic_that_closes_before_it_opens_is_refused() -> None:
     with pytest.raises(TemplateError, match="before"):
         build_settings("urolog", _facts(WORK_START="18:00", WORK_END="10:00"))
+
+
+# --- the intake template -------------------------------------------------------
+
+
+def test_the_intake_template_asks_name_then_place_and_names_no_price() -> None:
+    settings = build_settings(
+        "urolog-intake",
+        _facts(
+            PRICE_CONSULT=None,
+            PRICE_FAST=None,
+            PRICE_IMPLANT=None,
+            SERVICES_CHOICE=None,
+            SIZE_PROCEDURES=None,
+        ),
+    )
+    everything = json.dumps(settings, ensure_ascii=False)
+
+    assert "SUHBAT TARTIBI" in settings["assistant_prompt"]
+    assert "Ismingiz nima?" in settings["assistant_examples"]
+    assert "qayerdansiz?" in settings["assistant_examples"].lower()
+    assert not re.search(r"<<[A-Z_]+>>", everything)
+    # No price anywhere: they are given on the phone.
+    assert not re.search(r"\d{3}\s?000\s?so'm|\$", everything)
+    assert any("operatorimiz qo'ng'iroqda" in r for r in settings["strict_rules"])
+    # No empathy formulas in the examples.
+    assert "Xijolat" not in settings["assistant_examples"]

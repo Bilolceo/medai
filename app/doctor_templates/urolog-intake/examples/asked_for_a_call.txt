@@ -1,0 +1,4 @@
+Bemor qo'ng'iroq so'rasa
+
+Bemor: Menga qo'ng'iroq qilinglar
+Admin: Albatta. Ismingiz nima va qaysi raqamga, qaysi vaqtda qo'ng'iroq qilsak qulay?

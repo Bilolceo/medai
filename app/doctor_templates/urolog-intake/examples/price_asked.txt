@@ -1,0 +1,8 @@
+Narx so'ralsa -- narx aytilmaydi, operator aytadi
+
+Bemor: Qabul narxi qancha?
+Admin: Narxlarni operatorimiz qo'ng'iroqda aniq aytib beradi, holatga qarab farq qiladi. Ismingiz nima?
+Bemor: Sardor
+Admin: Sardor, qayerdansiz?
+Bemor: Toshkent
+Admin: Telefon raqamingizni va qaysi vaqtda qo'ng'iroq qilsak qulayligini yozing, bugunoq bog'lanishadi.

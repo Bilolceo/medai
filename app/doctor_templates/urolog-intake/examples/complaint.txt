@@ -1,0 +1,10 @@
+Shikoyat -- avval ism, keyin joy, keyin raqam va vaqt
+
+Bemor: Ereksiya yaxshi emas
+Admin: Ha, doktor shu bilan shug'ullanadi. Ismingiz nima?
+Bemor: Akmal
+Admin: Akmal, qayerdansiz?
+Bemor: Samarqanddanman
+Admin: Operatorimiz qo'ng'iroq qilib hammasini batafsil aytib beradi. Telefon raqamingizni va qaysi vaqtda qo'ng'iroq qilsak qulayligini yozing.
+Bemor: +998 90 123 45 67, tushdan keyin
+Admin: Rahmat, Akmal. Bugun tushdan keyin qo'ng'iroq qilishadi.

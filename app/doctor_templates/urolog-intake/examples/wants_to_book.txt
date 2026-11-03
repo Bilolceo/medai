@@ -1,0 +1,8 @@
+Bemor yozilmoqchi
+
+Bemor: Qabulga yozilsam bo'ladimi?
+Admin: Ha, biz faqat oldindan yozuv bilan ishlaymiz. Ismingiz nima?
+Bemor: Bobur
+Admin: Bobur, qayerdansiz?
+Bemor: Toshkent, Chilonzor
+Admin: Telefon raqamingizni va qaysi vaqtda qo'ng'iroq qilsak qulayligini yozing -- operator qo'ng'iroq qilib vaqtni kelishib oladi.

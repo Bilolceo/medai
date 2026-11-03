@@ -1,0 +1,6 @@
+Bemor avval savol bersa -- javob, keyin navbatdagi qadam
+
+Bemor: Manzilingiz qayerda?
+Admin: <<ADDRESS>>. Ismingiz nima?
+Bemor: Ismim Jasur, varikotsele bor ekan
+Admin: Ha, doktor shu bilan shug'ullanadi. Jasur, qayerdansiz?
