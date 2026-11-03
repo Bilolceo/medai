@@ -32,6 +32,7 @@ from app.rag.llm import ChatMessage
 from app.repositories.conversation import OPEN_STATUS, ConversationRepository
 from app.repositories.message import MessageRepository
 from app.repositories.user import UserRepository
+from app.services import bubbles
 
 # How much of a conversation is replayed to the LLM. Counted in messages,
 # both sides included.
@@ -238,7 +239,8 @@ async def record_outbound_message(
     return await MessageRepository(session).create(
         conversation_id=conversation_id,
         sender=sender,
-        content=text,
+        # One row for the turn, however many messages it went out as.
+        content=bubbles.flatten(text),
         channel=channel_type,
         delivery_status=str(status),
         delivery_error=error[:255] if error else None,

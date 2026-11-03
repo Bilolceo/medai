@@ -224,6 +224,7 @@ def test_the_intake_template_asks_name_then_place_and_names_no_price() -> None:
     settings = build_settings(
         "urolog-intake",
         _facts(
+            ADMIN_NAME="Dildora",
             PRICE_CONSULT=None,
             PRICE_FAST=None,
             PRICE_IMPLANT=None,
@@ -234,6 +235,10 @@ def test_the_intake_template_asks_name_then_place_and_names_no_price() -> None:
     everything = json.dumps(settings, ensure_ascii=False)
 
     assert "SUHBAT TARTIBI" in settings["assistant_prompt"]
+    # The administrator is named when the clinic names one, and the
+    # introduction is followed by a message break so the question arrives
+    # as a bubble of its own.
+    assert "administratoriman, ismim Dildora. |||" in settings["assistant_examples"]
     assert "Ismingiz nima?" in settings["assistant_examples"]
     assert "qayerdansiz?" in settings["assistant_examples"].lower()
     assert not re.search(r"<<[A-Z_]+>>", everything)

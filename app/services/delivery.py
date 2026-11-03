@@ -15,6 +15,7 @@ wrong account. The webhook always knew which account was written to; that
 identity is now carried through the queue instead of being discarded.
 """
 
+import asyncio
 import logging
 import uuid
 from collections.abc import Mapping
@@ -26,8 +27,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.channels.base import CHANNEL_EXTERNAL_ID, ChannelAdapter, get_adapter
 from app.core.encryption import decrypt
 from app.repositories.channel import ChannelRepository
+from app.services import bubbles
 
 logger = logging.getLogger(__name__)
+
+PAUSE_BETWEEN_MESSAGES_SECONDS = 0.8
 
 
 async def send_reply(
@@ -91,14 +95,22 @@ async def send_reply(
         )
         return None
 
-    await resolved_adapter.send_text(
-        credentials=credentials,
-        recipient_external_id=recipient_external_id,
-        text=text,
-        # The channel's own platform id rides along with whatever the caller
-        # gave: a platform that must name the sender finds it here.
-        reply_context={**(reply_context or {}), CHANNEL_EXTERNAL_ID: channel.external_id},
-    )
+    # A reply with breaks in it goes out as that many messages, in order,
+    # the way an administrator would send an introduction and then the
+    # question (app.services.bubbles). A short pause between them keeps the
+    # platform from reordering two sends that leave in the same instant.
+    messages = bubbles.parts(text)
+    for index, message in enumerate(messages):
+        if index:
+            await asyncio.sleep(PAUSE_BETWEEN_MESSAGES_SECONDS)
+        await resolved_adapter.send_text(
+            credentials=credentials,
+            recipient_external_id=recipient_external_id,
+            text=message,
+            # The channel's own platform id rides along with whatever the
+            # caller gave: a platform that must name the sender finds it here.
+            reply_context={**(reply_context or {}), CHANNEL_EXTERNAL_ID: channel.external_id},
+        )
     logger.info(
         "reply_sent",
         extra={
@@ -106,6 +118,7 @@ async def send_reply(
             "channel_type": channel.type,
             "recipient": recipient_external_id,
             "reply_length": len(text),
+            "messages": len(messages),
         },
     )
     return channel.type

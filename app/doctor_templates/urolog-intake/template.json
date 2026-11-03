@@ -12,6 +12,7 @@
     "WORK_HOURS"
   ],
   "optional": [
+    "ADMIN_NAME",
     "LANDMARK",
     "WORK_DAYS",
     "WORK_START",

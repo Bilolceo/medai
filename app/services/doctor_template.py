@@ -69,6 +69,9 @@ def _derived(facts: dict[str, str]) -> dict[str, str]:
     out = dict(facts)
     if "PRICE_FAST" in facts:
         out["PRICE_FAST_CAP"] = facts["PRICE_FAST"][:1].upper() + facts["PRICE_FAST"][1:]
+    # "administratoriman, ismim Dildora" when the clinic gave the
+    # administrator a name; just "administratoriman" when it did not.
+    out["ADMIN_NAME_PART"] = f", ismim {facts['ADMIN_NAME']}" if "ADMIN_NAME" in facts else ""
     return out
 
 
