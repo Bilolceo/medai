@@ -17,7 +17,12 @@
     "WORK_DAYS",
     "WORK_START",
     "WORK_END",
-    "SLOT_MINUTES"
+    "SLOT_MINUTES",
+    "ONLINE_PRICE",
+    "ONLINE_PREPAY",
+    "CARD",
+    "CARD_NAME",
+    "ONLINE_HOURS"
   ],
   "prompt": "prompt.txt",
   "examples": [
@@ -77,6 +82,42 @@
     },
     {
       "file": "examples/instagram_order_button.txt"
+    },
+    {
+      "file": "examples/same_question_twice.txt"
+    },
+    {
+      "file": "examples/other_doctor.txt"
+    },
+    {
+      "file": "examples/bare_ok.txt"
+    },
+    {
+      "file": "examples/libido_flow.txt",
+      "needs": [
+        "ONLINE_PRICE",
+        "ONLINE_PREPAY",
+        "CARD",
+        "CARD_NAME"
+      ]
+    },
+    {
+      "file": "examples/libido_price_first.txt",
+      "needs": [
+        "ONLINE_PRICE",
+        "ONLINE_PREPAY",
+        "CARD",
+        "CARD_NAME"
+      ]
+    },
+    {
+      "file": "examples/libido_paid.txt",
+      "needs": [
+        "ONLINE_PRICE",
+        "ONLINE_PREPAY",
+        "CARD",
+        "CARD_NAME"
+      ]
     }
   ],
   "rules": [
@@ -96,7 +137,25 @@
       "file": "rules/medicine.txt"
     },
     {
-      "file": "rules/prices_by_phone.txt"
+      "file": "rules/prices_by_phone.txt",
+      "unless": [
+        "ONLINE_PRICE"
+      ]
+    },
+    {
+      "file": "rules/prices_by_phone_except_online.txt",
+      "needs": [
+        "ONLINE_PRICE"
+      ]
+    },
+    {
+      "file": "rules/online_libido.txt",
+      "needs": [
+        "ONLINE_PRICE",
+        "ONLINE_PREPAY",
+        "CARD",
+        "CARD_NAME"
+      ]
     },
     {
       "file": "rules/intake_order.txt"
@@ -112,6 +171,18 @@
     },
     {
       "file": "rules/services_not_listed.txt"
+    }
+  ],
+  "prompt_sections": [
+    {
+      "file": "sections/online_libido.txt",
+      "needs": [
+        "ONLINE_PRICE",
+        "ONLINE_PREPAY",
+        "CARD",
+        "CARD_NAME",
+        "ONLINE_HOURS"
+      ]
     }
   ]
 }

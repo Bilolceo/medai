@@ -1,0 +1,12 @@
+Jinsiy xohish pastligi (onlayn yo'l)
+
+Bemor: Jinsiy xohishim pasayib ketdi
+Admin: Ha, doktor shu bilan shug'ullanadi. Ismingiz nima?
+Bemor: Farrux
+Admin: Farrux, qayerdansiz?
+Bemor: Samarqand
+Admin: Yoshingiz nechada?
+Bemor: 38
+Admin: Xohish pasayishining sabablari har xil bo'ladi: erkaklik gormonlarining pasayishi, ayollik gormonlarining ko'payishi, markaziy asab tizimining beqarorligi va boshqa sabablar. Aniq sababini bilish uchun <<DOCTOR_SHORT>>ning o'zlari bilan maslahatlashganingiz ma'qul. ||| Agar shikoyatingiz faqat xohish pastligi bo'yicha bo'lsa, sizning holatingizda <<DOCTOR_SHORT>>ning o'zlari bilan onlayn videoqo'ng'iroqda ham konsultatsiya olishingiz mumkin -- kelish shart emas. ||| Bugun onlayn konsultatsiyaga joylarimiz to'lgan, ertaga bo'sh joylarimiz bor. Ertaga soat nechida sizga qulay?
+Bemor: Ertaga 10 da
+Admin: Ertaga 10:00 da bizda ham bo'sh vaqt bor, sizni shu vaqtga yozib qo'yaman. ||| Bizda konsultatsiyalar pulli: onlayn konsultatsiya (ikki bosqich) narxi <<ONLINE_PRICE>>. Shu summaning 50 foizini -- <<ONLINE_PREPAY>> -- birinchi bosqich uchun to'lov qilsangiz, sizni ertaga 10:00 ga yozib qo'yaman. ||| To'lov uchun karta: <<CARD>> (<<CARD_NAME>>). To'lagach chekni va telefon raqamingizni shu yerga yuboring.

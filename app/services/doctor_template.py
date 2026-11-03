@@ -86,7 +86,12 @@ def _fill(text: str, facts: Mapping[str, str], where: str) -> str:
 
 
 def _wanted(item: Mapping[str, Any], facts: Mapping[str, str]) -> bool:
-    return all(key in facts for key in item.get("needs", []))
+    """An example, rule or prompt section is used when every fact it
+    ``needs`` is given and none it is ``unless`` is -- so a clinic without,
+    say, an online consultation never sees the lines about one."""
+    return all(key in facts for key in item.get("needs", [])) and not any(
+        key in facts for key in item.get("unless", [])
+    )
 
 
 def build_settings(template: str, doctor: Mapping[str, Any]) -> dict[str, Any]:
@@ -118,6 +123,12 @@ def build_settings(template: str, doctor: Mapping[str, Any]) -> dict[str, Any]:
         raise TemplateError("unknown facts (a typo?): " + ", ".join(unknown))
 
     prompt = _fill((root / manifest["prompt"]).read_text(), facts, "prompt")
+    # Optional sections -- a flow the clinic only has when it gave the facts
+    # for it -- follow the prompt, each filled like the prompt itself.
+    for item in manifest.get("prompt_sections", []):
+        if _wanted(item, facts):
+            section = _fill((root / item["file"]).read_text().strip(), facts, item["file"])
+            prompt = prompt.rstrip() + "\n\n" + section + "\n"
 
     examples = []
     for item in manifest["examples"]:

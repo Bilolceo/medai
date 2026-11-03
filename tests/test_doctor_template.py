@@ -247,3 +247,45 @@ def test_the_intake_template_asks_name_then_place_and_names_no_price() -> None:
     assert any("operatorimiz qo'ng'iroqda" in r for r in settings["strict_rules"])
     # No empathy formulas in the examples.
     assert "Xijolat" not in settings["assistant_examples"]
+
+
+def test_the_intake_template_has_the_online_flow_only_when_the_clinic_gave_its_facts() -> None:
+    without = build_settings(
+        "urolog-intake",
+        _facts(
+            ADMIN_NAME="Dildora",
+            PRICE_CONSULT=None,
+            PRICE_FAST=None,
+            PRICE_IMPLANT=None,
+            SERVICES_CHOICE=None,
+            SIZE_PROCEDURES=None,
+        ),
+    )
+    with_online = build_settings(
+        "urolog-intake",
+        _facts(
+            ADMIN_NAME="Dildora",
+            ONLINE_PRICE="500 000 so'm",
+            ONLINE_PREPAY="250 000 so'm",
+            CARD="9860 1501 1048 3446",
+            CARD_NAME="Sultonbek Norkuziev",
+            ONLINE_HOURS="09:00-16:00",
+            PRICE_CONSULT=None,
+            PRICE_FAST=None,
+            PRICE_IMPLANT=None,
+            SERVICES_CHOICE=None,
+            SIZE_PROCEDURES=None,
+        ),
+    )
+    # A clinic that named no online consultation never hears of one.
+    assert "JINSIY XOHISH" not in without["assistant_prompt"]
+    assert "500 000" not in json.dumps(without, ensure_ascii=False)
+    assert any(rule.startswith("Hech qanday narx") for rule in without["strict_rules"])
+    # The clinic that did gets the flow, the price rule the guard reads, and
+    # the plain no-price rule steps aside for the one with the exception.
+    assert "JINSIY XOHISH PASTLIGI" in with_online["assistant_prompt"]
+    assert "9860 1501 1048 3446" in with_online["assistant_prompt"]
+    assert any("500 000 so'm" in r and "250 000 so'm" in r for r in with_online["strict_rules"])
+    assert not any(rule.startswith("Hech qanday narx") for rule in with_online["strict_rules"])
+    assert "Yoshingiz nechada?" in with_online["assistant_examples"]
+    assert "<<" not in json.dumps(with_online, ensure_ascii=False)

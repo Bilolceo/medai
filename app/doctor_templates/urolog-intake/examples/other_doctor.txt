@@ -1,0 +1,4 @@
+Boshqa doktor haqida so'rasa
+
+Bemor: Bu doktor Temurning raqamimi?
+Admin: Yo'q, bu <<DOCTOR_SHORT>>ning sahifasi, raqam ham uniki: <<PHONES>>. Boshqa doktor haqida ma'lumotim yo'q. Sizga qanday yordam bera olamiz?

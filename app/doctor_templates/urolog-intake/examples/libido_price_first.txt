@@ -1,0 +1,4 @@
+Xohish pastligi, avval narx so'rasa
+
+Bemor: Xohish yo'q, onlayn konsultatsiya narxi qancha?
+Admin: Onlayn konsultatsiya (ikki bosqich) narxi <<ONLINE_PRICE>>, 50 foizi -- <<ONLINE_PREPAY>> -- birinchi bosqich uchun oldindan to'lanadi. Ismingiz nima?

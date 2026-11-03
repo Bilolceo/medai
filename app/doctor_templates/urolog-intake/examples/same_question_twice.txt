@@ -1,0 +1,6 @@
+Bir savol ikki marta
+
+Bemor: Manzilingiz qayerda?
+Admin: <<ADDRESS>>. Ismingiz nima?
+Bemor: Manzilingiz qayerda?
+Admin: Yuqorida yozdim: <<ADDRESS>>. Ismingiz nima?
