@@ -46,7 +46,9 @@ def test_the_whole_sequence_in_the_doctors_words() -> None:
     ]
     assert replies[1] == "Akmal, qayerdansiz?"
     assert replies[2].startswith("Operatorimiz qo'ng'iroq qilib hammasini batafsil aytib beradi.")
-    assert replies[3].startswith("Rahmat, Akmal. Operatorimiz ertaga 10 da qo'ng'iroq qiladi.")
+    assert replies[3].startswith(
+        "Rahmat, Akmal. Operatorimiz ertaga 10 da +998 90 123 45 67 raqamiga qo'ng'iroq qiladi."
+    )
     assert "[[CALLBACK:+998 90 123 45 67|Salom, ereksiya yaxshi emas|ertaga 10 da]]" in replies[3]
 
 
@@ -62,7 +64,9 @@ def test_a_bare_greeting_is_answered_with_the_introduction() -> None:
 def test_a_number_without_a_time_asks_the_time_then_confirms() -> None:
     replies = _talk(["Varikotsele bor", "Bobur", "Toshkent", "+998 93 345 67 89", "tushdan keyin"])
     assert replies[3] == "Qaysi vaqtda qo'ng'iroq qilsak qulay?"
-    assert replies[4].startswith("Rahmat, Bobur. Operatorimiz tushdan keyin qo'ng'iroq qiladi.")
+    assert replies[4].startswith(
+        "Rahmat, Bobur. Operatorimiz tushdan keyin +998 93 345 67 89 raqamiga qo'ng'iroq qiladi."
+    )
     assert "[[CALLBACK:+998 93 345 67 89|" in replies[4]
 
 
@@ -144,7 +148,7 @@ def test_everything_in_one_message_is_confirmed_at_once() -> None:
     last = bubbles.parts(replies[0])[-1]
     assert last.startswith(
         "Ha, doktor shu bilan shug'ullanadi. Rahmat, Otabek. "
-        "Operatorimiz ertaga 10 da qo'ng'iroq qiladi."
+        "Operatorimiz ertaga 10 da +998 95 890 12 34 raqamiga qo'ng'iroq qiladi."
     )
     assert "|ertaga 10 da]]" in last
 
@@ -178,3 +182,57 @@ def test_a_third_question_moves_on_instead_of_taking_it_for_a_name() -> None:
     replies = _talk(["Prostatit bor", "Ish vaqtingiz?", "Siz botmisiz?"])
     assert replies[1] == "<model> ||| Ismingiz nima?"
     assert replies[2] == "<model> ||| Qayerdansiz?"
+
+
+def test_a_number_a_digit_short_is_asked_again_with_an_example() -> None:
+    replies = _talk(["Prostatit bor", "Akmal", "Toshkent", "90 123 45 6, ertaga 10 da"])
+    assert replies[3].startswith("Raqam to'liq emas shekilli: +998 90123456.")
+    assert "masalan +998 90 123 45 67" in replies[3]
+    assert "CALLBACK" not in replies[3]
+
+
+def test_a_number_with_a_digit_too_many_is_asked_again() -> None:
+    replies = _talk(["Prostatit bor", "Akmal", "Toshkent", "+998 90 123 45 678"])
+    assert replies[3].startswith("Raqamda ortiqcha raqam bor shekilli")
+
+
+def test_a_corrected_number_after_the_check_is_confirmed() -> None:
+    replies = _talk(
+        ["Prostatit bor", "Akmal", "Toshkent", "90 123 45 6 ertaga 10 da", "+998 90 123 45 67"]
+    )
+    assert "+998 90 123 45 67 raqamiga qo'ng'iroq qiladi" in replies[4]
+    assert "|ertaga 10 da]]" in replies[4]
+
+
+def test_a_foreign_number_asks_for_telegram_or_whatsapp() -> None:
+    replies = _talk(
+        ["Ereksiya muammosi", "Bilol", "Rossiya", "+7 999 123 45 67 kechqurun", "Telegram bor"]
+    )
+    assert replies[3].startswith("Bu chet el raqami: +79991234567.")
+    assert "Telegram yoki WhatsApp bormi?" in replies[3]
+    assert "CALLBACK" not in replies[3]
+    assert replies[4].startswith(
+        "Rahmat, Bilol. Operatorimiz kechqurun Telegram orqali +79991234567"
+    )
+    assert "(chet el, Telegram)" in replies[4]
+
+
+def test_a_foreign_number_with_a_bare_yes_asks_which_app() -> None:
+    replies = _talk(["Prostatit", "Sardor", "Moskva", "89991234567", "ha", "WhatsApp"])
+    assert replies[3].startswith("Bu chet el raqami: +79991234567.")
+    assert replies[4] == "Telegram yoki WhatsApp -- qaysi biri orqali bog'lanaylik?"
+    assert "WhatsApp orqali" in replies[5]
+
+
+def test_a_new_number_after_the_confirmation_is_taken_as_a_correction() -> None:
+    replies = _talk(
+        [
+            "Prostatit bor",
+            "Akmal",
+            "Toshkent",
+            "+998 90 123 45 67 ertaga 10 da",
+            "+998 91 234 56 78",
+        ]
+    )
+    assert "+998 91 234 56 78 raqamiga qo'ng'iroq qiladi" in replies[4]
+    assert "|ertaga 10 da]]" in replies[4]

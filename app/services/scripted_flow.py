@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from typing import Any
 
-from app.services import bubbles
+from app.services import bubbles, phone_check
 
 # A complaint about desire, in any of the three alphabets, with a word that
 # says it is low or gone -- "qabulga yozilish xohishim bor" is not one.
@@ -328,6 +328,9 @@ _TIME_WORDS = re.compile(
     re.IGNORECASE,
 )
 _INTAKE_STEPS = ("ask_name", "ask_place", "ask_phone", "ask_time", "confirm")
+_TELEGRAM = re.compile(r"telegram|telegramm|телеграм|tg\b", re.IGNORECASE)
+_WHATSAPP = re.compile(r"whats\s*app|vatsap|vatsapp|ватсап|вацап|уотсап", re.IGNORECASE)
+_YES = re.compile(r"^\s*(ha|xa|bor|ҳа|ха|бор|да|есть)\b", re.IGNORECASE)
 # An emergency is the model's to answer -- today, the phone, come in -- never
 # a form to fill in.
 _EMERGENCY = re.compile(
@@ -430,7 +433,10 @@ def plan_intake(
     said = {key: _said(flow, key, since) for key in _INTAKE_STEPS}
     # "Telefon raqamingizni yozing" asked again is the same step.
     said["ask_phone"] += _said(flow, "ask_phone_again", since)
-    if said["confirm"] or any("19:00" in turn and "onlayn" in turn.lower() for turn in since):
+    corrected = said["confirm"] and phone_check.read(message) is not None
+    if (said["confirm"] and not corrected) or any(
+        "19:00" in turn and "onlayn" in turn.lower() for turn in since
+    ):
         return None
     if any("📎" in turn for turn in since if "kechki" in turn.lower() or "кечки" in turn.lower()):
         return None
@@ -466,19 +472,57 @@ def plan_intake(
                     return f", {_cap(word)}"
         return ""
 
+    def earlier_when() -> str | None:
+        return next((w for t in reversed(patient_since) if (w := _when(t))), None)
+
     def confirm(phone: str, when: str) -> Plan:
         at = parse_time(when)
         if (at is not None and not _within(flow, at)) or _EVENING_WORD.search(when):
             return Plan(reply=texts["operator_hours"])
-        text = texts["confirm"].format(name_part=name_part(), when=when)
+        text = texts["confirm"].format(name_part=name_part(), when=when, shown=phone)
         return Plan(reply=f"{text} [[CALLBACK:{phone}|{reason}|{when}]]")
 
+    def foreign(found: phone_check.Phone, said_now: str) -> Plan:
+        app = (
+            "WhatsApp"
+            if _WHATSAPP.search(said_now)
+            else ("Telegram" if _TELEGRAM.search(said_now) else None)
+        )
+        if app is None:
+            if _YES.search(said_now) and not _is_question(said_now):
+                return Plan(reply=texts["ask_app"])
+            return Plan(reply=texts["phone_foreign"].format(shown=found.shown))
+        when = earlier_when() or texts["any_time"]
+        text = texts["foreign_confirm"].format(
+            name_part=name_part(), when=when, app=app, shown=found.shown
+        )
+        return Plan(reply=f"{text} [[CALLBACK:{found.shown}|{reason} (chet el, {app})|{when}]]")
+
     def take_phone() -> Plan | None:
-        phone = _phone(message)
-        if phone is None:
+        found = phone_check.read(message)
+        if found is None:
+            # "Telegram bor" after the foreign number was pointed out.
+            last_number = next(
+                (f for t in reversed(patient_since[:-1]) if (f := phone_check.read(t))), None
+            )
+            pointed_out = _said(flow, "phone_foreign", since[-1:]) or _said(
+                flow, "ask_app", since[-1:]
+            )
+            if last_number is not None and last_number.kind == phone_check.FOREIGN and pointed_out:
+                return foreign(last_number, message)
             return None
-        when = _when(message)
-        return confirm(phone, when) if when else Plan(reply=texts["ask_time"])
+        if found.kind == phone_check.FOREIGN:
+            return foreign(found, message)
+        if found.kind != phone_check.UZ:
+            key = {
+                phone_check.SHORT: "phone_short",
+                phone_check.LONG: "phone_long",
+                phone_check.BAD_CODE: "phone_bad_code",
+            }[found.kind]
+            return Plan(reply=texts[key].format(shown=found.shown))
+        # A time said with the number that had to be retyped still stands.
+        when = _when(message) or earlier_when()
+        return confirm(found.shown, when) if when else Plan(reply=texts["ask_time"])
 
     # The first turn of the sequence.
     done = [key for key in _INTAKE_STEPS if said[key]]
@@ -500,9 +544,10 @@ def plan_intake(
         body = f"{lead} {bubbles.MARKER} {step}" if lead else step
         return Plan(reply=body, cards=asks_price)
 
-    # A number, whenever it comes, moves straight on to the time and the call.
+    # A number, whenever it comes -- or a correction of it -- is checked and
+    # moves straight on to the time and the call.
     early = take_phone()
-    if early is not None and pending in ("ask_name", "ask_place", "ask_phone"):
+    if early is not None and (pending in ("ask_name", "ask_place", "ask_phone") or corrected):
         return early
 
     if asks_price:
@@ -514,8 +559,17 @@ def plan_intake(
         }[pending]
         return Plan(reply=again, cards=True)
 
+    if early is not None and pending == "ask_time" and phone_check.read(message) is not None:
+        return early
     if pending == "ask_time":
-        phone = next((p for t in reversed(patient_since) if (p := _phone(t))), None)
+        phone = next(
+            (
+                f.shown
+                for t in reversed(patient_since)
+                if (f := phone_check.read(t)) and f.kind == phone_check.UZ
+            ),
+            None,
+        )
         when = _when(message)
         if phone and when and not question:
             return confirm(phone, when)
