@@ -39,7 +39,7 @@ def _talk(messages: list[str], script: str = "uz-latn", now: datetime = TUESDAY)
     history: list[dict[str, Any]] = []
     replies: list[str] = []
     for message in messages:
-        plan = scripted_flow.plan(
+        plan = scripted_flow.plan_libido(
             FLOW, script=script, user_message=message, history=history, now=now
         )
         reply = plan.reply if plan and plan.reply else f"<model>{plan.then if plan else ''}"
@@ -154,7 +154,9 @@ def test_saturday_asks_for_monday() -> None:
 )
 def test_other_complaints_and_other_wishes_are_left_to_the_ordinary_sequence(message: str) -> None:
     assert (
-        scripted_flow.plan(FLOW, script="uz-latn", user_message=message, history=[], now=TUESDAY)
+        scripted_flow.plan_libido(
+            FLOW, script="uz-latn", user_message=message, history=[], now=TUESDAY
+        )
         is None
     )
 
@@ -172,7 +174,7 @@ def test_cyrillic_and_russian_are_said_in_their_own_alphabet() -> None:
 
 def test_a_clinic_without_the_flow_is_untouched() -> None:
     assert (
-        scripted_flow.plan(
+        scripted_flow.plan_libido(
             None, script="uz-latn", user_message="Xohish past", history=[], now=TUESDAY
         )
         is None
@@ -192,7 +194,7 @@ def test_an_old_name_question_in_the_same_chat_does_not_skip_the_first_step() ->
         {"role": "user", "content": "Akmal"},
         {"role": "assistant", "content": "Akmal, qayerdansiz?"},
     ]
-    plan = scripted_flow.plan(
+    plan = scripted_flow.plan_libido(
         FLOW, script="uz-latn", user_message="Xohishim pasayib ketdi", history=history, now=TUESDAY
     )
     assert plan is not None and plan.reply is not None

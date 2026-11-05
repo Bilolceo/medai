@@ -1,0 +1,58 @@
+{
+  "name": "intake",
+  "online_start": "<<ONLINE_START>>",
+  "online_end": "<<ONLINE_END>>",
+  "texts": {
+    "uz-latn": {
+      "greet_back": "Va alaykum assalom.",
+      "greet": "Assalomu alaykum.",
+      "intro": "Men <<DOCTOR_SHORT>>ning administratoriman<<ADMIN_NAME_PART>>.",
+      "ask_help": "Sizga qanday yordam bera olamiz?",
+      "handles": "Ha, doktor shu bilan shug'ullanadi.",
+      "ask_name": "Ismingiz nima?",
+      "ask_place": "Qayerdansiz?",
+      "ask_place_named": "{name}, qayerdansiz?",
+      "abroad_online": "Chet elda bo'lsangiz ham kelish shart emas: doktor bilan onlayn videoqo'ng'iroqda konsultatsiya olishingiz mumkin.",
+      "ask_phone": "Operatorimiz qo'ng'iroq qilib hammasini batafsil aytib beradi. Telefon raqamingizni va qaysi vaqtda qo'ng'iroq qilsak qulayligini yozing.",
+      "ask_phone_again": "Telefon raqamingizni yozing, operatorimiz bog'lanadi.",
+      "ask_time": "Qaysi vaqtda qo'ng'iroq qilsak qulay?",
+      "operator_hours": "Operatorlarimiz <<ONLINE_START>> dan <<ONLINE_END>> gacha qo'ng'iroq qiladi. Shu oraliqda qaysi vaqt qulay?",
+      "confirm": "Rahmat{name_part}. Operatorimiz {when} qo'ng'iroq qiladi.",
+      "default_reason": "konsultatsiya"
+    },
+    "uz-cyrl": {
+      "greet_back": "Ва алайкум ассалом.",
+      "greet": "Ассалому алайкум.",
+      "intro": "Мен <<DOCTOR_SHORT_CYR>>нинг администраториман<<ADMIN_NAME_PART_CYR>>.",
+      "ask_help": "Сизга қандай ёрдам бера оламиз?",
+      "handles": "Ҳа, доктор шу билан шуғулланади.",
+      "ask_name": "Исмингиз нима?",
+      "ask_place": "Қаердансиз?",
+      "ask_place_named": "{name}, қаердансиз?",
+      "abroad_online": "Чет элда бўлсангиз ҳам келиш шарт эмас: доктор билан онлайн видеоқўнғироқда консультация олишингиз мумкин.",
+      "ask_phone": "Операторимиз қўнғироқ қилиб ҳаммасини батафсил айтиб беради. Телефон рақамингизни ва қайси вақтда қўнғироқ қилсак қулайлигини ёзинг.",
+      "ask_phone_again": "Телефон рақамингизни ёзинг, операторимиз боғланади.",
+      "ask_time": "Қайси вақтда қўнғироқ қилсак қулай?",
+      "operator_hours": "Операторларимиз <<ONLINE_START>> дан <<ONLINE_END>> гача қўнғироқ қилади. Шу оралиқда қайси вақт қулай?",
+      "confirm": "Раҳмат{name_part}. Операторимиз {when} қўнғироқ қилади.",
+      "default_reason": "консультация"
+    },
+    "ru": {
+      "greet_back": "Здравствуйте.",
+      "greet": "Здравствуйте.",
+      "intro": "Я администратор <<DOCTOR_RU_GEN>><<ADMIN_NAME_PART_RU>>.",
+      "ask_help": "Чем можем помочь?",
+      "handles": "Да, доктор этим занимается.",
+      "ask_name": "Как вас зовут?",
+      "ask_place": "Откуда вы?",
+      "ask_place_named": "{name}, откуда вы?",
+      "abroad_online": "Даже если вы за границей, приезжать не обязательно: можно получить консультацию у доктора онлайн по видеозвонку.",
+      "ask_phone": "Наш оператор позвонит и всё подробно расскажет. Напишите номер телефона и в какое время вам удобно позвонить.",
+      "ask_phone_again": "Напишите номер телефона, оператор свяжется с вами.",
+      "ask_time": "В какое время вам удобно позвонить?",
+      "operator_hours": "Операторы звонят с <<ONLINE_START>> до <<ONLINE_END>>. В какое время в этом промежутке вам удобно?",
+      "confirm": "Спасибо{name_part}. Оператор перезвонит вам {when}.",
+      "default_reason": "консультация"
+    }
+  }
+}

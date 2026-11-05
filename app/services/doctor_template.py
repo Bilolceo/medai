@@ -240,10 +240,18 @@ def build_settings(template: str, doctor: Mapping[str, Any]) -> dict[str, Any]:
         settings["promo_images"] = cards
     # A scripted flow: lines the clinic wants said word for word and in
     # order, run by app.services.scripted_flow instead of the model.
+    flows: dict[str, Any] = {}
     for item in manifest.get("flows", []):
         if _wanted(item, facts):
             raw = _fill((root / item["file"]).read_text(), facts, item["file"])
-            settings["scripted_flow"] = json.loads(raw)
+            flow = json.loads(raw)
+            flows[flow["name"]] = flow
+    if flows:
+        settings["scripted_flows"] = flows
+        # The single flow the first release read, kept so a deployment that
+        # has not caught up still finds it.
+        if "libido" in flows:
+            settings["scripted_flow"] = flows["libido"]
     settings.update(_schedule_settings(facts))
     return settings
 

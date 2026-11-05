@@ -101,6 +101,10 @@ def choose(
         topic = "steroid"
     elif any(_UROLOGY.search(text) for text in everything) or _POINTS_AT_PICTURE.search(reply):
         topic = "day"
+    elif asked_topic_last and price_guard.asks_price(user_message, list(patient_turns)):
+        # Asked which matter, and answered with the price question again: the
+        # doctor is a urologist-andrologist, so his ordinary card it is.
+        topic = "day"
     else:
         return None
     image = by_topic.get(topic)
@@ -184,3 +188,21 @@ def for_transcript(text: str) -> str:
     return MARKER.sub(
         lambda m: "\n\n" + sent_line((m.group("title") or "rasm").strip()), text
     ).strip()
+
+
+def attach_scripted(reply: str, image: Mapping[str, Any], script: str = "uz-latn") -> str:
+    """A scripted reply with the card: the caption goes before the step's own
+    question, in the last message, so the question stays the last word."""
+    if image.get("topic") == "evening":
+        return attach(reply, image, script)
+    caption = _CAPTIONS.get(script, _CAPTIONS["uz-latn"])
+    parts = reply.split("|||")
+    last = parts[-1].strip()
+    sentences = _SENTENCE.findall(last)
+    if len(sentences) > 1:
+        last = " ".join(s.strip() for s in sentences[:-1]) + f" {caption} " + sentences[-1].strip()
+    else:
+        last = f"{caption} {last}"
+    parts[-1] = " " + last.strip()
+    text = "|||".join(parts).strip()
+    return f"{text} [[IMAGE:{image['url']}|{image.get('title', '')}]]"

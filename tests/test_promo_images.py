@@ -41,6 +41,8 @@ def test_no_price_question_no_card() -> None:
 
 def test_an_unknown_topic_waits_for_the_answer_to_which_question() -> None:
     assert _pick("Narxlar qancha?") is None
+    # Asked again instead of naming the matter: the doctor's ordinary card.
+    assert _pick("Taxminan qancha?", own=["Qaysi masala bo'yicha konsultatsiya kerak?"]) == "day"
     assert (
         _pick(
             "Varikotsele",

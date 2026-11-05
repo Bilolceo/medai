@@ -255,6 +255,12 @@
         "EVENING_PREPAY",
         "EVENING_HOURS"
       ]
+    },
+    {
+      "file": "flows/intake.json",
+      "needs": [
+        "ONLINE_HOURS"
+      ]
     }
   ]
 }

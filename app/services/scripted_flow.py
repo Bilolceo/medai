@@ -91,6 +91,11 @@ class Plan:
     reply: str | None = None
     then: str | None = None
     instruction: str | None = None
+    # Said before the model's answer, as its own message: the greeting and
+    # introduction on a first contact that opens with a question.
+    prefix: str | None = None
+    # Whether a price card may go with this reply (app.services.promo_images).
+    cards: bool = False
 
 
 INSTRUCTION = (
@@ -111,7 +116,7 @@ def _said(flow: Mapping[str, Any], key: str, own: Sequence[str]) -> int:
         # The longest stretch of the line with no placeholder in it: the
         # day and the hour change, the words around them do not.
         pieces = re.split(r"\{[^}]*\}", texts.get(key, ""))
-        head = _norm(max(pieces, key=len)).strip(" ,.")[:28]
+        head = _norm(max(pieces, key=len)).strip(" ,.")[:60]
         if len(head) >= 8:
             marks.append(head)
     return sum(1 for turn in own if any(mark in _norm(turn) for mark in marks))
@@ -168,7 +173,7 @@ def _within(flow: Mapping[str, Any], at: time, prefix: str = "online") -> bool:
 _EVENING_WORD = re.compile(r"kech|кеч|вечер", re.IGNORECASE)
 
 
-def plan(
+def plan_libido(
     flow: Mapping[str, Any] | None,
     *,
     script: str,
@@ -289,3 +294,293 @@ def drop_questions(reply: str) -> str:
     sentences = re.split(r"(?<=[.!?])\s+", reply.strip())
     kept = [s for s in sentences if not s.rstrip().endswith("?")]
     return " ".join(kept).strip() or reply.strip()
+
+
+# --- the ordinary sequence: any complaint, or a wish to be seen ----------------
+
+_COMPLAINT = re.compile(
+    r"erek|erect|potens|tez\s*bo['‘ʻ’`]?shan|og['‘ʻ’`]?ri|siydik|siyish|siya\s*olma|\bqon\b|"
+    r"moyak|tuxum|prostat|varikot|bepusht|farzand|buyrak|achish|shish|sunnat|"
+    r"yuqumli|infeksiya|tahlil|spermogramma|steroid|anabol|gormon|testosteron|kurs\b|"
+    r"muammo|kasal|shikoyat|davola|qabul|yozil|ko['‘ʻ’`]?rik|konsultatsiya|"
+    r"эрек|потенц|оғри|сийдик|мояк|простат|варикоц|фарзанд|буйрак|стероид|гормон|"
+    r"муаммо|касал|шикоят|даволан|қабул|ёзил|кўрик|консультац|"
+    r"бол[иья]|моч|кров|яичк|бесплод|эякул|семяизверж|простатит|инфекц|анализ|"
+    r"проблем|лечени|запис|приём|прием",
+    re.IGNORECASE,
+)
+_ABROAD = re.compile(
+    r"rossiya|moskva|koreya|turkiya|qozog['‘ʻ’`]?iston|amerika|dubay|germaniya|polsha|"
+    r"chet\s*el|sankt|piter|yevropa|россия|москва|корея|турция|казахстан|америка|дубай|"
+    r"германия|польша|чет\s*эл|за\s*границ|питер|европ",
+    re.IGNORECASE,
+)
+_REFUSE = re.compile(
+    r"\byo['‘ʻ’`]?q\b|kerak\s*emas|bermayman|keyin|o['‘ʻ’`]?zim|shart\s*emas|"
+    r"\bйўқ\b|керак\s*эмас|бермайман|кейин|\bнет\b|не\s*надо|потом|сам\b",
+    re.IGNORECASE,
+)
+_PHONE_DIGITS = re.compile(r"\+?\d[\d\s()\-]{7,}\d")
+_TIME_WORDS = re.compile(
+    r"\d|ertalab|tush|kech|hozir|bugun|ertaga|istalgan|xohlagan|dushanba|seshanba|chorshanba|"
+    r"payshanba|juma|shanba|soat|эртала|туш|кеч|ҳозир|бугун|эртага|исталган|соат|"
+    r"утр|обед|вечер|сейчас|сегодня|завтра|любое|час",
+    re.IGNORECASE,
+)
+_INTAKE_STEPS = ("ask_name", "ask_place", "ask_phone", "ask_time", "confirm")
+# An emergency is the model's to answer -- today, the phone, come in -- never
+# a form to fill in.
+_EMERGENCY = re.compile(
+    r"birdan|qattiq\s*og['‘ʻ’`]?ri|kuchli\s*og['‘ʻ’`]?ri|shishib|shishdi|qon\s*ket|siya\s*olma|"
+    r"siyolma|isitma|harorat|chidab\s*bo['‘ʻ’`]?lma|"
+    r"бирдан|қаттиқ\s*оғри|кучли\s*оғри|шишди|қон\s*кет|сия\s*олма|иситма|ҳарорат|"
+    r"внезапн|сильн\w*\s*бол|кровотеч|не\s*могу\s*помочит|температур|опух",
+    re.IGNORECASE,
+)
+# "Ismim Bobur", "men Otabek", "меня зовут Руслан": the name, given unasked.
+_GIVEN_NAME = re.compile(
+    r"(?i:ismim|men|исмим|мен|меня\s+зовут|я)\s+([A-ZА-ЯЎҚҒҲ][a-zа-яёўқғҳ'‘ʻ’`]{1,19})(?=[\s,.!]|$)"
+)
+
+
+def _phone(text: str) -> str | None:
+    match = _PHONE_DIGITS.search(text)
+    if not match:
+        return None
+    digits = re.sub(r"\D", "", match.group(0))
+    return match.group(0).strip() if len(digits) >= 9 else None
+
+
+_CALL_ME = re.compile(
+    r"\s*(?:menga\s+)?(?:qo['‘ʻ’`]?ng['‘ʻ’`]?iroq\s+(?:qiling(?:lar)?|qilinglar|qilsangiz)|"
+    r"телефон\s+қилинг|қўнғироқ\s+қилинг|позвоните(?:\s+мне)?|перезвоните)\s*",
+    re.IGNORECASE,
+)
+_NOT_TIME = re.compile(r"raqam|рақам|номер|telefon|телефон|ism|исм", re.IGNORECASE)
+
+
+def _when(text: str) -> str | None:
+    """What the patient said about the time -- "ertaga 10 da", "tushdan
+    keyin" -- out of a message that may also carry the number, the name and
+    the complaint."""
+    rest = _PHONE_DIGITS.sub(" ", text)
+    pieces = []
+    for part in re.split(r"[,;.\n]+", rest):
+        part = _CALL_ME.sub(" ", part)
+        part = re.sub(r"\s+", " ", part).strip(" -")
+        if not part or not _TIME_WORDS.search(part):
+            continue
+        if _COMPLAINT.search(part) or _NOT_TIME.search(part) or _GREETING.search(part):
+            continue
+        pieces.append(part)
+    return ", ".join(pieces) or None
+
+
+def _greeting_only(text: str) -> bool:
+    words = re.findall(r"\w+", text)
+    return bool(_GREETING.search(text)) and len(words) <= 5 and not _COMPLAINT.search(text)
+
+
+def plan_intake(
+    flow: Mapping[str, Any] | None,
+    *,
+    script: str,
+    user_message: str,
+    history: Sequence[Mapping[str, Any]] | None,
+    now: datetime,
+) -> Plan | None:
+    """Dr Sultonbek's ordinary sequence, said as written: the doctor handles
+    it, name, place, telephone and a time, then the operator will ring.
+
+    Starts at the patient's first complaint or wish to be seen; until then
+    only a bare greeting is answered here (with the introduction). Leaves
+    the conversation to the model once the call is confirmed, once the
+    evening card has been sent, or when the patient says no.
+    """
+    if not flow:
+        return None
+    texts = flow["texts"].get(script) or flow["texts"]["uz-latn"]
+    turns = list(history or [])
+    own = [turn["content"] for turn in turns if turn.get("role") == "assistant"]
+    message = user_message.strip()
+    introduced = any(_INTRO.search(turn) for turn in own)
+
+    def opening() -> str | None:
+        parts: list[str] = []
+        if not own:
+            parts.append(texts["greet_back"] if _GREETING.search(message) else texts["greet"])
+        if not introduced:
+            parts.append(texts["intro"])
+        return " ".join(parts) or None
+
+    first = next(
+        (
+            i
+            for i, turn in enumerate(turns)
+            if turn.get("role") == "user" and _COMPLAINT.search(turn["content"])
+        ),
+        None,
+    )
+    if first is None and not _COMPLAINT.search(message):
+        if not own and _greeting_only(message):
+            return Plan(reply=f"{opening()} {bubbles.MARKER} {texts['ask_help']}")
+        return None
+    since_turns = turns[first:] if first is not None else []
+    since = [turn["content"] for turn in since_turns if turn.get("role") == "assistant"]
+    said = {key: _said(flow, key, since) for key in _INTAKE_STEPS}
+    # "Telefon raqamingizni yozing" asked again is the same step.
+    said["ask_phone"] += _said(flow, "ask_phone_again", since)
+    if said["confirm"] or any("19:00" in turn and "onlayn" in turn.lower() for turn in since):
+        return None
+    if any("📎" in turn for turn in since if "kechki" in turn.lower() or "кечки" in turn.lower()):
+        return None
+    patient_since = [t["content"] for t in since_turns if t.get("role") == "user"] + [message]
+    complaint = next((t for t in patient_since if _COMPLAINT.search(t)), message)
+    reason = " ".join(complaint.split()[:12]) or texts["default_reason"]
+    question = _is_question(message)
+    asks_price = bool(_ASKS_PRICE.search(message)) and question
+
+    def given_name() -> str | None:
+        for text in patient_since:
+            for found in _GIVEN_NAME.finditer(text):
+                word = found.group(1)
+                # "Men Rossiyadaman", "men Toshkentdanman": a place, not a name.
+                if re.search(r"(man|dan|da|ман|дан|да)$", word.lower()) or _ABROAD.search(word):
+                    continue
+                if _COMPLAINT.search(word):
+                    continue
+                return _cap(word)
+        return None
+
+    def name_part() -> str:
+        if given_name():
+            return f", {given_name()}"
+        # The answer to "Ismingiz nima?": the patient message right after it.
+        for i, turn in enumerate(since_turns):
+            if turn.get("role") == "assistant" and _said(flow, "ask_name", [turn["content"]]):
+                answer = next(
+                    (t["content"] for t in since_turns[i + 1 :] if t.get("role") == "user"), ""
+                )
+                word = answer.split()[0].strip(".,!") if answer.split() else ""
+                if len(answer.split()) <= 2 and _NAME_WORD.match(word):
+                    return f", {_cap(word)}"
+        return ""
+
+    def confirm(phone: str, when: str) -> Plan:
+        at = parse_time(when)
+        if (at is not None and not _within(flow, at)) or _EVENING_WORD.search(when):
+            return Plan(reply=texts["operator_hours"])
+        text = texts["confirm"].format(name_part=name_part(), when=when)
+        return Plan(reply=f"{text} [[CALLBACK:{phone}|{reason}|{when}]]")
+
+    def take_phone() -> Plan | None:
+        phone = _phone(message)
+        if phone is None:
+            return None
+        when = _when(message)
+        return confirm(phone, when) if when else Plan(reply=texts["ask_time"])
+
+    # The first turn of the sequence.
+    done = [key for key in _INTAKE_STEPS if said[key]]
+    pending = done[-1] if done else None
+    if pending is None:
+        lead = opening()
+        early = take_phone()
+        if early is not None and early.reply is not None:
+            # All of it in one message: complaint, number, time.
+            body = f"{texts['handles']} {early.reply}"
+            return Plan(reply=f"{lead} {bubbles.MARKER} {body}" if lead else body)
+        named = given_name()
+        if named:
+            step = f"{texts['handles']} {texts['ask_place_named'].format(name=named)}"
+        else:
+            step = f"{texts['handles']} {texts['ask_name']}"
+        if question and not asks_price:
+            return Plan(prefix=lead, then=step, instruction=INSTRUCTION)
+        body = f"{lead} {bubbles.MARKER} {step}" if lead else step
+        return Plan(reply=body, cards=asks_price)
+
+    # A number, whenever it comes, moves straight on to the time and the call.
+    early = take_phone()
+    if early is not None and pending in ("ask_name", "ask_place", "ask_phone"):
+        return early
+
+    if asks_price:
+        again = {
+            "ask_name": texts["ask_name"],
+            "ask_place": texts["ask_place"],
+            "ask_phone": texts["ask_phone_again"],
+            "ask_time": texts["ask_time"],
+        }[pending]
+        return Plan(reply=again, cards=True)
+
+    if pending == "ask_time":
+        phone = next((p for t in reversed(patient_since) if (p := _phone(t))), None)
+        when = _when(message)
+        if phone and when and not question:
+            return confirm(phone, when)
+        if question:
+            return Plan(then=texts["ask_time"], instruction=INSTRUCTION)
+        return None
+
+    if _REFUSE.search(message) and not question:
+        # "Yo'q", "keyin o'zim yozaman": respected, by the model, once.
+        return None
+    if question:
+        # The model answers; the step's question follows -- twice at most,
+        # then the next step's, so a patient full of questions is not asked
+        # the same thing a third time, and a question is never taken for a name.
+        if said[pending] < 2:
+            again = texts["ask_phone_again"] if pending == "ask_phone" else texts[pending]
+        else:
+            again = {
+                "ask_name": texts["ask_place"],
+                "ask_place": texts["ask_phone"],
+                "ask_phone": texts["ask_phone_again"],
+            }[pending]
+            if pending == "ask_phone":
+                return None
+        return Plan(then=again, instruction=INSTRUCTION)
+
+    if pending == "ask_name":
+        word = message.split()[0].strip(".,!") if message else ""
+        if len(message.split()) <= 2 and _NAME_WORD.match(word):
+            return Plan(reply=texts["ask_place_named"].format(name=_cap(word)))
+        return Plan(reply=texts["ask_place"])
+    if pending == "ask_place":
+        if _ABROAD.search(message):
+            return Plan(reply=f"{texts['abroad_online']} {bubbles.MARKER} {texts['ask_phone']}")
+        return Plan(reply=texts["ask_phone"])
+    if pending == "ask_phone":
+        if said["ask_phone"] >= 2:
+            return None
+        return Plan(reply=texts["ask_phone_again"])
+    return None
+
+
+def plan(
+    flows: Mapping[str, Any] | None,
+    *,
+    script: str,
+    user_message: str,
+    history: Sequence[Mapping[str, Any]] | None,
+    now: datetime,
+) -> Plan | None:
+    """The scripted answer from whichever flow this conversation is in."""
+    if not flows:
+        return None
+    if _EMERGENCY.search(user_message):
+        return None
+    libido = flows.get("libido")
+    if libido:
+        patient = [t["content"] for t in history or [] if t.get("role") == "user"]
+        in_libido = any(_about_desire(t) for t in (*patient, user_message)) and not any(
+            _OTHER_COMPLAINT.search(t) for t in (*patient, user_message)
+        )
+        if in_libido:
+            return plan_libido(
+                libido, script=script, user_message=user_message, history=history, now=now
+            )
+    return plan_intake(
+        flows.get("intake"), script=script, user_message=user_message, history=history, now=now
+    )

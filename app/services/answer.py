@@ -409,16 +409,30 @@ async def generate_answer(
     # A flow the clinic wants said word for word (app.services.scripted_flow)
     # answers before the model does; off its script, the model answers the
     # patient's question and the flow's own question follows.
+    stored = tenant.settings if tenant is not None else {}
+    flows = stored.get("scripted_flows") or (
+        {"libido": stored["scripted_flow"]} if stored.get("scripted_flow") else None
+    )
+    now_local = datetime.now(UTC).astimezone(CLINIC_TIMEZONE)
     scripted = scripted_flow.plan(
-        tenant.settings.get("scripted_flow") if tenant is not None else None,
-        script=script,
-        user_message=user_message,
-        history=history,
-        now=datetime.now(UTC).astimezone(CLINIC_TIMEZONE),
+        flows, script=script, user_message=user_message, history=history, now=now_local
     )
     if scripted is not None and scripted.reply is not None:
-        logger.info("scripted_flow_reply", extra={"reply": scripted.reply[:200]})
-        return scripted.reply
+        reply = scripted.reply
+        if scripted.cards:
+            patient_said = [t["content"] for t in history or [] if t.get("role") == "user"]
+            card = promo_images.choose(
+                stored.get("promo_images"),
+                user_message=user_message,
+                patient_turns=patient_said,
+                own_turns=[t["content"] for t in history or [] if t.get("role") == "assistant"],
+                reply="rasmda",
+                hour=now_local.hour,
+            )
+            if card is not None:
+                reply = promo_images.attach_scripted(reply, card, script)
+        logger.info("scripted_flow_reply", extra={"reply": reply[:200]})
+        return reply
     if scripted is not None and scripted.instruction:
         situation = "\n\n".join(filter(None, (situation, scripted.instruction)))
     if situation:
@@ -494,6 +508,8 @@ async def generate_answer(
         reply = stripped
     if scripted is not None and scripted.then:
         reply = f"{scripted_flow.drop_questions(reply)} {bubbles.MARKER} {scripted.then}"
+    if scripted is not None and scripted.prefix:
+        reply = f"{scripted.prefix} {bubbles.MARKER} {reply}"
     # The clinic's price card, when the patient asked the price (see
     # app.services.promo_images): chosen here, sent by delivery after the words.
     card = promo_images.choose(
