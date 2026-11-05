@@ -1243,7 +1243,9 @@ async def handle_patient_media(
                 conversation is not None and not conversation.is_bot_enabled
             )
             if muted:
-                await _notify_doctor_of_media(session, tenant_uuid, user_id, media)
+                await _notify_doctor_of_media(
+                    session, tenant_uuid, user_id, media, uuid.UUID(conversation_id)
+                )
                 return
             if not await _may_answer(
                 session, channel_id=uuid.UUID(channel_id), user_id=uuid.UUID(user_id)
@@ -1260,7 +1262,9 @@ async def handle_patient_media(
             except Exception:  # noqa: BLE001 - the doctor must still be told
                 await session.rollback()
                 logger.exception("patient_media_ack_failed")
-            await _notify_doctor_of_media(session, tenant_uuid, user_id, media)
+            await _notify_doctor_of_media(
+                session, tenant_uuid, user_id, media, uuid.UUID(conversation_id)
+            )
             logger.info(
                 "patient_media_handled", extra={"tenant_id": tenant_id, "count": len(media)}
             )
@@ -1305,12 +1309,24 @@ async def store_attachments(
 
 
 async def _notify_doctor_of_media(
-    session: AsyncSession, tenant_id: uuid.UUID, user_id: str, media: Any
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    user_id: str,
+    media: Any,
+    conversation_id: uuid.UUID | None = None,
 ) -> None:
     try:
         patient = await session.get(User, uuid.UUID(user_id))
+        # A photo after the card is the payment receipt: said so on Telegram,
+        # with the booking it pays for, so it is checked rather than read as
+        # an analysis.
+        offer = (
+            await patient_media.awaiting_payment(session, conversation_id)
+            if conversation_id is not None
+            else None
+        )
         await doctor_telegram.notify_patient_media(
-            session, tenant_id, media, patient_media.caption(patient, len(media))
+            session, tenant_id, media, patient_media.caption(patient, len(media), offer)
         )
     except Exception:  # noqa: BLE001
         logger.exception("patient_media_notify_failed")

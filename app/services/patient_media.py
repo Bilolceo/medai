@@ -20,7 +20,7 @@ import logging
 import re
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from html.parser import HTMLParser
 from typing import Any
 from urllib.parse import urlsplit
@@ -61,6 +61,58 @@ ACKNOWLEDGEMENTS = {
     "uz-cyrl": "Расмингиз келди. Доктор кўриб, шу ерда жавоб беради.",
     "ru": "Фото получили. Врач посмотрит и ответит здесь.",
 }
+# A photo right after the card was given is the receipt, not a result.
+RECEIPT_ACKNOWLEDGEMENTS = {
+    "uz-latn": (
+        "Chekingiz keldi. To'lov tekshirilgach administratorimiz yozilganingizni tasdiqlaydi."
+    ),
+    "uz-cyrl": "Чекингиз келди. Тўлов текширилгач администраторимиз ёзилганингизни тасдиқлайди.",
+    "ru": "Чек получили. После проверки оплаты администратор подтвердит вашу запись.",
+}
+_CARD = re.compile(r"\b\d{4}\s?\d{4}\s?\d{4}\s?\d{4}\b")
+_RECEIPT_WINDOW = timedelta(days=3)
+
+
+async def awaiting_payment(session: AsyncSession, conversation_id: uuid.UUID) -> str | None:
+    """The clinic's message that gave the card, if the patient was given one
+    in the last three days and nothing else from the clinic has come since --
+    a photo now is the receipt. None otherwise."""
+    from sqlalchemy import select
+
+    from app.models.message import Message
+
+    since = datetime.now(UTC) - _RECEIPT_WINDOW
+    last = (
+        (
+            await session.execute(
+                select(Message.content)
+                .where(
+                    Message.conversation_id == conversation_id,
+                    Message.sender != MessageSender.PATIENT,
+                    Message.created_at >= since,
+                )
+                .order_by(Message.created_at.desc())
+                .limit(3)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for content in last:
+        if content and _CARD.search(content):
+            return content
+    return None
+
+
+def _receipt_note(offer: str) -> str:
+    """The booking the receipt is for, from the message that gave the card:
+    the day and hour, and the half that was asked for."""
+    lines = [
+        sentence.strip()
+        for sentence in re.split(r"(?<=[.!?])\s+|\n+", offer)
+        if re.search(r"\d{1,2}:\d{2}|so['‘ʻ’`]?m|сўм|сум", sentence)
+    ]
+    return " ".join(lines)[:400]
 
 
 # Instagram's CDN answers a bare HTTP client from a data-centre address with a
@@ -612,7 +664,9 @@ async def acknowledge(
     )
     if not first:
         return
-    text = ACKNOWLEDGEMENTS[await patient_script(session, conversation_id)]
+    script = await patient_script(session, conversation_id)
+    paying = await awaiting_payment(session, conversation_id)
+    text = (RECEIPT_ACKNOWLEDGEMENTS if paying else ACKNOWLEDGEMENTS)[script]
     delivered = await send_reply(
         session,
         channel_id=channel_id,
@@ -633,7 +687,7 @@ async def acknowledge(
     await session.commit()
 
 
-def caption(patient: User | None, count: int) -> str:
+def caption(patient: User | None, count: int, receipt_for: str | None = None) -> str:
     who = "Bemor"
     if patient is not None:
         if patient.name and patient.username:
@@ -645,4 +699,9 @@ def caption(patient: User | None, count: int) -> str:
     photos = "rasm" if count == 1 else f"{count} ta rasm"
     base = get_settings().public_base_url
     link = f"\n🖥 Dashboard → Rasm yuborganlar: {base.rstrip('/')}/admin/" if base else ""
+    if receipt_for:
+        return (
+            f"💳 TO'LOV CHEKI -- tekshiring\n👤 {who}\n🗓 {_receipt_note(receipt_for)}\n"
+            f"✅ To'lov to'g'ri bo'lsa, bemorga yozilganini tasdiqlang.{link}"
+        )
     return f"📷 Bemor tomonidan {photos} yuborildi\n👤 {who}{link}"

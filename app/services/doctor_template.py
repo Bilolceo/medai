@@ -83,7 +83,14 @@ def _derived(facts: dict[str, str]) -> dict[str, str]:
         bare = re.sub(r"(?i)^doktor\s+", "", facts["DOCTOR_SHORT"]).strip()
         out["DOCTOR_RU_GEN"] = f"доктора {to_cyrillic(bare)}а"
         out["DOCTOR_RU_INS"] = f"доктором {to_cyrillic(bare)}ом"
-    for key in ("ONLINE_PRICE", "ONLINE_PREPAY", "EVENING_PRICE", "EVENING_PREPAY"):
+    for key in (
+        "ONLINE_PRICE",
+        "ONLINE_PREPAY",
+        "EVENING_PRICE",
+        "EVENING_PREPAY",
+        "STEROID_PRICE",
+        "STEROID_PREPAY",
+    ):
         if key in facts:
             out[f"{key}_CYR"] = to_cyrillic(facts[key])
             out[f"{key}_RU"] = re.sub(r"(?i)so['‘ʻ’`]?m", "сум", facts[key])

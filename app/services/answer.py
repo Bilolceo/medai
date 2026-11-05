@@ -12,7 +12,7 @@ and the appointment book they refer to.
 
 import logging
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -245,6 +245,19 @@ def _build_system_prompt(
     return prompt
 
 
+async def _online_slots(session: AsyncSession, now_local: datetime) -> list[datetime]:
+    """Free consultation times today (from an hour on) and on the next working
+    day, from the clinic's own appointment book -- what the online booking
+    offers. Local time."""
+    from app.services.booking import free_slots
+
+    repo = AppointmentRepository(session)
+    found = await free_slots(repo, datetime.now(UTC), horizon_days=2)
+    soonest = now_local + timedelta(hours=1)
+    local = [slot.astimezone(CLINIC_TIMEZONE) for slot in found]
+    return [slot for slot in local if slot >= soonest]
+
+
 async def _appointment_book(session: AsyncSession, doctor_count: int) -> str:
     """The free slots, rendered for the prompt.
 
@@ -432,6 +445,7 @@ async def generate_answer(
         history=history,
         now=now_local,
         reading=reading,
+        slots=await _online_slots(session, now_local) if flows and flows.get("intake") else None,
     )
     if scripted is not None and scripted.reply is not None:
         reply = scripted.reply

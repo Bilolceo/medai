@@ -38,7 +38,7 @@ def _talk(messages: list[str], script: str = "uz-latn") -> list[str]:
 
 def test_the_whole_sequence_in_the_doctors_words() -> None:
     replies = _talk(
-        ["Salom, ereksiya yaxshi emas", "Akmal", "Samarqand", "+998 90 123 45 67, ertaga 10 da"]
+        ["Salom, ereksiya yaxshi emas", "Akmal", "Toshkent", "+998 90 123 45 67, ertaga 10 da"]
     )
     assert bubbles.parts(replies[0]) == [
         "Va alaykum assalom. Men doktor Sultonbekning administratoriman, ismim Dildora.",
@@ -84,11 +84,13 @@ def test_an_evening_call_time_is_moved_into_the_operators_hours() -> None:
     )
 
 
-def test_a_patient_abroad_hears_about_the_online_consultation() -> None:
+def test_a_patient_abroad_is_offered_online_or_a_call() -> None:
     replies = _talk(["Ereksiya muammosi", "Bilol", "Rossiya"])
-    first, second = bubbles.parts(replies[2])
-    assert "onlayn videoqo'ng'iroqda konsultatsiya" in first
-    assert second.startswith("Operatorimiz qo'ng'iroq qilib")
+    assert replies[2] == (
+        "Doktor bilan onlayn videoqo'ng'iroqda konsultatsiya olishingiz mumkin, kelish shart "
+        "emas. Onlayn konsultatsiyaga yozilasizmi yoki administratorimiz qo'ng'iroq qilib "
+        "batafsil aytsinmi?"
+    )
 
 
 def test_a_question_mid_way_goes_to_the_model_and_the_step_follows() -> None:
@@ -218,7 +220,7 @@ def test_a_foreign_number_asks_for_telegram_or_whatsapp() -> None:
 
 
 def test_a_foreign_number_with_a_bare_yes_asks_which_app() -> None:
-    replies = _talk(["Prostatit", "Sardor", "Moskva", "89991234567", "ha", "WhatsApp"])
+    replies = _talk(["Prostatit", "Sardor", "Toshkent", "89991234567", "ha", "WhatsApp"])
     assert replies[3].startswith("Bu chet el raqami: +79991234567.")
     assert replies[4] == "Telegram yoki WhatsApp -- qaysi biri orqali bog'lanaylik?"
     assert "WhatsApp orqali" in replies[5]
@@ -253,15 +255,111 @@ def test_bilols_chat_of_2026_11_05() -> None:
             "16:00",
         ]
     )
-    assert "onlayn videoqo'ng'iroqda konsultatsiya" in replies[3]
+    assert replies[3].startswith("Doktor bilan onlayn videoqo'ng'iroqda konsultatsiya")
+    # A number at the choice is the call path.
     assert replies[4] == "Qaysi vaqtda qo'ng'iroq qilsak qulay?"
     assert replies[5].startswith("Operatorlarimiz 09:00 dan 16:00 gacha")
     assert replies[6].startswith("Rahmat, Bilol. Operatorimiz 16:00 da +998 97 488 06 66 raqamiga")
     assert "[[CALLBACK:+998 97 488 06 66|" in replies[6]
 
 
-def test_abroad_said_after_the_place_question_still_brings_the_online_line() -> None:
+def test_abroad_said_after_the_place_question_still_brings_the_choice() -> None:
     replies = _talk(["Ereksiya bor", "Bilol", "Toshkent", "Hozr men Rassiyadaman"])
-    first, second = bubbles.parts(replies[3])
-    assert "onlayn videoqo'ng'iroqda konsultatsiya" in first
-    assert second.startswith("Operatorimiz qo'ng'iroq qilib")
+    assert replies[3].startswith("Doktor bilan onlayn videoqo'ng'iroqda konsultatsiya")
+
+
+# --- the online booking: outside Tashkent, a time, half paid, the card ---
+
+SLOTS = [
+    datetime(2026, 11, 3, 14, 0, tzinfo=CLINIC_TIMEZONE),
+    datetime(2026, 11, 3, 15, 30, tzinfo=CLINIC_TIMEZONE),
+    datetime(2026, 11, 4, 10, 0, tzinfo=CLINIC_TIMEZONE),
+    datetime(2026, 11, 4, 11, 30, tzinfo=CLINIC_TIMEZONE),
+]
+
+
+def _book(messages: list[str], script: str = "uz-latn") -> list[str]:
+    history: list[dict[str, Any]] = []
+    replies: list[str] = []
+    for message in messages:
+        plan = scripted_flow.plan(
+            FLOWS, script=script, user_message=message, history=history, now=NOW, slots=SLOTS
+        )
+        reply = plan.reply if plan and plan.reply else "<model>"
+        replies.append(reply)
+        history += [
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": bubbles.flatten(reply)},
+        ]
+    return replies
+
+
+def test_outside_tashkent_the_patient_books_online_and_pays_half() -> None:
+    replies = _book(
+        ["Prostatit bor", "Sardor", "Samarqand", "Onlayn", "ertaga 10:00", "+998 90 123 45 67"]
+    )
+    assert replies[2].startswith("Doktor bilan onlayn videoqo'ng'iroqda konsultatsiya")
+    assert replies[3] == (
+        "Bugun 14:00 va 15:30 da, ertaga 10:00 va 11:30 da bo'sh vaqtlar bor. "
+        "Qaysi biri sizga qulay?"
+    )
+    book, price, card = bubbles.parts(replies[4])
+    assert book == "Yaxshi, ertaga 10:00 ga yozib qo'yishim mumkin."
+    assert price == (
+        "Konsultatsiya narxi 330 000 so'm. Qabulga yozilish uchun 50% -- 165 000 so'm "
+        "oldindan to'lanadi."
+    )
+    assert card.startswith("To'lov uchun karta: 9860 1501 1048 3446")
+    assert replies[5].startswith(
+        "Rahmat, Sardor. Chek va to'lov tekshirilgach administratorimiz ertaga 10:00 ga"
+    )
+    assert "[[CALLBACK:+998 90 123 45 67|ONLAYN ertaga 10:00 -- 50% oldindan" in replies[5]
+
+
+def test_steroids_take_the_steroid_price() -> None:
+    replies = _book(["Steroid kursidan keyin muammo", "Jasur", "Buxoro", "ha", "bugun 14:00"])
+    assert "500 000 so'm" in replies[4] and "250 000 so'm" in replies[4]
+
+
+def test_a_taken_hour_is_answered_with_the_free_ones() -> None:
+    replies = _book(["Prostatit bor", "Sardor", "Samarqand", "onlayn", "ertaga 9:00"])
+    assert replies[4].startswith("09:00 band. Bugun 14:00 va 15:30 da")
+
+
+def test_an_evening_hour_takes_the_evening_price() -> None:
+    replies = _book(["Prostatit bor", "Sardor", "Samarqand", "onlayn", "ertaga kechki 8 da"])
+    assert "990 000 so'm" in replies[4] and "495 000 so'm" in replies[4]
+    assert "ish vaqtidan tashqari" in replies[4]
+
+
+def test_choosing_the_call_outside_tashkent_takes_the_call_path() -> None:
+    replies = _book(["Prostatit bor", "Sardor", "Samarqand", "Administrator qo'ng'iroq qilsin"])
+    assert replies[3].startswith("Operatorimiz qo'ng'iroq qilib hammasini batafsil aytib beradi.")
+
+
+def test_in_tashkent_the_administrator_calls() -> None:
+    replies = _book(["Prostatit bor", "Sardor", "Toshkent, Chilonzor"])
+    assert replies[2].startswith("Operatorimiz qo'ng'iroq qilib hammasini batafsil aytib beradi.")
+
+
+def test_no_free_time_hands_over_to_the_administrator() -> None:
+    plan = None
+    history: list[dict[str, Any]] = []
+    for message in ["Prostatit bor", "Sardor", "Samarqand", "onlayn"]:
+        plan = scripted_flow.plan(
+            FLOWS, script="uz-latn", user_message=message, history=history, now=NOW, slots=[]
+        )
+        assert plan is not None and plan.reply is not None
+        history += [
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": bubbles.flatten(plan.reply)},
+        ]
+    assert plan is not None and plan.reply is not None
+    assert plan.reply.startswith("Yaqin kunlarga onlayn konsultatsiyada bo'sh vaqt qolmadi.")
+
+
+def test_russian_booking() -> None:
+    replies = _book(["Проблемы с потенцией", "Руслан", "Москва", "онлайн", "завтра в 11:30"], "ru")
+    assert replies[3].startswith("Свободно: Сегодня в 14:00 и 15:30, завтра в 10:00 и 11:30.")
+    assert "Хорошо, могу записать вас завтра на 11:30." in replies[4]
+    assert "165 000 сум" in replies[4]

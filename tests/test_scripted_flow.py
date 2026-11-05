@@ -19,14 +19,16 @@ FACTS = {
     "PHONES": "+998 77 690 60 06",
     "ADDRESS": "CityMed klinikasi, Toshkent shahri, Farobiy ko'chasi 415-uy",
     "WORK_HOURS": "Dushanbadan shanbagacha 09:00–17:00, yakshanba dam olish",
-    "ONLINE_PRICE": "500 000 so'm",
-    "ONLINE_PREPAY": "250 000 so'm",
+    "ONLINE_PRICE": "330 000 so'm",
+    "ONLINE_PREPAY": "165 000 so'm",
     "CARD": "9860 1501 1048 3446",
     "CARD_NAME": "Sultonbek Norkuziev",
     "ONLINE_HOURS": "09:00–16:00",
     "EVENING_PRICE": "990 000 so'm",
     "EVENING_PREPAY": "495 000 so'm",
     "EVENING_HOURS": "19:00–22:00",
+    "STEROID_PRICE": "500 000 so'm",
+    "STEROID_PREPAY": "250 000 so'm",
 }
 FLOW = build_settings("urolog-intake", FACTS)["scripted_flow"]
 # A Tuesday: tomorrow is a working day.
@@ -83,9 +85,9 @@ def test_the_whole_flow_goes_in_the_doctors_order_and_words() -> None:
         "Yaxshi, ertaga bizda 10:00 ga bo'sh joy bor ekan, "
         "sizni shu vaqtga navbatga yozib qo'yishim mumkin."
     )
-    assert "500 000 so'm" in paid
+    assert "330 000 so'm" in paid
     assert prepay == (
-        "Konsultatsiyaning birinchi bosqichi uchun to'lovning birinchi yarmini (250 000 so'm) "
+        "Konsultatsiyaning birinchi bosqichi uchun to'lovning birinchi yarmini (165 000 so'm) "
         "kiritib qo'ysangiz, sizni ertaga 10:00 ga yozib qo'yaman."
     )
     assert "9860 1501 1048 3446" in card
@@ -100,7 +102,7 @@ def test_after_the_card_the_model_carries_on() -> None:
 def test_a_price_question_is_answered_and_the_same_question_asked_again() -> None:
     replies = _talk(["Xohishim yo'q bo'lib qoldi", "Narxi qancha?", "Bobur"])
     price, again = bubbles.parts(replies[1])
-    assert "500 000 so'm" in price and "250 000 so'm" in price
+    assert "330 000 so'm" in price and "165 000 so'm" in price
     assert again == "Ismingiz nima?"
     assert replies[2] == "Bobur, qayerdansiz?"
 
@@ -165,11 +167,11 @@ def test_cyrillic_and_russian_are_said_in_their_own_alphabet() -> None:
     cyr = _talk(["Жинсий хоҳишим пасайган", "Ботир", "Фарғона", "35", "Эртага 14 да"], "uz-cyrl")
     assert bubbles.parts(cyr[0])[-1] == "Исмингиз нима?"
     assert cyr[1] == "Ботир, қаердансиз?"
-    assert "14:00" in cyr[4] and "250 000 сўм" in cyr[4]
+    assert "14:00" in cyr[4] and "165 000 сўм" in cyr[4]
     ru = _talk(["Пропало влечение", "Руслан", "Ташкент", "40", "в 12"], "ru")
     assert bubbles.parts(ru[0])[-1] == "Как вас зовут?"
     assert ru[2] == "Сколько вам лет?"
-    assert "12:00" in ru[4] and "250 000 сум" in ru[4]
+    assert "12:00" in ru[4] and "165 000 сум" in ru[4]
 
 
 def test_a_clinic_without_the_flow_is_untouched() -> None:

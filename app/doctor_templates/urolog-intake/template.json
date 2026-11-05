@@ -28,7 +28,9 @@
     "EVENING_HOURS",
     "PROMO_DAY_URL",
     "PROMO_STEROID_URL",
-    "PROMO_EVENING_URL"
+    "PROMO_EVENING_URL",
+    "STEROID_PRICE",
+    "STEROID_PREPAY"
   ],
   "prompt": "prompt.txt",
   "examples": [
@@ -259,7 +261,16 @@
     {
       "file": "flows/intake.json",
       "needs": [
-        "ONLINE_HOURS"
+        "ONLINE_HOURS",
+        "ONLINE_PRICE",
+        "ONLINE_PREPAY",
+        "STEROID_PRICE",
+        "STEROID_PREPAY",
+        "EVENING_PRICE",
+        "EVENING_PREPAY",
+        "EVENING_HOURS",
+        "CARD",
+        "CARD_NAME"
       ]
     }
   ]

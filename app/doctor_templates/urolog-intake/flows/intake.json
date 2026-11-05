@@ -26,7 +26,21 @@
       "ask_app": "Telegram yoki WhatsApp -- qaysi biri orqali bog'lanaylik?",
       "foreign_confirm": "Rahmat{name_part}. Operatorimiz {when} {app} orqali {shown} raqamiga bog'lanadi.",
       "any_time": "ish vaqtida",
-      "at_clock": "{t} da"
+      "at_clock": "{t} da",
+      "online_choice": "Doktor bilan onlayn videoqo'ng'iroqda konsultatsiya olishingiz mumkin, kelish shart emas. Onlayn konsultatsiyaga yozilasizmi yoki administratorimiz qo'ng'iroq qilib batafsil aytsinmi?",
+      "choice_again": "Onlayn konsultatsiyaga yozilasizmi yoki administratorimiz qo'ng'iroq qilsinmi?",
+      "offer_slots": "{slots} bo'sh vaqtlar bor. Qaysi biri sizga qulay?",
+      "slot_taken": "{time} band. {slots} bo'sh vaqtlar bor. Qaysi biri qulay?",
+      "no_slots": "Yaqin kunlarga onlayn konsultatsiyada bo'sh vaqt qolmadi. Administratorimiz qo'ng'iroq qilib vaqtni kelishadi. Telefon raqamingizni yozing.",
+      "book_ok": "Yaxshi, {day} {time} ga yozib qo'yishim mumkin.",
+      "price_line": "Konsultatsiya narxi {price}. Qabulga yozilish uchun 50% -- {prepay} oldindan to'lanadi.",
+      "price_line_evening": "Kechki onlayn konsultatsiya ish vaqtidan tashqari bo'lgani uchun narxi {price}. Qabulga yozilish uchun 50% -- {prepay} oldindan to'lanadi.",
+      "card_line": "To'lov uchun karta: <<CARD>> (<<CARD_NAME>>). To'lagach chekni va telefon raqamingizni shu yerga yuboring.",
+      "paid_confirm": "Rahmat{name_part}. Chek va to'lov tekshirilgach administratorimiz {day} {time} ga yozilganingizni tasdiqlaydi.",
+      "today": "bugun",
+      "tomorrow": "ertaga",
+      "and": "va",
+      "at": "da"
     },
     "uz-cyrl": {
       "greet_back": "Ва алайкум ассалом.",
@@ -51,7 +65,21 @@
       "ask_app": "Telegram ёки WhatsApp -- қайси бири орқали боғланайлик?",
       "foreign_confirm": "Раҳмат{name_part}. Операторимиз {when} {app} орқали {shown} рақамига боғланади.",
       "any_time": "иш вақтида",
-      "at_clock": "{t} да"
+      "at_clock": "{t} да",
+      "online_choice": "Доктор билан онлайн видеоқўнғироқда консультация олишингиз мумкин, келиш шарт эмас. Онлайн консультацияга ёзиласизми ёки администраторимиз қўнғироқ қилиб батафсил айтсинми?",
+      "choice_again": "Онлайн консультацияга ёзиласизми ёки администраторимиз қўнғироқ қилсинми?",
+      "offer_slots": "{slots} бўш вақтлар бор. Қайси бири сизга қулай?",
+      "slot_taken": "{time} банд. {slots} бўш вақтлар бор. Қайси бири қулай?",
+      "no_slots": "Яқин кунларга онлайн консультацияда бўш вақт қолмади. Администраторимиз қўнғироқ қилиб вақтни келишади. Телефон рақамингизни ёзинг.",
+      "book_ok": "Яхши, {day} {time} га ёзиб қўйишим мумкин.",
+      "price_line": "Консультация нархи {price}. Қабулга ёзилиш учун 50% -- {prepay} олдиндан тўланади.",
+      "price_line_evening": "Кечки онлайн консультация иш вақтидан ташқари бўлгани учун нархи {price}. Қабулга ёзилиш учун 50% -- {prepay} олдиндан тўланади.",
+      "card_line": "Тўлов учун карта: <<CARD>> (<<CARD_NAME_CYR>>). Тўлагач чекни ва телефон рақамингизни шу ерга юборинг.",
+      "paid_confirm": "Раҳмат{name_part}. Чек ва тўлов текширилгач администраторимиз {day} {time} га ёзилганингизни тасдиқлайди.",
+      "today": "бугун",
+      "tomorrow": "эртага",
+      "and": "ва",
+      "at": "да"
     },
     "ru": {
       "greet_back": "Здравствуйте.",
@@ -76,7 +104,50 @@
       "ask_app": "Через что удобнее связаться — Telegram или WhatsApp?",
       "foreign_confirm": "Спасибо{name_part}. Оператор свяжется с вами {when} через {app} по номеру {shown}.",
       "any_time": "в рабочее время",
-      "at_clock": "в {t}"
+      "at_clock": "в {t}",
+      "online_choice": "Можно получить консультацию у доктора онлайн по видеозвонку, приезжать не обязательно. Записать вас на онлайн-консультацию или чтобы администратор вам позвонил?",
+      "choice_again": "Записать вас на онлайн-консультацию или чтобы администратор позвонил?",
+      "offer_slots": "Свободно: {slots}. Какое время вам удобно?",
+      "slot_taken": "{time} занято. Свободно: {slots}. Какое время удобно?",
+      "no_slots": "На ближайшие дни свободного времени для онлайн-консультации нет. Администратор позвонит и договорится о времени. Напишите номер телефона.",
+      "book_ok": "Хорошо, могу записать вас {day} на {time}.",
+      "price_line": "Консультация стоит {price}. Для записи вносится предоплата 50% -- {prepay}.",
+      "price_line_evening": "Вечерняя онлайн-консультация вне рабочего времени, поэтому стоит {price}. Для записи вносится предоплата 50% -- {prepay}.",
+      "card_line": "Карта для оплаты: <<CARD>> (<<CARD_NAME_CYR>>). После оплаты отправьте сюда чек и номер телефона.",
+      "paid_confirm": "Спасибо{name_part}. После проверки чека администратор подтвердит вашу запись {day} на {time}.",
+      "today": "сегодня",
+      "tomorrow": "завтра",
+      "and": "и",
+      "at": "в"
     }
-  }
+  },
+  "prices": {
+    "uro": {
+      "price": "<<ONLINE_PRICE>>",
+      "prepay": "<<ONLINE_PREPAY>>",
+      "price_cyr": "<<ONLINE_PRICE_CYR>>",
+      "prepay_cyr": "<<ONLINE_PREPAY_CYR>>",
+      "price_ru": "<<ONLINE_PRICE_RU>>",
+      "prepay_ru": "<<ONLINE_PREPAY_RU>>"
+    },
+    "steroid": {
+      "price": "<<STEROID_PRICE>>",
+      "prepay": "<<STEROID_PREPAY>>",
+      "price_cyr": "<<STEROID_PRICE_CYR>>",
+      "prepay_cyr": "<<STEROID_PREPAY_CYR>>",
+      "price_ru": "<<STEROID_PRICE_RU>>",
+      "prepay_ru": "<<STEROID_PREPAY_RU>>"
+    },
+    "evening": {
+      "price": "<<EVENING_PRICE>>",
+      "prepay": "<<EVENING_PREPAY>>",
+      "price_cyr": "<<EVENING_PRICE_CYR>>",
+      "prepay_cyr": "<<EVENING_PREPAY_CYR>>",
+      "price_ru": "<<EVENING_PRICE_RU>>",
+      "prepay_ru": "<<EVENING_PREPAY_RU>>"
+    }
+  },
+  "evening_start": "<<EVENING_START>>",
+  "evening_end": "<<EVENING_END>>",
+  "tashkent": "toshkent|tashkent|ташкент|тошкент|chilonzor|yunusobod|sergeli|yashnobod|mirzo|olmazor|uchtepa|shayxontohur|yakkasaroy|bektemir|mirobod|чиланзар|юнусобод|сергели"
 }
