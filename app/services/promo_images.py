@@ -1,14 +1,12 @@
 """The clinic's price cards, sent as pictures when a patient asks the price.
 
-Dr Sultonbek gave three cards: the daytime urology and andrology
-consultation (330 000 so'm), the daytime anabolic-steroid and hormone one
-(500 000 so'm), and the evening online one (990 000 so'm, 19:00-22:00).
+Dr Sultonbek gave two cards: the daytime urology and andrology consultation
+(330 000 so'm) and the evening online one (990 000 so'm, 19:00-22:00).
 Which one a patient gets is decided here, by pattern, rather than left to
 the model -- the same way prices themselves are policed in
 app.services.price_guard:
 
 * evening -- the patient asked about the evening or after work;
-* steroid -- the conversation is about steroids, a course, hormones, sport;
 * day -- any urology or andrology complaint, and the default when the
   reply itself points at the picture.
 
@@ -31,16 +29,11 @@ _EVENING = re.compile(
     r"кеч|кечқурун|кечки|ишдан\s*кейин|вечер|после\s*работы|ночью",
     re.IGNORECASE,
 )
-_STEROID = re.compile(
-    r"steroid|anabol|kurs\b|kursdan|testosteron|gormon|sport|trenbolon|nandrolon|sustanon|"
-    r"стероид|анабол|курс\b|тестостерон|гормон|спорт|тренболон|нандролон|сустанон",
-    re.IGNORECASE,
-)
 _UROLOGY = re.compile(
     r"erek|potens|xohish|istak|libido|prostat|varikot|bepusht|farzand|siydik|moyak|tez\s*bo['‘ʻ’`]?shan|"
-    r"erkak|urolog|androlog|"
+    r"erkak|urolog|androlog|gormon|testosteron|"
     r"эрек|потенц|хоҳиш|хохиш|истак|либидо|простат|варикоц|фарзанд|сийдик|мояк|"
-    r"влечен|желани|бесплод|моч|яичк|уролог|андролог",
+    r"влечен|желани|бесплод|моч|яичк|уролог|андролог|гормон|тестостерон",
     re.IGNORECASE,
 )
 # The reply saying the card is there: "narxlari rasmda", "на картинке".
@@ -99,8 +92,6 @@ def choose(
         return None
     if evening_wish or any(_EVENING.search(text) for text in recent):
         topic = "evening"
-    elif any(_STEROID.search(text) for text in everything):
-        topic = "steroid"
     elif any(_UROLOGY.search(text) for text in everything) or _POINTS_AT_PICTURE.search(reply):
         topic = "day"
     elif asked_topic_last and price_guard.asks_price(user_message, list(patient_turns)):

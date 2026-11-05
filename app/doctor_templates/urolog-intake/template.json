@@ -27,10 +27,7 @@
     "EVENING_PREPAY",
     "EVENING_HOURS",
     "PROMO_DAY_URL",
-    "PROMO_STEROID_URL",
-    "PROMO_EVENING_URL",
-    "STEROID_PRICE",
-    "STEROID_PREPAY"
+    "PROMO_EVENING_URL"
   ],
   "prompt": "prompt.txt",
   "examples": [
@@ -264,8 +261,6 @@
         "ONLINE_HOURS",
         "ONLINE_PRICE",
         "ONLINE_PREPAY",
-        "STEROID_PRICE",
-        "STEROID_PREPAY",
         "EVENING_PRICE",
         "EVENING_PREPAY",
         "EVENING_HOURS",

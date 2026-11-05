@@ -316,9 +316,9 @@ def test_outside_tashkent_the_patient_books_online_and_pays_half() -> None:
     assert "[[CALLBACK:+998 90 123 45 67|ONLAYN ertaga 10:00 -- 50% oldindan" in replies[5]
 
 
-def test_steroids_take_the_steroid_price() -> None:
-    replies = _book(["Steroid kursidan keyin muammo", "Jasur", "Buxoro", "ha", "bugun 14:00"])
-    assert "500 000 so'm" in replies[4] and "250 000 so'm" in replies[4]
+def test_hormones_take_the_ordinary_price() -> None:
+    replies = _book(["Gormonlarimni tekshirtirmoqchiman", "Jasur", "Buxoro", "ha", "bugun 14:00"])
+    assert "330 000 so'm" in replies[4] and "165 000 so'm" in replies[4]
 
 
 def test_a_taken_hour_is_answered_with_the_free_ones() -> None:

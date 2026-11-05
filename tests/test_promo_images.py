@@ -4,7 +4,6 @@ from app.services import promo_images
 
 CARDS = [
     {"topic": "day", "title": "Kunduzgi konsultatsiya: narx va tartib", "url": "https://x/day.jpg"},
-    {"topic": "steroid", "title": "Steroid: narx va tartib", "url": "https://x/steroid.jpg"},
     {"topic": "evening", "title": "Kechki onlayn: narx va tartib", "url": "https://x/evening.jpg"},
 ]
 
@@ -23,15 +22,13 @@ def test_a_urology_price_question_gets_the_day_card() -> None:
     assert _pick("Narxi qancha?", patient=["Ereksiya yaxshi emas"]) == "day"
 
 
-def test_steroids_and_hormones_get_the_steroid_card() -> None:
-    assert _pick("Steroid kursidan keyin gormon tekshirmoqchiman, qancha turadi?") == "steroid"
-    assert _pick("Сколько стоит?", patient=["После курса тестостерона проблемы"]) == "steroid"
+def test_hormones_get_the_ordinary_card() -> None:
+    assert _pick("Gormonlarimni tekshirtirmoqchiman, qancha turadi?") == "day"
 
 
 def test_the_evening_wins_whatever_the_topic() -> None:
     assert (
-        _pick("Kechqurun ishdan keyin konsultatsiya narxi qancha?", patient=["Steroid"])
-        == "evening"
+        _pick("Kechqurun ishdan keyin konsultatsiya narxi qancha?", patient=["Gormon"]) == "evening"
     )
 
 
@@ -118,7 +115,7 @@ def test_the_evening_card_says_what_the_evening_is_and_promises_no_call() -> Non
     reply = (
         "Rossiyada bo'lsangiz ham operator 19:00 da qo'ng'iroq qiladi. Telefon raqamingizni yozing."
     )
-    text, _ = promo_images.split(promo_images.attach(reply, CARDS[2]))
+    text, _ = promo_images.split(promo_images.attach(reply, CARDS[1]))
     assert "qo'ng'iroq qiladi" not in text
     assert text.startswith("Ish vaqtidan keyin doktor bilan faqat onlayn konsultatsiya bor")
 

@@ -88,8 +88,6 @@ def _derived(facts: dict[str, str]) -> dict[str, str]:
         "ONLINE_PREPAY",
         "EVENING_PRICE",
         "EVENING_PREPAY",
-        "STEROID_PRICE",
-        "STEROID_PREPAY",
     ):
         if key in facts:
             out[f"{key}_CYR"] = to_cyrillic(facts[key])
@@ -238,7 +236,6 @@ def build_settings(template: str, doctor: Mapping[str, Any]) -> dict[str, Any]:
         {"topic": topic, "title": title, "url": facts[key]}
         for key, topic, title in (
             ("PROMO_DAY_URL", "day", "Kunduzgi konsultatsiya: narx va tartib"),
-            ("PROMO_STEROID_URL", "steroid", "Steroid va gormonal muammolar: narx va tartib"),
             ("PROMO_EVENING_URL", "evening", "Kechki onlayn konsultatsiya: narx va tartib"),
         )
         if key in facts

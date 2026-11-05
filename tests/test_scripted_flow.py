@@ -27,8 +27,6 @@ FACTS = {
     "EVENING_PRICE": "990 000 so'm",
     "EVENING_PREPAY": "495 000 so'm",
     "EVENING_HOURS": "19:00–22:00",
-    "STEROID_PRICE": "500 000 so'm",
-    "STEROID_PREPAY": "250 000 so'm",
 }
 FLOW = build_settings("urolog-intake", FACTS)["scripted_flow"]
 # A Tuesday: tomorrow is a working day.

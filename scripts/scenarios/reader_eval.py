@@ -37,7 +37,11 @@ CASES: list[tuple[str | None, str, dict]] = [
     (ASK_TIME, "16:00", {"time": True}),
     (None, "Narhi qancha qabul", {"price": True, "question": True}),
     (None, "Puli qancha", {"price": True}),
-    (None, "Menga soat 19:00 da qongiroq qiling va men rasiyadaman qanday qilasz", {"abroad": True, "time": True}),
+    (
+        None,
+        "Menga soat 19:00 da qongiroq qiling va men rasiyadaman qanday qilasz",
+        {"abroad": True, "time": True},
+    ),
     (None, "Ishvoht nechida tugaydi kechi", {"question": True, "price": False, "kind": "none"}),
     # complaints, spelled every way
     (None, "Salom, ereksiya yaxshi emas", {"kind": "urology"}),
@@ -52,8 +56,7 @@ CASES: list[tuple[str | None, str, dict]] = [
     (None, "Пропало желание", {"kind": "libido_only"}),
     (None, "xohish ham yo'q ereksiya ham yomon", {"kind": "urology"}),
     (None, "qabulga yozilish xohishim bor", {"kind": "urology"}),
-    (None, "kursdan keyin gormonlarim buzildi", {"kind": "steroid"}),
-    (None, "testosteron ukol qilganman, endi nima qilay", {"kind": "steroid"}),
+    (None, "gormonlarim buzildi shekilli", {"kind": "urology"}),
     (None, "Moyagim birdan qattiq og'rib shishdi", {"kind": "emergency"}),
     (None, "8 soatdan beri siya olmayapman", {"kind": "emergency"}),
     (None, "Assalomu alaykum", {"kind": "none", "question": False}),
@@ -78,7 +81,11 @@ CASES: list[tuple[str | None, str, dict]] = [
     # numbers and times
     (ASK_PHONE, "+998 90 123 45 67, ertaga 10 da", {"phone": True, "time": True}),
     (ASK_PHONE, "raqamim 90 123 45 67 tushdan keyin", {"phone": True, "time": True}),
-    (ASK_PHONE, "ishdan chiqqach qo'ng'iroq qilinglar, 93 345 67 89", {"phone": True, "time": True}),
+    (
+        ASK_PHONE,
+        "ishdan chiqqach qo'ng'iroq qilinglar, 93 345 67 89",
+        {"phone": True, "time": True},
+    ),
     (ASK_PHONE, "Yo'q, raqam bermayman", {"refuses": True, "phone": False}),
     (ASK_PHONE, "keyin o'zim yozaman", {"refuses": True}),
     (ASK_PHONE, "hozircha o'ylab ko'raman", {"refuses": True}),
@@ -91,9 +98,16 @@ CASES: list[tuple[str | None, str, dict]] = [
     (ASK_TIME, "qachon bo'lsa ham", {"time": True}),
     (ASK_TIME, "qancha turadi?", {"price": True, "time": False}),
     # all in one
-    (None, "Salom, men Otabek, Andijondanman, tez bo'shanish bor, raqamim +998 95 890 12 34, ertaga 10 da qo'ng'iroq qiling",
-     {"kind": "urology", "name": "Otabek", "abroad": False, "phone": True, "time": True}),
-    (None, "men alisher buxorodanman qovuq og'riyapti 99 789 01 23 soat 3 da", {"kind": "urology", "name": "Alisher", "phone": True, "time": True}),
+    (
+        None,
+        "Salom, men Otabek, Andijondanman, tez bo'shanish bor, raqamim +998 95 890 12 34, ertaga 10 da qo'ng'iroq qiling",
+        {"kind": "urology", "name": "Otabek", "abroad": False, "phone": True, "time": True},
+    ),
+    (
+        None,
+        "men alisher buxorodanman qovuq og'riyapti 99 789 01 23 soat 3 da",
+        {"kind": "urology", "name": "Alisher", "phone": True, "time": True},
+    ),
 ]
 
 
@@ -103,15 +117,17 @@ def patterns(last: str | None, message: str) -> dict:
         kind = "emergency"
     elif sf._about_desire(message) and not sf._OTHER_COMPLAINT.search(message):
         kind = "libido_only"
-    elif sf._STEROID_WORDS.search(message) if hasattr(sf, "_STEROID_WORDS") else False:
-        kind = "steroid"
     elif sf._COMPLAINT.search(message):
-        kind = "steroid" if any(w in message.lower() for w in ("steroid", "kurs", "gormon", "testosteron")) else "urology"
+        kind = "urology"
     else:
         kind = "none"
     name = None
     found = sf._GIVEN_NAME.search(message)
-    if found and not sf._ABROAD.search(found.group(1)) and not found.group(1).lower().endswith(("man", "dan", "da")):
+    if (
+        found
+        and not sf._ABROAD.search(found.group(1))
+        and not found.group(1).lower().endswith(("man", "dan", "da"))
+    ):
         name = found.group(1)
     elif last and "Ismingiz nima" in last:
         word = message.split()[0].strip(".,!") if message.split() else ""

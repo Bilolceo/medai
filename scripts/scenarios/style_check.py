@@ -19,7 +19,9 @@ LITERARY = re.compile(
     r"қадрли|ташвишланманг|хавотир олманг|бемалол|соғлом бўлинг|"
     r"не переживайте|не волнуйтесь|всё будет хорошо|уважаемый|дорогой|высококвалифицирован"
 )
-EMPATHY = re.compile(r"(?i)xijolat|tushunaman|tushundim|afsus|ko'p uchraydi|кўп учрайди|хижолат|тушунаман|понимаю|сожалею")
+EMPATHY = re.compile(
+    r"(?i)xijolat|tushunaman|tushundim|afsus|ko'p uchraydi|кўп учрайди|хижолат|тушунаман|понимаю|сожалею"
+)
 _SENT = re.compile(r"(?<=[.!?])\s+")
 DEAR = re.compile(r"(?<![A-Za-zА-Яа-я])(aziz|азиз) (bemor|do'stim|inson|бемор|дўстим)")
 MIXED_SCRIPT = re.compile(r"[а-яёқўғҳ][a-z]|[a-z][а-яёқўғҳ]", re.I)

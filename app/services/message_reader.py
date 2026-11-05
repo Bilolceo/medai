@@ -21,7 +21,7 @@ from app.rag.llm import ChatMessage, LLMProvider
 
 logger = logging.getLogger(__name__)
 
-KINDS = ("none", "urology", "libido_only", "steroid", "emergency")
+KINDS = ("none", "urology", "libido_only", "emergency")
 
 _PROMPT = """\
 You read one message a patient wrote to a urologist-andrologist's Instagram \
@@ -37,11 +37,10 @@ Answer with JSON only, exactly these keys:
  "greeting_only": true if the message is only a greeting or small talk,
  "complaint_kind": "none" | "urology" (any urological or andrological \
 problem: erection, potency, premature ejaculation, prostate, urination, \
-testicles, varicocele, infertility, infection, stones, circumcision, a wish \
-to be examined) | "libido_only" (ONLY low or lost sexual desire, nothing \
-else) | "steroid" (anabolic steroids, a course, hormones, testosterone, \
-sport) | "emergency" (sudden severe pain or swelling, bleeding, cannot \
-urinate, high fever),
+testicles, varicocele, infertility, infection, stones, circumcision, \
+hormones, testosterone, a wish to be examined) | "libido_only" (ONLY low \
+or lost sexual desire, nothing else) | "emergency" (sudden severe pain or \
+swelling, bleeding, cannot urinate, high fever),
  "complaint": the complaint in a few of the patient's own words, or null,
  "name": the patient's first name if they give it, capitalised and in the \
 alphabet they wrote it in ("Руслан" stays "Руслан"), or null -- never a \

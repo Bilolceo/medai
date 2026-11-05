@@ -130,14 +130,6 @@
       "price_ru": "<<ONLINE_PRICE_RU>>",
       "prepay_ru": "<<ONLINE_PREPAY_RU>>"
     },
-    "steroid": {
-      "price": "<<STEROID_PRICE>>",
-      "prepay": "<<STEROID_PREPAY>>",
-      "price_cyr": "<<STEROID_PRICE_CYR>>",
-      "prepay_cyr": "<<STEROID_PREPAY_CYR>>",
-      "price_ru": "<<STEROID_PRICE_RU>>",
-      "prepay_ru": "<<STEROID_PREPAY_RU>>"
-    },
     "evening": {
       "price": "<<EVENING_PRICE>>",
       "prepay": "<<EVENING_PREPAY>>",

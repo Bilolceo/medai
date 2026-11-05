@@ -302,9 +302,9 @@ def drop_questions(reply: str) -> str:
 _COMPLAINT = re.compile(
     r"erek|erect|potens|tez\s*bo['‘ʻ’`]?shan|og['‘ʻ’`]?ri|siydik|siyish|siya\s*olma|\bqon\b|"
     r"moyak|tuxum|prostat|varikot|bepusht|farzand|buyrak|achish|shish|sunnat|"
-    r"yuqumli|infeksiya|tahlil|spermogramma|steroid|anabol|gormon|testosteron|kurs\b|"
+    r"yuqumli|infeksiya|tahlil|spermogramma|gormon|testosteron|"
     r"muammo|kasal|shikoyat|davola|qabul|yozil|ko['‘ʻ’`]?rik|konsultatsiya|"
-    r"эрек|потенц|оғри|сийдик|мояк|простат|варикоц|фарзанд|буйрак|стероид|гормон|"
+    r"эрек|потенц|оғри|сийдик|мояк|простат|варикоц|фарзанд|буйрак|гормон|"
     r"муаммо|касал|шикоят|даволан|қабул|ёзил|кўрик|консультац|"
     r"бол[иья]|моч|кров|яичк|бесплод|эякул|семяизверж|простатит|инфекц|анализ|"
     r"проблем|лечени|запис|приём|прием",
@@ -355,10 +355,6 @@ _WANTS_CALL = re.compile(
 _PAID = re.compile(
     r"to['‘ʻ’`]?ladim|to['‘ʻ’`]?lov\s+qildim|o['‘ʻ’`]?tkazdim|tashladim|тўладим|ўтказдим|"
     r"оплатил|перевел|перевёл|отправил",
-    re.IGNORECASE,
-)
-_STEROID = re.compile(
-    r"steroid|anabol|kurs\b|testosteron|gormon|sport|стероид|анабол|курс\b|тестостерон|гормон|спорт",
     re.IGNORECASE,
 )
 _TODAY = re.compile(r"bugun|бугун|сегодня", re.IGNORECASE)
@@ -468,7 +464,7 @@ def _understand(message: str, reading: Any, *, asked_name: bool) -> _Understood:
         when = _when(when)
     messenger = {"telegram": "Telegram", "whatsapp": "WhatsApp"}.get(reading.messenger or "")
     return _Understood(
-        complaint=reading.complaint_kind in ("urology", "steroid", "libido_only")
+        complaint=reading.complaint_kind in ("urology", "libido_only")
         or bool(_COMPLAINT.search(message)),
         greeting_only=reading.greeting_only and reading.complaint_kind == "none",
         question=bool(reading.question) or reading.who_are_you,
@@ -776,7 +772,6 @@ def plan_intake(
             (n for n in names if re.search(re.escape(n), offer, re.IGNORECASE)), texts["tomorrow"]
         )
         at = clock.group(1) if clock else ""
-        _, prepay = price_of("steroid" if "500" in offer else "uro")
         text = texts["paid_confirm"].format(name_part=name_part(), day=day, time=at)
         note = f"ONLAYN {day} {at} -- 50% oldindan, chekni tekshiring ({reason})"
         return Plan(reply=f"{text} [[CALLBACK:{found.shown}|{note}|{day} {at}]]")
@@ -790,7 +785,7 @@ def plan_intake(
         ):
             if _EVENING_WORD.search(message) and at.hour < 12:
                 at = at.replace(hour=at.hour + 12)
-            kind = "steroid" if _STEROID.search(" ".join(patient_since)) else "uro"
+            kind = "uro"
             if _within(flow, at, "evening"):
                 evening_day = (
                     now.date() if _TODAY.search(message) else now.date() + timedelta(days=1)
