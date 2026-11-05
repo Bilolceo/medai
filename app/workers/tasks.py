@@ -60,6 +60,7 @@ from app.services import (
     instagram_posts,
     message_labels,
     patient_media,
+    promo_images,
     small_talk,
     turn,
     voice_notes,
@@ -1016,9 +1017,9 @@ async def note_clinic_reply(
             conversation = await ConversationRepository(session).get_open_for_user(user.id)
             if conversation is None:
                 return
-            if (text or "").strip():
-                since = datetime.now(UTC) - timedelta(minutes=10)
-                recent = (
+            since = datetime.now(UTC) - timedelta(minutes=10)
+            recent = list(
+                (
                     await session.execute(
                         select(Message.content).where(
                             Message.conversation_id == conversation.id,
@@ -1027,8 +1028,14 @@ async def note_clinic_reply(
                         )
                     )
                 ).scalars()
-                if any(handoff.same_message(text, content) for content in recent):
+            )
+            if (text or "").strip():
+                if any(handoff.one_of_ours(text, content) for content in recent):
                     return
+            elif any(promo_images.sent_line("") in (content or "") for content in recent):
+                # A picture with no words, minutes after the assistant sent the
+                # price card: the card's own echo, not a person in the app.
+                return
             if await _is_automatic_reply(session, conversation.id, text, sent_at):
                 if (text or "").strip():
                     await record_outbound_message(

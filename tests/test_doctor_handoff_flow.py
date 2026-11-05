@@ -227,6 +227,37 @@ async def test_the_bots_own_echo_leaves_it_answering(
         assert conversation.is_bot_enabled is True
 
 
+async def test_the_echoes_of_a_reply_sent_as_bubbles_and_a_card_leave_it_answering(
+    db_session: AsyncSession,
+    seed: Seed,
+    as_tenant: Callable[[uuid.UUID], AbstractContextManager[None]],
+) -> None:
+    """A reply that went out as two messages and a price card echoes back as
+    three pieces, none of them the recorded row; the bot kept switching
+    itself off (live, 2026-11-05)."""
+    from app.services.conversation import record_outbound_message
+
+    with as_tenant(seed.tenant_a.id):
+        await record_outbound_message(
+            db_session,
+            conversation_id=seed.a.conversation.id,
+            channel_type="instagram",
+            text=(
+                "Men doktor Sultonbekning administratoriman, ismim Dildora. ||| "
+                "Konsultatsiya narxi va tartibi rasmda. Ismingiz nima? "
+                "[[IMAGE:https://x/day.jpg|Kunduzgi konsultatsiya: narx va tartib]]"
+            ),
+        )
+        await db_session.flush()
+        await _echo(db_session, seed, "Men doktor Sultonbekning administratoriman, ismim Dildora.")
+        await _echo(db_session, seed, "Konsultatsiya narxi va tartibi rasmda. Ismingiz nima?")
+        await _echo(db_session, seed, None)
+        conversation = await db_session.get(Conversation, seed.a.conversation.id)
+        assert conversation is not None
+        await db_session.refresh(conversation)
+        assert conversation.is_bot_enabled is True
+
+
 async def test_an_echo_to_somebody_who_never_wrote_is_ignored(
     db_session: AsyncSession,
     seed: Seed,

@@ -80,6 +80,16 @@ def same_message(a: str | None, b: str | None) -> bool:
     return " ".join((a or "").split()) == " ".join((b or "").split())
 
 
+def one_of_ours(echo: str | None, recorded: str | None) -> bool:
+    """Whether an echoed text is a recorded reply or one of the messages it
+    went out as. A reply sent as several bubbles (app.services.bubbles) is
+    kept as one row with a blank line between them, so each bubble echoes
+    back as a piece of it, not the whole."""
+    if same_message(echo, recorded):
+        return True
+    return any(same_message(echo, part) for part in (recorded or "").split("\n\n") if part.strip())
+
+
 async def flag(session: AsyncSession, conversation_id: uuid.UUID) -> None:
     """Mark this conversation as waiting on a person, keeping the earliest time."""
     conversation = await session.get(Conversation, conversation_id)
