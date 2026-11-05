@@ -49,7 +49,11 @@ def test_the_whole_sequence_in_the_doctors_words() -> None:
     assert replies[3].startswith(
         "Rahmat, Akmal. Operatorimiz ertaga 10 da +998 90 123 45 67 raqamiga qo'ng'iroq qiladi."
     )
-    assert "[[CALLBACK:+998 90 123 45 67|Salom, ereksiya yaxshi emas|ertaga 10 da]]" in replies[3]
+    assert (
+        "[[CALLBACK:+998 90 123 45 67|Salom, ereksiya yaxshi emas -- 50% oldindan|ertaga 10 da]]"
+        in replies[3]
+    )
+    assert "50%" in replies[3]
 
 
 def test_a_bare_greeting_is_answered_with_the_introduction() -> None:
@@ -377,7 +381,7 @@ def test_after_the_operators_hours_line_the_number_already_given_stands() -> Non
 
 def test_the_call_back_names_the_complaint_not_the_number_message() -> None:
     replies = _talk(["Prostatit bor", "Akmal", "Toshkent", "ertaga 10 da, 93 345 67 89"])
-    assert "|Prostatit bor|" in replies[3]
+    assert "|Prostatit bor -- 50% oldindan|" in replies[3]
 
 
 def test_a_price_question_without_a_complaint_asks_what_for_first() -> None:

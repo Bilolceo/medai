@@ -702,7 +702,7 @@ def plan_intake(
             # A bare "16:00" reads as "16:00 da" / "в 16:00".
             when = texts.get("at_clock", "{t}").format(t=when.strip())
         text = texts["confirm"].format(name_part=name_part(), when=when, shown=phone)
-        return Plan(reply=f"{text} [[CALLBACK:{phone}|{reason}|{when}]]")
+        return Plan(reply=f"{text} [[CALLBACK:{phone}|{reason} -- 50% oldindan|{when}]]")
 
     def foreign(found: phone_check.Phone, said_now: str) -> Plan:
         app = u.messenger
@@ -714,7 +714,8 @@ def plan_intake(
         text = texts["foreign_confirm"].format(
             name_part=name_part(), when=when, app=app, shown=found.shown
         )
-        return Plan(reply=f"{text} [[CALLBACK:{found.shown}|{reason} (chet el, {app})|{when}]]")
+        note = f"{reason} (chet el, {app}) -- 50% oldindan"
+        return Plan(reply=f"{text} [[CALLBACK:{found.shown}|{note}|{when}]]")
 
     def take_phone() -> Plan | None:
         found = phone_check.read(message)
