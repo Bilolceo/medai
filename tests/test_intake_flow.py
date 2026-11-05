@@ -236,3 +236,32 @@ def test_a_new_number_after_the_confirmation_is_taken_as_a_correction() -> None:
     )
     assert "+998 91 234 56 78 raqamiga qo'ng'iroq qiladi" in replies[4]
     assert "|ertaga 10 da]]" in replies[4]
+
+
+def test_bilols_chat_of_2026_11_05() -> None:
+    """A live test chat: Russia misspelt, said again later, an Uzbek number
+    without a time, an evening time, then 16:00 -- which must end in the
+    scripted confirmation with the call-back, not a reply from the model."""
+    replies = _talk(
+        [
+            "Asalomu alekum",
+            "Menda ereksiya bolmoqda",
+            "Bilol",
+            "Toshkendaman lekin hozr rassiyada",
+            "974880666",
+            "18:40 da bugun",
+            "16:00",
+        ]
+    )
+    assert "onlayn videoqo'ng'iroqda konsultatsiya" in replies[3]
+    assert replies[4] == "Qaysi vaqtda qo'ng'iroq qilsak qulay?"
+    assert replies[5].startswith("Operatorlarimiz 09:00 dan 16:00 gacha")
+    assert replies[6].startswith("Rahmat, Bilol. Operatorimiz 16:00 da +998 97 488 06 66 raqamiga")
+    assert "[[CALLBACK:+998 97 488 06 66|" in replies[6]
+
+
+def test_abroad_said_after_the_place_question_still_brings_the_online_line() -> None:
+    replies = _talk(["Ereksiya bor", "Bilol", "Toshkent", "Hozr men Rassiyadaman"])
+    first, second = bubbles.parts(replies[3])
+    assert "onlayn videoqo'ng'iroqda konsultatsiya" in first
+    assert second.startswith("Operatorimiz qo'ng'iroq qilib")

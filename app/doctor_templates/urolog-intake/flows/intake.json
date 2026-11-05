@@ -25,7 +25,8 @@
       "phone_foreign": "Bu chet el raqami: {shown}. Operatorlarimiz chet el raqamiga oddiy qo'ng'iroq qila olmaydi. Shu raqamda Telegram yoki WhatsApp bormi? Yoki O'zbekistondagi raqam qoldirishingiz mumkin.",
       "ask_app": "Telegram yoki WhatsApp -- qaysi biri orqali bog'lanaylik?",
       "foreign_confirm": "Rahmat{name_part}. Operatorimiz {when} {app} orqali {shown} raqamiga bog'lanadi.",
-      "any_time": "ish vaqtida"
+      "any_time": "ish vaqtida",
+      "at_clock": "{t} da"
     },
     "uz-cyrl": {
       "greet_back": "Ва алайкум ассалом.",
@@ -49,7 +50,8 @@
       "phone_foreign": "Бу чет эл рақами: {shown}. Операторларимиз чет эл рақамига оддий қўнғироқ қила олмайди. Шу рақамда Telegram ёки WhatsApp борми? Ёки Ўзбекистондаги рақам қолдиришингиз мумкин.",
       "ask_app": "Telegram ёки WhatsApp -- қайси бири орқали боғланайлик?",
       "foreign_confirm": "Раҳмат{name_part}. Операторимиз {when} {app} орқали {shown} рақамига боғланади.",
-      "any_time": "иш вақтида"
+      "any_time": "иш вақтида",
+      "at_clock": "{t} да"
     },
     "ru": {
       "greet_back": "Здравствуйте.",
@@ -73,7 +75,8 @@
       "phone_foreign": "Это зарубежный номер: {shown}. Наши операторы не могут звонить на зарубежные номера обычным звонком. Есть ли на этом номере Telegram или WhatsApp? Или можете оставить номер в Узбекистане.",
       "ask_app": "Через что удобнее связаться — Telegram или WhatsApp?",
       "foreign_confirm": "Спасибо{name_part}. Оператор свяжется с вами {when} через {app} по номеру {shown}.",
-      "any_time": "в рабочее время"
+      "any_time": "в рабочее время",
+      "at_clock": "в {t}"
     }
   }
 }

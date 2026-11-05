@@ -309,10 +309,13 @@ _COMPLAINT = re.compile(
     r"проблем|лечени|запис|приём|прием",
     re.IGNORECASE,
 )
+# Spelled as people type it: "rassiyada", "rosiyada", "moskvada", "korеyada".
 _ABROAD = re.compile(
-    r"rossiya|moskva|koreya|turkiya|qozog['‘ʻ’`]?iston|amerika|dubay|germaniya|polsha|"
-    r"chet\s*el|sankt|piter|yevropa|россия|москва|корея|турция|казахстан|америка|дубай|"
-    r"германия|польша|чет\s*эл|за\s*границ|питер|европ",
+    r"r[ao]s+i[iy]?a|russia|moskva|maskva|koreya|koriya|turkiya|turtsiya|qozog['‘ʻ’`]?iston|"
+    r"kazaxstan|amerika|ameriqa|usa\b|dubay|dubai|bae\b|germaniya|polsha|angliya|yaponiya|"
+    r"chet\s*el|sankt|piter|yevropa|evropa|"
+    r"р[ао]сси|москв|корея|корея|турци|туркия|казахстан|қозоғистон|америк|дубай|"
+    r"германи|польш|англи|чет\s*эл|за\s*границ|питер|европ",
     re.IGNORECASE,
 )
 _REFUSE = re.compile(
@@ -477,8 +480,13 @@ def plan_intake(
 
     def confirm(phone: str, when: str) -> Plan:
         at = parse_time(when)
-        if (at is not None and not _within(flow, at)) or _EVENING_WORD.search(when):
+        # "16:00" is inside "09:00 dan 16:00 gacha" for a call.
+        callable_at = at is None or _within(flow, at) or f"{at:%H:%M}" == flow.get("online_end")
+        if not callable_at or _EVENING_WORD.search(when):
             return Plan(reply=texts["operator_hours"])
+        if re.fullmatch(r"\d{1,2}(?:[:.]\d{2})?", when.strip()):
+            # A bare "16:00" reads as "16:00 da" / "в 16:00".
+            when = texts.get("at_clock", "{t}").format(t=when.strip())
         text = texts["confirm"].format(name_part=name_part(), when=when, shown=phone)
         return Plan(reply=f"{text} [[CALLBACK:{phone}|{reason}|{when}]]")
 
@@ -601,6 +609,10 @@ def plan_intake(
         if len(message.split()) <= 2 and _NAME_WORD.match(word):
             return Plan(reply=texts["ask_place_named"].format(name=_cap(word)))
         return Plan(reply=texts["ask_place"])
+    told_online = any(_said(flow, "abroad_online", [turn]) for turn in since)
+    if pending in ("ask_phone", "ask_time") and _ABROAD.search(message) and not told_online:
+        # "Hozir men Rossiyadaman", said after the place question was answered.
+        return Plan(reply=f"{texts['abroad_online']} {bubbles.MARKER} {texts['ask_phone']}")
     if pending == "ask_place":
         if _ABROAD.search(message):
             return Plan(reply=f"{texts['abroad_online']} {bubbles.MARKER} {texts['ask_phone']}")
