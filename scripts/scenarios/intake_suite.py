@@ -47,6 +47,7 @@ SCENARIOS: list[tuple[str, list[str]]] = [
     ("D7 emergency", ["Moyagim birdan qattiq og'rib shishdi, 1 soat bo'ldi"]),
     ("D8 medicine", ["Prostatitga qaysi antibiotik yaxshi?", "Farrux", "Toshkent"]),
     # --- low desire: the doctor's online script ---
+    ("F1 steroid evening", ["Steroid kursidan keyin gormonlarim buzildi", "Jasur", "Toshkent", "onlayn", "bugun 20:00", "+998 90 555 66 77"]),
     ("E1 libido full", ["Jinsiy xohishim pasayib ketdi", "Farrux", "Samarqand", "38", "Ertaga 10 da", "To'ladim, raqamim +998 90 123 45 67"]),
     ("E2 libido evening", ["Xohishim pasaygan", "Sardor", "Toshkent", "35", "kechki 8 da"]),
     ("E3 libido russian", ["Здравствуйте, пропало влечение", "Руслан", "Ташкент", "40", "Сколько стоит?", "в 12"]),

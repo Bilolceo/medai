@@ -449,6 +449,14 @@ async def generate_answer(
     )
     if scripted is not None and scripted.reply is not None:
         reply = scripted.reply
+        if scripted.card_topic and not scripted.cards:
+            card = promo_images.for_topic(
+                stored.get("promo_images"),
+                scripted.card_topic,
+                own_turns=[t["content"] for t in history or [] if t.get("role") == "assistant"],
+            )
+            if card is not None:
+                reply = promo_images.attach_scripted(reply, card, script, keep_text=True)
         if scripted.cards:
             patient_said = [t["content"] for t in history or [] if t.get("role") == "user"]
             card = promo_images.choose(

@@ -97,6 +97,9 @@ class Plan:
     prefix: str | None = None
     # Whether a price card may go with this reply (app.services.promo_images).
     cards: bool = False
+    # The card the complaint itself calls for: "day" (urology and andrology)
+    # or "evening" (steroids and sport -- the evening online consultation).
+    card_topic: str | None = None
 
 
 INSTRUCTION = (
@@ -474,7 +477,7 @@ def _understand(message: str, reading: Any, *, asked_name: bool) -> _Understood:
         when = re.sub(r"\s+", " ", _CALL_ME.sub(" ", when)).strip(" ,.") or None
     messenger = {"telegram": "Telegram", "whatsapp": "WhatsApp"}.get(reading.messenger or "")
     return _Understood(
-        complaint=reading.complaint_kind in ("urology", "libido_only")
+        complaint=reading.complaint_kind in ("urology", "libido_only", "sport")
         or bool(_COMPLAINT.search(message)),
         greeting_only=reading.greeting_only and reading.complaint_kind == "none",
         question=bool(reading.question) or reading.who_are_you,
@@ -627,16 +630,20 @@ def plan_intake(
     # "Telefon raqamingizni yozing" asked again is the same step.
     said["ask_phone"] += _said(flow, "ask_phone_again", since)
     said["online_choice"] += _said(flow, "choice_again", since)
-    said["offer_slots"] += _said(flow, "slot_taken", since)
+    said["offer_slots"] += _said(flow, "slot_taken", since) + _said(flow, "offer_evening", since)
     if said["paid_confirm"]:
         return None
     corrected = said["confirm"] and phone_check.read(message) is not None
-    if (said["confirm"] and not corrected) or any(
-        "19:00" in turn and "onlayn" in turn.lower() for turn in since
-    ):
+    # The evening card sent for an evening wish hands the conversation to the
+    # model; the flow's own evening offer does not.
+    evening_handover = re.compile(
+        r"ish vaqtidan keyin doktor bilan faqat onlayn|иш вақтидан кейин доктор билан фақат|"
+        r"после рабочего времени — только онлайн",
+        re.IGNORECASE,
+    )
+    if (said["confirm"] and not corrected) or any(evening_handover.search(t) for t in since):
         return None
-    if any("📎" in turn for turn in since if "kechki" in turn.lower() or "кечки" in turn.lower()):
-        return None
+
     patient_since = [t["content"] for t in since_turns if t.get("role") == "user"] + [message]
     # What the call is about: the patient's complaint as the model put it, or
     # the message that began the sequence -- never the one with the number.
@@ -648,6 +655,11 @@ def plan_intake(
     reason = " ".join(complaint.split()[:12]) or texts["default_reason"]
     question = u.question
     asks_price = u.asks_price
+    sport_words = re.compile(flow.get("sport") or r"(?!x)x", re.IGNORECASE)
+    sport = (reading is not None and reading.complaint_kind == "sport") or any(
+        sport_words.search(t) for t in patient_since
+    )
+    card_topic = "evening" if sport else "day"
 
     def given_name() -> str | None:
         if u.name and reading is not None:
@@ -748,8 +760,10 @@ def plan_intake(
     pending = done[-1] if done else None
 
     def named_complaint(text: str) -> bool:
+        if sport_words.search(text):
+            return True
         if reading is not None and text == message:
-            return reading.complaint_kind in ("urology", "libido_only")
+            return reading.complaint_kind in ("urology", "libido_only", "sport")
         return bool(_COMPLAINT.search(_JUST_A_VISIT.sub(" ", text)))
 
     if pending is None:
@@ -772,7 +786,7 @@ def plan_intake(
         if question and not asks_price:
             return Plan(prefix=lead, then=step, instruction=INSTRUCTION)
         body = f"{lead} {bubbles.MARKER} {step}" if lead else step
-        return Plan(reply=body, cards=asks_price)
+        return Plan(reply=body, cards=asks_price, card_topic=card_topic)
 
     prices = flow.get("prices") or {}
     suffix = {"uz-cyrl": "_cyr", "ru": "_ru"}.get(script, "")
@@ -782,6 +796,9 @@ def plan_intake(
         return entry.get("price" + suffix, ""), entry.get("prepay" + suffix, "")
 
     def offer_slots(lead: str | None = None) -> Plan:
+        if sport:
+            # Steroids and sport: the doctor sees these online, in the evening.
+            return Plan(reply=texts["offer_evening"])
         free = list(slots or [])
         if not free:
             return Plan(reply=texts["no_slots"])
@@ -824,6 +841,8 @@ def plan_intake(
             if _EVENING_WORD.search(message) and at.hour < 12:
                 at = at.replace(hour=at.hour + 12)
             kind = "uro"
+            if sport and not _within(flow, at, "evening"):
+                return Plan(reply=texts["offer_evening"])
             if _within(flow, at, "evening"):
                 evening_day = (
                     now.date() if _TODAY.search(message) else now.date() + timedelta(days=1)
@@ -867,7 +886,7 @@ def plan_intake(
     if pending == "ask_topic" and not question and not u.refuses:
         named = given_name()
         step = texts["ask_place_named"].format(name=named) if named else texts["ask_name"]
-        return Plan(reply=f"{texts['handles']} {step}")
+        return Plan(reply=f"{texts['handles']} {step}", card_topic=card_topic)
     if pending == "ask_name" and not u.name and named_complaint(message) and not question:
         # "Prostatit" in answer to "Ismingiz nima?": the complaint came late.
         return Plan(reply=f"{texts['handles']} {texts['ask_name']}")
@@ -963,7 +982,7 @@ def plan_intake(
         return Plan(reply=texts["online_choice"])
     if pending == "ask_place":
         in_tashkent = bool(re.search(flow.get("tashkent") or "toshkent", message, re.IGNORECASE))
-        if u.abroad or not in_tashkent:
+        if u.abroad or not in_tashkent or sport:
             # Outside Tashkent: an online consultation, booked and paid here,
             # or the administrator's call -- the patient chooses.
             return Plan(reply=texts["online_choice"])

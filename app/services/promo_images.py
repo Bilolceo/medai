@@ -93,6 +93,9 @@ def choose(
         return None
     if evening_wish or any(_EVENING.search(text) for text in recent):
         topic = "evening"
+    elif any(_SPORT.search(text) for text in everything):
+        # Steroids and sport are seen in the evening, online.
+        topic = "evening"
     elif any(_UROLOGY.search(text) for text in everything) or _POINTS_AT_PICTURE.search(reply):
         topic = "day"
     elif asked_topic_last and price_guard.asks_price(user_message, list(patient_turns)):
@@ -184,12 +187,29 @@ def for_transcript(text: str) -> str:
     ).strip()
 
 
-def attach_scripted(reply: str, image: Mapping[str, Any], script: str = "uz-latn") -> str:
+_EVENING_SHORT = {
+    "uz-latn": "Kechki onlayn konsultatsiya (19:00-22:00) narxi va tartibi rasmda.",
+    "uz-cyrl": "Кечки онлайн консультация (19:00-22:00) нархи ва тартиби расмда.",
+    "ru": "Цена и порядок вечерней онлайн-консультации (19:00-22:00) — на картинке.",
+}
+_SPORT = re.compile(
+    r"steroid|anabol|sport|bodibild|bodybuild|\bzal\b|trenbolon|nandrolon|sustanon|kurs\b|kursdan|"
+    r"стероид|анабол|спорт|бодибилд|курс\b|курсдан|тренболон|нандролон|сустанон|качалк",
+    re.IGNORECASE,
+)
+
+
+def attach_scripted(
+    reply: str, image: Mapping[str, Any], script: str = "uz-latn", *, keep_text: bool = False
+) -> str:
     """A scripted reply with the card: the caption goes before the step's own
-    question, in the last message, so the question stays the last word."""
-    if image.get("topic") == "evening":
+    question, in the last message, so the question stays the last word.
+    ``keep_text`` keeps the step's words under the evening card too -- the
+    card sent with a steroid or sport complaint, not an evening wish."""
+    if image.get("topic") == "evening" and not keep_text:
         return attach(reply, image, script)
-    caption = _CAPTIONS.get(script, _CAPTIONS["uz-latn"])
+    captions = _EVENING_SHORT if image.get("topic") == "evening" else _CAPTIONS
+    caption = captions.get(script, captions["uz-latn"])
     parts = reply.split("|||")
     last = parts[-1].strip()
     sentences = _SENTENCE.findall(last)
@@ -200,3 +220,18 @@ def attach_scripted(reply: str, image: Mapping[str, Any], script: str = "uz-latn
     parts[-1] = " " + last.strip()
     text = "|||".join(parts).strip()
     return f"{text} [[IMAGE:{image['url']}|{image.get('title', '')}]]"
+
+
+def for_topic(
+    images: Sequence[Mapping[str, Any]] | None, topic: str, *, own_turns: Sequence[str]
+) -> Mapping[str, Any] | None:
+    """The card for this topic, sent with the reply to the patient's complaint
+    -- the doctor wants the right one in front of them from the start -- once
+    a conversation."""
+    image = next((i for i in images or [] if i.get("topic") == topic), None)
+    if image is None:
+        return None
+    already = sent_line(str(image.get("title", "")))
+    if any(already in turn for turn in own_turns):
+        return None
+    return image

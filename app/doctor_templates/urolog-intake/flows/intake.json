@@ -41,7 +41,8 @@
       "tomorrow": "ertaga",
       "and": "va",
       "at": "da",
-      "ask_topic": "Qaysi masala bo'yicha konsultatsiya kerak?"
+      "ask_topic": "Qaysi masala bo'yicha konsultatsiya kerak?",
+      "offer_evening": "Kechki onlayn konsultatsiya 19:00 dan 22:00 gacha. Bugun yoki ertaga, soat nechiga sizga qulay?"
     },
     "uz-cyrl": {
       "greet_back": "Ва алайкум ассалом.",
@@ -81,7 +82,8 @@
       "tomorrow": "эртага",
       "and": "ва",
       "at": "да",
-      "ask_topic": "Қайси масала бўйича консультация керак?"
+      "ask_topic": "Қайси масала бўйича консультация керак?",
+      "offer_evening": "Кечки онлайн консультация 19:00 дан 22:00 гача. Бугун ёки эртага, соат нечига сизга қулай?"
     },
     "ru": {
       "greet_back": "Здравствуйте.",
@@ -121,7 +123,8 @@
       "tomorrow": "завтра",
       "and": "и",
       "at": "в",
-      "ask_topic": "По какому вопросу нужна консультация?"
+      "ask_topic": "По какому вопросу нужна консультация?",
+      "offer_evening": "Вечерняя онлайн-консультация с 19:00 до 22:00. Сегодня или завтра, во сколько вам удобно?"
     }
   },
   "prices": {
@@ -144,5 +147,6 @@
   },
   "evening_start": "<<EVENING_START>>",
   "evening_end": "<<EVENING_END>>",
-  "tashkent": "toshkent|tashkent|ташкент|тошкент|chilonzor|yunusobod|sergeli|yashnobod|mirzo|olmazor|uchtepa|shayxontohur|yakkasaroy|bektemir|mirobod|чиланзар|юнусобод|сергели"
+  "tashkent": "toshkent|tashkent|ташкент|тошкент|chilonzor|yunusobod|sergeli|yashnobod|mirzo|olmazor|uchtepa|shayxontohur|yakkasaroy|bektemir|mirobod|чиланзар|юнусобод|сергели",
+  "sport": "steroid|anabol|sport|bodibild|bodybuild|\\bzal\\b|trenbolon|nandrolon|sustanon|kurs\\b|kursdan|kursni|стероид|анабол|спорт|бодибилд|курс\\b|курсдан|тренболон|нандролон|сустанон|качалк"
 }

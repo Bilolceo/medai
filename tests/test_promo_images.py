@@ -135,3 +135,23 @@ def test_asking_the_hours_after_hours_is_not_a_wish_for_the_evening() -> None:
             CARDS, user_message=asked, patient_turns=["Prostatit"], own_turns=[], reply="", hour=18
         )
         assert card is None, asked
+
+
+def test_the_complaint_card_goes_once() -> None:
+    assert promo_images.for_topic(CARDS, "day", own_turns=[]) == CARDS[0]
+    sent = ["x\n\n" + promo_images.sent_line(CARDS[0]["title"])]
+    assert promo_images.for_topic(CARDS, "day", own_turns=sent) is None
+
+
+def test_the_evening_card_with_a_complaint_keeps_the_question() -> None:
+    reply = "Ha, doktor shu bilan shug'ullanadi. Ismingiz nima?"
+    text, urls = promo_images.split(promo_images.attach_scripted(reply, CARDS[1], keep_text=True))
+    assert text == (
+        "Ha, doktor shu bilan shug'ullanadi. Kechki onlayn konsultatsiya (19:00-22:00) "
+        "narxi va tartibi rasmda. Ismingiz nima?"
+    )
+    assert urls == ["https://x/evening.jpg"]
+
+
+def test_a_steroid_price_question_gets_the_evening_card() -> None:
+    assert _pick("Steroid kursidan keyin tekshirmoqchiman, qancha turadi?") == "evening"

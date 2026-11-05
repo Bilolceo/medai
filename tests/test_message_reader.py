@@ -121,3 +121,10 @@ def test_a_time_with_call_me_in_it_is_just_the_time() -> None:
     )
     assert plan is not None and plan.reply is not None
     assert "Operatorimiz ertaga 10 da +998 95 890 12 34 raqamiga" in plan.reply
+
+
+def test_a_sport_complaint_the_model_read_is_a_complaint_with_the_evening_card() -> None:
+    plan = _plan("Steroid kursidan keyin gormonlarim buzildi", [], complaint_kind="sport")
+    assert plan is not None and plan.reply is not None
+    assert bubbles.parts(plan.reply)[-1] == "Ha, doktor shu bilan shug'ullanadi. Ismingiz nima?"
+    assert plan.card_topic == "evening"

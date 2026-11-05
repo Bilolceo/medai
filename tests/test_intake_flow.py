@@ -388,3 +388,43 @@ def test_a_price_question_without_a_complaint_asks_what_for_first() -> None:
     assert replies[1] == "Ha, doktor shu bilan shug'ullanadi. Ismingiz nima?"
     assert replies[2] == "Jasur, qayerdansiz?"
     assert replies[3].startswith("Operatorimiz qo'ng'iroq qilib")
+
+
+# --- the card the complaint calls for ---
+
+
+def test_a_urology_complaint_brings_the_day_card() -> None:
+    plan = scripted_flow.plan(
+        FLOWS, script="uz-latn", user_message="Prostatit bor", history=[], now=NOW
+    )
+    assert plan is not None and plan.card_topic == "day"
+
+
+def test_a_steroid_complaint_brings_the_evening_card() -> None:
+    plan = scripted_flow.plan(
+        FLOWS,
+        script="uz-latn",
+        user_message="Steroid kursidan keyin muammo bor",
+        history=[],
+        now=NOW,
+    )
+    assert plan is not None and plan.card_topic == "evening"
+
+
+def test_a_steroid_patient_books_the_evening_at_the_evening_price() -> None:
+    replies = _book(
+        [
+            "Steroid kursidan keyin muammo",
+            "Jasur",
+            "Toshkent",
+            "onlayn",
+            "bugun 10:00",
+            "bugun 20:00",
+        ]
+    )
+    # Tashkent or not, the evening is online: the choice is offered.
+    assert replies[2].startswith("Doktor bilan onlayn videoqo'ng'iroqda konsultatsiya")
+    assert replies[3].startswith("Kechki onlayn konsultatsiya 19:00 dan 22:00 gacha.")
+    # A daytime hour is not on offer for this.
+    assert replies[4].startswith("Kechki onlayn konsultatsiya 19:00 dan 22:00 gacha.")
+    assert "990 000 so'm" in replies[5] and "495 000 so'm" in replies[5]
