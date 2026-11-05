@@ -363,3 +363,28 @@ def test_russian_booking() -> None:
     assert replies[3].startswith("Свободно: Сегодня в 14:00 и 15:30, завтра в 10:00 и 11:30.")
     assert "Хорошо, могу записать вас завтра на 11:30." in replies[4]
     assert "165 000 сум" in replies[4]
+
+
+def test_after_the_operators_hours_line_the_number_already_given_stands() -> None:
+    """Live test, 2026-11-05: "+998 ..., soat 19 da", then "16:00" -- the
+    number was asked for again."""
+    replies = _talk(
+        ["Prostatit bor", "Akmal", "Toshkent", "+998 90 123 45 67, soat 19 da", "16:00"]
+    )
+    assert replies[3].startswith("Operatorlarimiz 09:00 dan 16:00 gacha")
+    assert replies[4].startswith("Rahmat, Akmal. Operatorimiz 16:00 da +998 90 123 45 67")
+
+
+def test_the_call_back_names_the_complaint_not_the_number_message() -> None:
+    replies = _talk(["Prostatit bor", "Akmal", "Toshkent", "ertaga 10 da, 93 345 67 89"])
+    assert "|Prostatit bor|" in replies[3]
+
+
+def test_a_price_question_without_a_complaint_asks_what_for_first() -> None:
+    """Live test, 2026-11-05: "Qabul narxi qancha?" got "Ha, doktor shu bilan
+    shug'ullanadi" before any complaint, then "Prostatit" was read as a name."""
+    replies = _talk(["Qabul narxi qancha?", "Prostatit", "Jasur", "Toshkent"])
+    assert bubbles.parts(replies[0])[-1] == "Qaysi masala bo'yicha konsultatsiya kerak?"
+    assert replies[1] == "Ha, doktor shu bilan shug'ullanadi. Ismingiz nima?"
+    assert replies[2] == "Jasur, qayerdansiz?"
+    assert replies[3].startswith("Operatorimiz qo'ng'iroq qilib")

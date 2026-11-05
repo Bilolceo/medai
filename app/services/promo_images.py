@@ -79,10 +79,11 @@ def choose(
     asked_topic_last = bool(own_turns) and bool(_ASKED_TOPIC.search(own_turns[-1]))
     recent = [*patient_turns[-3:], user_message]
     everything = [*patient_turns, user_message]
-    after_hours = hour is not None and not (DAY_START_HOUR <= hour < DAY_END_HOUR)
-    evening_wish = bool(_EVENING.search(user_message)) or (
-        after_hours and bool(_WANTS_VISIT.search(user_message))
-    )
+    # The evening card is for a patient who wants the evening -- said so, or
+    # named an evening hour. Writing in the evening is not that: tomorrow's
+    # daytime consultation is still there for them (live test, 2026-11-05).
+    del hour
+    evening_wish = bool(_EVENING.search(user_message))
     wants = (
         price_guard.asks_price(user_message, list(patient_turns))
         or asked_topic_last

@@ -87,16 +87,18 @@ def test_an_evening_call_wish_gets_the_evening_card_without_a_price_question() -
     assert _pick("Menga soat 19:00 da qo'ng'iroq qiling, Rossiyadaman") == "evening"
 
 
-def test_after_hours_a_wish_to_book_gets_the_evening_card() -> None:
+def test_writing_in_the_evening_is_not_a_wish_for_the_evening() -> None:
+    """Live test, 2026-11-05: "Qabul narxi qancha?" at 18:01 got the evening
+    card -- but tomorrow's daytime consultation was there for them."""
     card = promo_images.choose(
         CARDS,
-        user_message="Qabulga yozilmoqchiman",
+        user_message="Qabul narxi qancha?",
         patient_turns=["Prostatit bor"],
         own_turns=[],
         reply="",
         hour=18,
     )
-    assert card is not None and card["topic"] == "evening"
+    assert card is not None and card["topic"] == "day"
 
 
 def test_in_the_day_a_wish_to_book_alone_sends_no_card() -> None:

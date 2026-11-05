@@ -107,3 +107,17 @@ def test_a_soft_no_the_model_understood_is_respected() -> None:
 
 def test_an_emergency_the_model_understood_goes_to_the_model() -> None:
     assert _plan("qornim pastida chidab bo'lmas og'riq", [], complaint_kind="emergency") is None
+
+
+def test_a_time_with_call_me_in_it_is_just_the_time() -> None:
+    plan = _plan(
+        "Salom, men Otabek, tez bo'shanish bor, raqamim +998 95 890 12 34, "
+        "ertaga 10 da qo'ng'iroq qiling",
+        [],
+        complaint_kind="urology",
+        name="Otabek",
+        phone="+998 95 890 12 34",
+        time="ertaga 10 da qo'ng'iroq qiling",
+    )
+    assert plan is not None and plan.reply is not None
+    assert "Operatorimiz ertaga 10 da +998 95 890 12 34 raqamiga" in plan.reply

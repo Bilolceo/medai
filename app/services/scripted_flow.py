@@ -331,7 +331,14 @@ _TIME_WORDS = re.compile(
     r"утр|обед|вечер|сейчас|сегодня|завтра|любое|час",
     re.IGNORECASE,
 )
+# Words that ask to be seen without saying what for.
+_JUST_A_VISIT = re.compile(
+    r"qabul|yozil|ko['‘ʻ’`]?rik|konsultatsiya|narx|qancha|қабул|ёзил|кўрик|консультац|нарх|қанча|"
+    r"запис|приём|прием|цен|стоим|сколько",
+    re.IGNORECASE,
+)
 _INTAKE_STEPS = (
+    "ask_topic",
     "ask_name",
     "ask_place",
     "online_choice",
@@ -462,6 +469,9 @@ def _understand(message: str, reading: Any, *, asked_name: bool) -> _Understood:
     when = reading.time or None
     if when and _PHONE_DIGITS.search(when):
         when = _when(when)
+    if when:
+        # "ertaga 10 da qo'ng'iroq qiling" is "ertaga 10 da".
+        when = re.sub(r"\s+", " ", _CALL_ME.sub(" ", when)).strip(" ,.") or None
     messenger = {"telegram": "Telegram", "whatsapp": "WhatsApp"}.get(reading.messenger or "")
     return _Understood(
         complaint=reading.complaint_kind in ("urology", "libido_only")
@@ -628,8 +638,12 @@ def plan_intake(
     if any("📎" in turn for turn in since if "kechki" in turn.lower() or "кечки" in turn.lower()):
         return None
     patient_since = [t["content"] for t in since_turns if t.get("role") == "user"] + [message]
-    complaint = u.complaint_words or next(
-        (t for t in patient_since if _COMPLAINT.search(t)), message
+    # What the call is about: the patient's complaint as the model put it, or
+    # the message that began the sequence -- never the one with the number.
+    complaint = (
+        (u.complaint_words if len(patient_since) == 1 else None)
+        or next((t for t in patient_since if _COMPLAINT.search(t)), None)
+        or patient_since[0]
     )
     reason = " ".join(complaint.split()[:12]) or texts["default_reason"]
     question = u.question
@@ -692,6 +706,19 @@ def plan_intake(
 
     def take_phone() -> Plan | None:
         found = phone_check.read(message)
+        if found is None and u.when and _said(flow, "operator_hours", since[-1:]):
+            # The number came with an hour the operators do not work; now the
+            # hour is fixed, the number already given stands.
+            earlier = next(
+                (
+                    f.shown
+                    for t in reversed(patient_since[:-1])
+                    if (f := phone_check.read(t)) and f.kind == phone_check.UZ
+                ),
+                None,
+            )
+            if earlier:
+                return confirm(earlier, u.when)
         if found is None:
             # "Telegram bor" after the foreign number was pointed out.
             last_number = next(
@@ -719,8 +746,19 @@ def plan_intake(
     # The first turn of the sequence.
     done = [key for key in _INTAKE_STEPS if said[key]]
     pending = done[-1] if done else None
+
+    def named_complaint(text: str) -> bool:
+        if reading is not None and text == message:
+            return reading.complaint_kind in ("urology", "libido_only")
+        return bool(_COMPLAINT.search(_JUST_A_VISIT.sub(" ", text)))
+
     if pending is None:
         lead = opening()
+        if not named_complaint(message) and phone_check.read(message) is None:
+            # "Qabul narxi qancha?": what for, before the doctor "handles it".
+            body = texts["ask_topic"]
+            plan_body = f"{lead} {bubbles.MARKER} {body}" if lead else body
+            return Plan(reply=plan_body, cards=asks_price)
         early = take_phone()
         if early is not None and early.reply is not None:
             # All of it in one message: complaint, number, time.
@@ -826,10 +864,25 @@ def plan_intake(
     ):
         return offer_slots()
 
+    if pending == "ask_topic" and not question and not u.refuses:
+        named = given_name()
+        step = texts["ask_place_named"].format(name=named) if named else texts["ask_name"]
+        return Plan(reply=f"{texts['handles']} {step}")
+    if pending == "ask_name" and not u.name and named_complaint(message) and not question:
+        # "Prostatit" in answer to "Ismingiz nima?": the complaint came late.
+        return Plan(reply=f"{texts['handles']} {texts['ask_name']}")
+
     # A number, whenever it comes -- or a correction of it -- is checked and
     # moves straight on to the time and the call.
     early = take_phone()
-    callable_steps = ("ask_name", "ask_place", "online_choice", "offer_slots", "ask_phone")
+    callable_steps = (
+        "ask_name",
+        "ask_place",
+        "online_choice",
+        "offer_slots",
+        "ask_phone",
+        "ask_time",
+    )
     if early is not None and (pending in callable_steps or corrected):
         return early
 
@@ -837,6 +890,7 @@ def plan_intake(
         again = {
             "ask_name": texts["ask_name"],
             "ask_place": texts["ask_place"],
+            "ask_topic": texts["ask_topic"],
             "online_choice": texts["choice_again"],
             "offer_slots": texts["choice_again"],
             "ask_phone": texts["ask_phone_again"],
@@ -885,13 +939,12 @@ def plan_intake(
         if said[pending] < 2:
             again = texts["ask_phone_again"] if pending == "ask_phone" else texts[pending]
         else:
+            if pending in ("ask_phone", "ask_topic"):
+                return None
             again = {
                 "ask_name": texts["ask_place"],
                 "ask_place": texts["ask_phone"],
-                "ask_phone": texts["ask_phone_again"],
             }[pending]
-            if pending == "ask_phone":
-                return None
         return Plan(then=again, instruction=INSTRUCTION)
 
     if pending == "ask_name":

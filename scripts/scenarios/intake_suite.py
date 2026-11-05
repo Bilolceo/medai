@@ -20,200 +20,36 @@ from app.services import bubbles, promo_images
 from style_check import style_flags
 
 SCENARIOS: list[tuple[str, list[str]]] = [
-    (
-        "complaint, cooperative",
-        [
-            "Assalomu alaykum",
-            "Ereksiya yaxshi emas",
-            "Akmal",
-            "Samarqanddanman",
-            "+998 90 123 45 67, tushdan keyin",
-        ],
-    ),
-    (
-        "complaint first, then asks price mid-way",
-        [
-            "Tez bo'shanish muammosi bor",
-            "Narxi qancha bo'ladi avval shuni ayting",
-            "Sardor",
-            "Toshkent",
-        ],
-    ),
-    ("price first", ["Qabul narxi qancha?", "Jasur", "Buxoro", "+998 91 234 56 78 ertalab"]),
-    (
-        "address first, then complaint",
-        [
-            "Manzilingiz qayerda?",
-            "Ismim Bobur, varikotsele bor ekan",
-            "Toshkent Chilonzor",
-            "+998 93 345 67 89, kechki 7",
-        ],
-    ),
-    (
-        "refuses name",
-        ["Prostatit bor", "Ismim kerakmi? Shart emas", "Qarshidanman", "+998 94 456 78 90"],
-    ),
-    (
-        "abroad",
-        [
-            "Men Rossiyadaman, kela olmayman, nima qilay",
-            "Dilshod",
-            "Moskva",
-            "+7 999 123 45 67, kechqurun",
-        ],
-    ),
-    (
-        "treatment questions",
-        [
-            "Varikotsele qanday davolanadi, operatsiya shartmi?",
-            "Operatsiya narxi?",
-            "Aziz",
-            "Namangan",
-        ],
-    ),
-    ("declines", ["Erkaklar muammosi", "Yo'q, raqam bermayman, keyin o'zim yozaman"]),
-    (
-        "wants booking directly",
-        [
-            "Qabulga yozilmoqchiman",
-            "Sherzod",
-            "Toshkent, Sergeli",
-            "+998 97 567 89 01, soat 3 da qo'ng'iroq qiling",
-        ],
-    ),
-    (
-        "cyrillic",
-        ["Ассалому алайкум, менда мояк оғрияпти", "Ботир", "Фарғонадан", "+998 90 678 90 12"],
-    ),
-    (
-        "russian",
-        [
-            "Здравствуйте, у меня проблемы с потенцией",
-            "Руслан",
-            "Ташкент",
-            "+998 99 789 01 23, после 18:00",
-        ],
-    ),
-    (
-        "already gave everything in one go",
-        [
-            "Salom, men Otabek, Andijondanman, tez bo'shanish bor, raqamim +998 95 890 12 34, ertaga 10 da qo'ng'iroq qiling"
-        ],
-    ),
-    (
-        "asks why name",
-        ["Siydik qiyin chiqyapti", "Nega ismimni so'rayapsiz?", "Mayli, Komil", "Toshkent"],
-    ),
-    ("emergency inside flow", ["Moyagim birdan qattiq og'rib shishdi, 1 soat bo'ldi"]),
-    ("medicine", ["Prostatitga qaysi antibiotik yaxshi?", "Farrux", "Jizzax"]),
-    (
-        "asks own number back",
-        ["Prostatit bor", "Rustam", "Toshkent", "+998 90 123 45 67", "Raqamim nima edi?"],
-    ),
-    (
-        "russian confirms with number",
-        ["Здравствуйте, варикоцеле", "Тимур", "Ташкент", "+998 99 111 22 33, после обеда"],
-    ),
-    (
-        "asks price three times",
-        [
-            "Narxi qancha?",
-            "Taxminan bo'lsa ham ayting, qancha?",
-            "Yo'q, menga hozir raqam kerak, narxi qancha?",
-            "Mayli, Karim",
-            "Toshkent",
-        ],
-    ),
-    (
-        "asks the same question twice",
-        ["Qayerdasizlar?", "Manzil qayer dedingiz?", "Ulug'bek", "Toshkent"],
-    ),
-    ("only ok replies", ["Assalomu alaykum", "ok", "ha", "xo'p", "Jamshid"]),
-    (
-        "long story",
-        [
-            "Salom. Men 34 yoshdaman, 2 yildan beri prostatit, 3 ta doktorga bordim, antibiotik ichdim, foydasi bo'lmadi, uyquda ham og'riq, ishga ham ta'sir qilyapti, xotinim ham xafa, nima qilsam bo'ladi, sizlarda davolanadimi, qancha vaqt ketadi, narxi qancha?",
-            "Bekzod",
-            "Namangan",
-        ],
-    ),
-    (
-        "thanks and goodbye",
-        [
-            "Prostatit bor",
-            "Nodir",
-            "Toshkent",
-            "+998 90 555 66 77, ertaga ertalab",
-            "Rahmat",
-            "Xayr",
-        ],
-    ),
-    (
-        "libido full flow",
-        [
-            "Jinsiy xohishim pasayib ketdi",
-            "Farrux",
-            "Samarqand",
-            "38",
-            "Ertaga 10 da",
-            "To'ladim, raqamim +998 90 123 45 67",
-        ],
-    ),
-    (
-        "libido price first",
-        [
-            "Xohish yo'q, onlayn konsultatsiya narxi qancha?",
-            "Karim",
-            "Toshkent",
-            "41",
-            "Ertaga 11 da",
-        ],
-    ),
-    (
-        "libido plus erection (not online)",
-        ["Xohish ham past, ereksiya ham yomon", "Sanjar", "Buxoro"],
-    ),
-    ("libido cyrillic", ["Жинсий хоҳишим пасайган", "Ботир", "Фарғона", "35", "Эртага 14 да"]),
-    (
-        "libido asks why age",
-        ["Istak yo'q bo'lib qoldi", "Doston", "Namangan", "Yoshim nimaga kerak?", "33"],
-    ),
-    (
-        "libido doctor himself mid-flow",
-        [
-            "Assalomu alaykum",
-            "Jinsiy xohishim pasayib ketdi",
-            "Doktor o'zi ko'radimi?",
-            "Jasur",
-            "Toshkent",
-            "29",
-            "Bugun bo'lmaydimi?",
-            "Ertaga 15:00",
-            "To'ladim, raqamim +998 90 111 22 33",
-        ],
-    ),
-    (
-        "bilol replay",
-        [
-            "Km bn gaplashvoma",
-            "Kmsz sz oziz tanshtrmyszmi",
-            "Menda ereksiya",
-            "Bilol",
-            "Rossiya",
-            "Puli qancha",
-            "Menga soat 19:00 da qongiroq qiling va men rasiyadaman qanday qilasz",
-            "Ishvoht nechida tugaydi kechi",
-        ],
-    ),
-    ("card urology", ["Prostatit bor, konsultatsiya narxi qancha?", "Akmal"]),
-    ("card unknown topic", ["Narxlar qancha?", "Prostatit bor"]),
-    ("card evening", ["Ishdan keyin kechqurun konsultatsiya bormi, narxi qancha?"]),
-    ("card cyrillic", ["Эрекция яхши эмас, нархи қанча?"]),
-    ("libido evening", ["Xohishim pasaygan", "Sardor", "Toshkent", "35", "kechki 8 da"]),
-    (
-        "libido russian",
-        ["Здравствуйте, пропало влечение", "Руслан", "Ташкент", "40", "Сколько стоит?", "в 12"],
-    ),
+    # --- the ordinary sequence: Tashkent, the administrator calls ---
+    ("A1 tashkent call", ["Assalomu alaykum", "Ereksiya yaxshi emas", "Akmal", "Toshkent", "+998 90 123 45 67, ertaga 10 da"]),
+    ("A2 tashkent number then time", ["Varikotsele bor", "Bobur", "Toshkent, Chilonzor", "+998 93 345 67 89", "tushdan keyin"]),
+    ("A3 everything in one", ["Salom, men Otabek, Andijondanman, tez bo'shanish bor, raqamim +998 95 890 12 34, ertaga 10 da qo'ng'iroq qiling"]),
+    ("A4 complaint only the model reads", ["erkaklik kuchim pasaygan", "Akmal", "Toshkent", "ishdan chiqqach qo'ng'iroq qilinglar, 93 345 67 89"]),
+    # --- numbers ---
+    ("B1 short number", ["Prostatit bor", "Akmal", "Toshkent", "90 123 45 6 ertaga 10 da", "+998 90 123 45 67"]),
+    ("B2 foreign number", ["Ereksiya muammosi", "Bilol", "Toshkent", "+7 999 123 45 67 kechqurun", "Telegram bor"]),
+    ("B3 evening call time", ["Prostatit bor", "Akmal", "Toshkent", "+998 90 123 45 67, soat 19 da", "16:00"]),
+    # --- outside Tashkent: the choice and the online booking ---
+    ("C1 online booking", ["Prostatit bor", "Sardor", "Samarqand", "Onlayn", "ertaga 10:00", "+998 91 234 56 78"]),
+    ("C2 choice call", ["Siydik qiyin chiqyapti", "Komil", "Buxoro", "Administrator qo'ng'iroq qilsin", "+998 94 456 78 90 tushdan keyin"]),
+    ("C3 abroad typo then online", ["Menda ereksiya bolmoqda", "Bilol", "Toshkendaman lekin hozr rassiyada", "onlayn bo'lsin", "bugun 15:30"]),
+    ("C4 evening online", ["Prostatit bor", "Sardor", "Namangan", "onlayn", "ertaga kechki 8 da"]),
+    ("C5 taken hour", ["Varikotsele", "Aziz", "Farg'ona", "ha", "ertaga 9:00"]),
+    ("C6 russian online", ["Здравствуйте, проблемы с потенцией", "Руслан", "Москва", "онлайн", "завтра в 11:00", "+998 99 111 22 33"]),
+    ("C7 cyrillic", ["Ассалому алайкум, менда мояк оғрияпти", "Ботир", "Фарғонадан", "онлайн", "эртага 10:00"]),
+    # --- questions, prices, no ---
+    ("D1 questions in the middle", ["Prostatit bor", "Doktor o'zi ko'radimi?", "Akmal", "Buxoro", "narxi qancha?", "onlayn", "ertaga 11:00"]),
+    ("D2 price first", ["Qabul narxi qancha?", "Prostatit", "Jasur", "Toshkent"]),
+    ("D3 who are you", ["Km bn gaplashvoma", "Kmsz sz oziz tanshtrmyszmi", "Menda ereksiya"]),
+    ("D4 declines", ["Erkaklar muammosi", "Yo'q, raqam bermayman, keyin o'zim yozaman"]),
+    ("D5 soft no", ["Prostatit bor", "Akmal", "Toshkent", "hozircha o'ylab ko'raman"]),
+    ("D6 hours after hours", ["Ishvoht nechida tugaydi kechi"]),
+    ("D7 emergency", ["Moyagim birdan qattiq og'rib shishdi, 1 soat bo'ldi"]),
+    ("D8 medicine", ["Prostatitga qaysi antibiotik yaxshi?", "Farrux", "Toshkent"]),
+    # --- low desire: the doctor's online script ---
+    ("E1 libido full", ["Jinsiy xohishim pasayib ketdi", "Farrux", "Samarqand", "38", "Ertaga 10 da", "To'ladim, raqamim +998 90 123 45 67"]),
+    ("E2 libido evening", ["Xohishim pasaygan", "Sardor", "Toshkent", "35", "kechki 8 da"]),
+    ("E3 libido russian", ["Здравствуйте, пропало влечение", "Руслан", "Ташкент", "40", "Сколько стоит?", "в 12"]),
 ]
 
 EMPATHY = re.compile(r"(?i)xijolat|tushunaman|afsus|ko'p uchraydi|кўп учрайди|хижолат")

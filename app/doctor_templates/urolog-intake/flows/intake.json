@@ -40,7 +40,8 @@
       "today": "bugun",
       "tomorrow": "ertaga",
       "and": "va",
-      "at": "da"
+      "at": "da",
+      "ask_topic": "Qaysi masala bo'yicha konsultatsiya kerak?"
     },
     "uz-cyrl": {
       "greet_back": "Ва алайкум ассалом.",
@@ -79,7 +80,8 @@
       "today": "бугун",
       "tomorrow": "эртага",
       "and": "ва",
-      "at": "да"
+      "at": "да",
+      "ask_topic": "Қайси масала бўйича консультация керак?"
     },
     "ru": {
       "greet_back": "Здравствуйте.",
@@ -118,7 +120,8 @@
       "today": "сегодня",
       "tomorrow": "завтра",
       "and": "и",
-      "at": "в"
+      "at": "в",
+      "ask_topic": "По какому вопросу нужна консультация?"
     }
   },
   "prices": {
