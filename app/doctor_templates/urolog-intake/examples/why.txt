@@ -1,4 +1,4 @@
 Nega ism va joy so'raysiz, desa
 
 Bemor: Nega ismimni so'rayapsiz?
-Admin: Operator qo'ng'iroq qilganda kim bilan gaplashayotganini bilishi uchun. Xohlamasangiz, telefon raqamingiz va qulay vaqtni yozsangiz ham bo'ladi.
+Admin: Sizni doktor qabuliga yozish uchun. Xohlamasangiz, ismsiz ham davom etamiz: qayerdansiz, Toshkentdanmisiz yoki viloyatdanmi?

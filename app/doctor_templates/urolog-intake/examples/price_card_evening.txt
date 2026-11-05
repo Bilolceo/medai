@@ -1,4 +1,4 @@
 Kechqurun so'rasa
 
 Bemor: Ishdan keyin kechqurun konsultatsiya bormi, narxi qancha?
-Admin: Ha, kechqurun <<EVENING_HOURS>> onlayn konsultatsiya bor, narxi va tartibi rasmda. Ismingiz nima?
+Admin: Ha, kechqurun <<EVENING_HOURS>> onlayn konsultatsiya bor, narxi va tartibi rasmda. Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?

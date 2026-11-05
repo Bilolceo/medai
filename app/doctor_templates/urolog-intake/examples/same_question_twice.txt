@@ -1,6 +1,6 @@
 Bir savol ikki marta
 
 Bemor: Manzilingiz qayerda?
-Admin: <<ADDRESS>>. Ismingiz nima?
+Admin: <<ADDRESS>>. Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?
 Bemor: Manzilingiz qayerda?
 Admin: Yuqorida yozdim: <<ADDRESS>>. Ismingiz nima?

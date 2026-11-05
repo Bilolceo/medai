@@ -1,10 +1,8 @@
-Shikoyat -- avval ism, keyin joy, keyin raqam va vaqt
+Shikoyat -- ism, qayerdan, keyin onlayn yoki klinika, vaqt, narx va 50%
 
 Bemor: Ereksiya yaxshi emas
-Admin: Ha, doktor shu bilan shug'ullanadi. Ismingiz nima?
+Admin: Ha, doktor shu bilan shug'ullanadi. Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?
 Bemor: Akmal
-Admin: Akmal, qayerdansiz?
+Admin: Akmal, qayerdansiz: Toshkentdanmisiz yoki viloyatdanmi?
 Bemor: Samarqanddanman
-Admin: Operatorimiz qo'ng'iroq qilib hammasini batafsil aytib beradi. Telefon raqamingizni va qaysi vaqtda qo'ng'iroq qilsak qulayligini yozing.
-Bemor: +998 90 123 45 67, tushdan keyin
-Admin: Rahmat, Akmal. Bugun tushdan keyin qo'ng'iroq qilishadi.
+Admin: Doktor bilan onlayn videoqo'ng'iroqda konsultatsiya olishingiz mumkin, kelish shart emas. Onlayn konsultatsiyaga yozib qo'yaymi?

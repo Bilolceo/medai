@@ -341,9 +341,9 @@ _JUST_A_VISIT = re.compile(
     re.IGNORECASE,
 )
 _INTAKE_STEPS = (
-    "ask_topic",
     "ask_name",
     "ask_place",
+    "ask_topic",
     "online_choice",
     "offer_slots",
     "book_ok",
@@ -360,6 +360,19 @@ _WANTS_ONLINE = re.compile(
 _WANTS_CALL = re.compile(
     r"qo['‘ʻ’`]?ng['‘ʻ’`]?iroq|telefon|administrator|qilsin|қўнғироқ|телефон|администратор|"
     r"звон|позвон|перезвон",
+    re.IGNORECASE,
+)
+# "Klinikaga kelaman": a visit in person, not online.
+_WANTS_VISIT = re.compile(
+    r"kel(?:aman|ib|amiz|sam|ish)|klinika|oflayn|offline|borib|boraman|"
+    r"кел(?:аман|иб|амиз|сам)|клиник|офлайн|очно|приду|приеду|приехать|прийти",
+    re.IGNORECASE,
+)
+# "Doktor bilan qanday bog'lansam bo'ladi?", "raqamini bering": the way to the
+# doctor is the booking here, not the clinic's numbers.
+_CONTACT = re.compile(
+    r"bog['‘ʻ’`]?lan|aloqa|raqam|nomer|telefon|telegram|tel\b|"
+    r"боғлан|алоқа|рақам|номер|телефон|телеграм|связат|связь",
     re.IGNORECASE,
 )
 _PAID = re.compile(
@@ -618,18 +631,25 @@ def plan_intake(
         ),
         None,
     )
-    starts = [i for i in (by_pattern, by_own_line) if i is not None]
-    first = min(starts) if starts else None
-    if first is None and not u.complaint:
-        if not own and u.greeting_only:
-            return Plan(reply=f"{opening()} {bubbles.MARKER} {texts['ask_help']}")
-        return None
-    since_turns = turns[first:] if first is not None else []
+    # The doctor's order is name, place, complaint: the sequence begins with
+    # the conversation, whatever the first message is -- a greeting, "how do
+    # I reach the doctor", a price.
+    by_name_line = next(
+        (
+            max(i - 1, 0)
+            for i, turn in enumerate(turns)
+            if turn.get("role") == "assistant" and _said(flow, "ask_name", [turn["content"]])
+        ),
+        None,
+    )
+    starts = [i for i in (by_pattern, by_own_line, by_name_line) if i is not None]
+    first = min(starts) if starts else 0
+    since_turns = turns[first:]
     since = [turn["content"] for turn in since_turns if turn.get("role") == "assistant"]
     said = {key: _said(flow, key, since) for key in _INTAKE_STEPS}
     # "Telefon raqamingizni yozing" asked again is the same step.
     said["ask_phone"] += _said(flow, "ask_phone_again", since)
-    said["online_choice"] += _said(flow, "choice_again", since)
+    said["online_choice"] += _said(flow, "choice_again", since) + _said(flow, "visit_choice", since)
     said["offer_slots"] += _said(flow, "slot_taken", since) + _said(flow, "offer_evening", since)
     if said["paid_confirm"]:
         return None
@@ -770,8 +790,14 @@ def plan_intake(
     if pending is None:
         lead = opening()
         if not named_complaint(message) and phone_check.read(message) is None:
-            # "Qabul narxi qancha?": what for, before the doctor "handles it".
-            body = texts["ask_topic"]
+            # No complaint yet: the name first, as the doctor asks. "Doktor bilan
+            # qanday bog'lansam bo'ladi?" is answered with the booking here,
+            # never with the clinic's numbers.
+            body = texts["ask_name"]
+            if _CONTACT.search(message):
+                body = f"{texts['contact_answer']} {body}"
+            elif question and not asks_price and not u.greeting_only:
+                return Plan(prefix=lead, then=body, instruction=INSTRUCTION)
             plan_body = f"{lead} {bubbles.MARKER} {body}" if lead else body
             return Plan(reply=plan_body, cards=asks_price)
         early = take_phone()
@@ -806,7 +832,53 @@ def plan_intake(
         text = texts["offer_slots"].format(slots=_slot_words(texts, free, now))
         return Plan(reply=f"{lead} {text}" if lead else text)
 
-    # --- the online booking: a time, the price, half of it, the card ---
+    def answer_after(*keys: str) -> str | None:
+        """The patient's message right after the bot's line for one of these steps."""
+        for i, turn in enumerate(since_turns):
+            if turn.get("role") == "assistant" and any(
+                _said(flow, key, [turn["content"]]) for key in keys
+            ):
+                return next(
+                    (t["content"] for t in since_turns[i + 1 :] if t.get("role") == "user"),
+                    message,
+                )
+        return None
+
+    def question_only(text: str) -> bool:
+        """Only the question, no answer to the step: "Narxi qancha?"."""
+        rest = re.sub(r"[^\w\s]", " ", _ASKS_PRICE.sub(" ", text))
+        return len(rest.split()) <= 2
+
+    def complaint_known() -> bool:
+        return bool(_said(flow, "handles", since)) or any(named_complaint(t) for t in patient_since)
+
+    def choice(place: str | None, abroad: bool = False) -> str:
+        """Online or in the clinic, by where the patient is."""
+        if sport:
+            # Sport pharmacology: online only, in the evening.
+            return str(texts["offer_evening"])
+        place = place or ""
+        tashkent = re.search(flow.get("tashkent") or "toshkent", place, re.IGNORECASE)
+        if tashkent and not abroad and not _ABROAD.search(place):
+            return str(texts["visit_choice"])
+        return str(texts["online_choice"])
+
+    def after_place(place: str, abroad: bool = False) -> Plan:
+        if not complaint_known():
+            return Plan(reply=texts["ask_topic"])
+        return Plan(reply=choice(place, abroad))
+
+    def in_person() -> bool:
+        """Did the patient choose to come to the clinic?"""
+        if sport:
+            return False
+        chosen = answer_after("online_choice", "visit_choice", "choice_again")
+        replies = [chosen] if chosen else []
+        if pending in ("online_choice", "offer_slots"):
+            replies.append(message)
+        return any(_WANTS_VISIT.search(t) for t in replies)
+
+    # --- the booking: a time, the price, half of it, the card ---
     if pending == "book_ok":
         found = phone_check.read(message)
         if found is not None and found.kind not in (phone_check.UZ, phone_check.FOREIGN):
@@ -828,8 +900,13 @@ def plan_intake(
             (n for n in names if re.search(re.escape(n), offer, re.IGNORECASE)), texts["tomorrow"]
         )
         at = clock.group(1) if clock else ""
+        visit = any(_norm(t.get("mode_visit", "#")) in _norm(offer) for t in flow["texts"].values())
         text = texts["paid_confirm"].format(name_part=name_part(), day=day, time=at)
-        note = f"ONLAYN {day} {at} -- 50% oldindan, chekni tekshiring ({reason})"
+        where = "KLINIKA" if visit else "ONLAYN"
+        note = (
+            f"{where} {day} {at} -- 50% oldindan, chekni tekshiring, "
+            f"qabuldan 1-2 soat oldin qo'ng'iroq ({reason})"
+        )
         return Plan(reply=f"{text} [[CALLBACK:{found.shown}|{note}|{day} {at}]]")
 
     if pending in ("offer_slots", "online_choice") and not question:
@@ -842,6 +919,7 @@ def plan_intake(
             if _EVENING_WORD.search(message) and at.hour < 12:
                 at = at.replace(hour=at.hour + 12)
             kind = "uro"
+            mode = texts["mode_visit"] if in_person() else texts["mode_online"]
             if sport and not _within(flow, at, "evening"):
                 return Plan(reply=texts["offer_evening"])
             if _within(flow, at, "evening"):
@@ -849,6 +927,7 @@ def plan_intake(
                     now.date() if _TODAY.search(message) else now.date() + timedelta(days=1)
                 )
                 day = _label(texts, evening_day, now)
+                mode = texts["mode_online"]
                 price, prepay = price_of("evening")
                 line = texts["price_line_evening"].format(price=price, prepay=prepay)
             else:
@@ -864,14 +943,14 @@ def plan_intake(
                 day = _day_word(texts, slot, now)
                 price, prepay = price_of(kind)
                 line = texts["price_line"].format(price=price, prepay=prepay)
-            book = texts["book_ok"].format(day=day, time=f"{at:%H:%M}")
+            book = texts["book_ok"].format(day=day, time=f"{at:%H:%M}", mode=mode)
             return Plan(reply=f" {bubbles.MARKER} ".join((book, line, texts["card_line"])))
 
     no_number = phone_check.read(message) is None
     if pending == "online_choice" and not question and no_number:
         if _WANTS_CALL.search(message):
             return Plan(reply=texts["ask_phone"])
-        if _WANTS_ONLINE.search(message) or u.yes:
+        if _WANTS_VISIT.search(message) or _WANTS_ONLINE.search(message) or u.yes:
             return offer_slots()
         if said["online_choice"] < 2 and not u.refuses:
             return Plan(reply=texts["choice_again"])
@@ -885,9 +964,8 @@ def plan_intake(
         return offer_slots()
 
     if pending == "ask_topic" and not question and not u.refuses:
-        named = given_name()
-        step = texts["ask_place_named"].format(name=named) if named else texts["ask_name"]
-        return Plan(reply=f"{texts['handles']} {step}", card_topic=card_topic)
+        place = answer_after("ask_place", "ask_place_named")
+        return Plan(reply=f"{texts['handles']} {choice(place)}", card_topic=card_topic)
     if pending == "ask_name" and not u.name and named_complaint(message) and not question:
         # "Prostatit" in answer to "Ismingiz nima?": the complaint came late.
         return Plan(reply=f"{texts['handles']} {texts['ask_name']}")
@@ -906,6 +984,10 @@ def plan_intake(
     if early is not None and (pending in callable_steps or corrected):
         return early
 
+    if asks_price and pending == "ask_place" and not question_only(message):
+        # "Toshkentdanman, narxi qancha?": the place is answered; the card goes.
+        step_plan = after_place(message, abroad=u.abroad)
+        return Plan(reply=step_plan.reply, cards=True)
     if asks_price:
         again = {
             "ask_name": texts["ask_name"],
@@ -963,7 +1045,7 @@ def plan_intake(
                 return None
             again = {
                 "ask_name": texts["ask_place"],
-                "ask_place": texts["ask_phone"],
+                "ask_place": texts["ask_topic"],
             }[pending]
         return Plan(then=again, instruction=INSTRUCTION)
 
@@ -971,7 +1053,7 @@ def plan_intake(
         if u.name:
             if u.abroad:
                 # "Bilol, Rossiyadaman" -- name and place in one go.
-                return Plan(reply=f"{texts['abroad_online']} {bubbles.MARKER} {texts['ask_phone']}")
+                return after_place(message, abroad=True)
             return Plan(reply=texts["ask_place_named"].format(name=u.name))
         return Plan(reply=texts["ask_place"])
     told_online = any(
@@ -982,12 +1064,10 @@ def plan_intake(
         # "Hozir men Rossiyadaman", said after the place question was answered.
         return Plan(reply=texts["online_choice"])
     if pending == "ask_place":
-        in_tashkent = bool(re.search(flow.get("tashkent") or "toshkent", message, re.IGNORECASE))
-        if u.abroad or not in_tashkent or sport:
-            # Outside Tashkent: an online consultation, booked and paid here,
-            # or the administrator's call -- the patient chooses.
-            return Plan(reply=texts["online_choice"])
-        return Plan(reply=texts["ask_phone"])
+        # Then the complaint, if not yet said; then online or the clinic --
+        # booked and half paid here, so the administrator only checks the
+        # receipt and rings to confirm before the visit.
+        return after_place(message, abroad=u.abroad)
     if pending == "ask_phone":
         if said["ask_phone"] >= 2:
             return None

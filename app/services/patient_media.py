@@ -64,10 +64,19 @@ ACKNOWLEDGEMENTS = {
 # A photo right after the card was given is the receipt, not a result.
 RECEIPT_ACKNOWLEDGEMENTS = {
     "uz-latn": (
-        "Chekingiz keldi. To'lov tekshirilgach administratorimiz yozilganingizni tasdiqlaydi."
+        "Chekingiz keldi. To'lov tekshirilgach yozilganingiz tasdiqlanadi, qabuldan 1-2 soat "
+        "oldin administratorimiz qo'ng'iroq qiladi. Telefon raqamingizni yozmagan bo'lsangiz, "
+        "yozib qo'ying."
     ),
-    "uz-cyrl": "Чекингиз келди. Тўлов текширилгач администраторимиз ёзилганингизни тасдиқлайди.",
-    "ru": "Чек получили. После проверки оплаты администратор подтвердит вашу запись.",
+    "uz-cyrl": (
+        "Чекингиз келди. Тўлов текширилгач ёзилганингиз тасдиқланади, қабулдан 1-2 соат "
+        "олдин администраторимиз қўнғироқ қилади. Телефон рақамингизни ёзмаган бўлсангиз, "
+        "ёзиб қўйинг."
+    ),
+    "ru": (
+        "Чек получили. После проверки оплаты запись подтвердится, за 1-2 часа до приёма "
+        "администратор позвонит. Если ещё не написали номер телефона, напишите его."
+    ),
 }
 _CARD = re.compile(r"\b\d{4}\s?\d{4}\s?\d{4}\s?\d{4}\b")
 _RECEIPT_WINDOW = timedelta(days=3)

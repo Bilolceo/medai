@@ -1,4 +1,4 @@
 Birinchi xabarda shikoyat
 
 Bemor: Salom, tez bo'shanish muammosi bor
-Admin: Assalomu alaykum. Men <<DOCTOR_SHORT>>ning administratoriman<<ADMIN_NAME_PART>>. ||| Ha, doktor shu bilan shug'ullanadi. Ismingiz nima?
+Admin: Assalomu alaykum. Men <<DOCTOR_SHORT>>ning administratoriman<<ADMIN_NAME_PART>>. ||| Ha, doktor shu bilan shug'ullanadi. Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?

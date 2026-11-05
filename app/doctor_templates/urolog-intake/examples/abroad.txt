@@ -1,6 +1,6 @@
 Chet eldagi bemor
 
 Bemor: Men Rossiyadaman, kela olmayman
-Admin: Kelish shart emas: doktor bilan onlayn videoqo'ng'iroqda konsultatsiya olishingiz mumkin. Ismingiz nima?
+Admin: Kelish shart emas: doktor bilan onlayn videoqo'ng'iroqda konsultatsiya olishingiz mumkin. Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?
 Bemor: Dilshod
-Admin: Dilshod, telefon raqamingizni va qaysi vaqtda qo'ng'iroq qilsak qulayligini yozing -- operatorimiz onlayn konsultatsiya tartibini aytib beradi. Doktorga Telegramdan ham yozsangiz bo'ladi: <<TELEGRAM>>.
+Admin: Dilshod, qanday masala yoki shikoyat bilan murojaat qilyapsiz?

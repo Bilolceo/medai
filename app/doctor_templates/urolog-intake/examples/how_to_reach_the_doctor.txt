@@ -1,0 +1,4 @@
+Doktor bilan qanday bog'lanish mumkin, desa -- raqam berilmaydi, shu yerda yoziladi
+
+Bemor: Doktor bilan qanday bog'lansam bo'ladi?
+Admin: Doktor bilan konsultatsiyaga shu yerning o'zida yozib qo'yaman. Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?

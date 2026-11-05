@@ -14,8 +14,8 @@ from app.core.config import get_settings
 from app.rag.llm import _select_llm_provider  # noqa: PLC2701
 from app.services import message_reader, phone_check, scripted_flow as sf
 
-ASK_NAME = "Ha, doktor shu bilan shug'ullanadi. Ismingiz nima?"
-ASK_PLACE = "Akmal, qayerdansiz?"
+ASK_NAME = "Ha, doktor shu bilan shug'ullanadi. Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?"
+ASK_PLACE = "Akmal, qayerdansiz: Toshkentdanmisiz yoki viloyatdanmi?"
 ASK_PHONE = (
     "Operatorimiz qo'ng'iroq qilib hammasini batafsil aytib beradi. "
     "Telefon raqamingizni va qaysi vaqtda qo'ng'iroq qilsak qulayligini yozing."

@@ -1,8 +1,8 @@
 Bemor yozilmoqchi
 
 Bemor: Qabulga yozilsam bo'ladimi?
-Admin: Ha, biz faqat oldindan yozuv bilan ishlaymiz. Ismingiz nima?
+Admin: Ha, shu yerning o'zida yozib qo'yaman. Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?
 Bemor: Bobur
-Admin: Bobur, qayerdansiz?
+Admin: Bobur, qayerdansiz: Toshkentdanmisiz yoki viloyatdanmi?
 Bemor: Toshkent, Chilonzor
-Admin: Telefon raqamingizni va qaysi vaqtda qo'ng'iroq qilsak qulayligini yozing -- operator qo'ng'iroq qilib vaqtni kelishib oladi.
+Admin: Qanday masala yoki shikoyat bilan murojaat qilyapsiz?

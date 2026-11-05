@@ -240,7 +240,7 @@ def test_the_intake_template_asks_name_then_place_and_names_no_price() -> None:
     # as a bubble of its own.
     assert "administratoriman, ismim Dildora. |||" in settings["assistant_examples"]
     assert "Ismingiz nima?" in settings["assistant_examples"]
-    assert "qayerdansiz?" in settings["assistant_examples"].lower()
+    assert "qayerdansiz" in settings["assistant_examples"].lower()
     assert not re.search(r"<<[A-Z_]+>>", everything)
     # No price anywhere: they are given on the phone.
     assert not re.search(r"\d{3}\s?000\s?so'm|\$", everything)

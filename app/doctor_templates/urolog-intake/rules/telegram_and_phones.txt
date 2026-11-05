@@ -1,1 +1,1 @@
-Agar mijoz Telegram so‘rasa, doktorning Telegramini bering: <<TELEGRAM>>. Telefon uchun faqat klinika raqamlari: <<PHONES>>.
+Bemor doktor bilan qanday bog'lanishni, doktorning telefoni yoki Telegramini so'rasa, raqam bermang: "Doktor bilan konsultatsiyaga shu yerning o'zida yozib qo'yaman" deng va tartibni davom ettiring. Klinika raqamlari (<<PHONES>>) faqat shoshilinch holatda beriladi, yoki bemor yozilishni istamay raqamni qayta qat'iy so'rasa.

@@ -1,6 +1,8 @@
 Narx so'ralsa, masala noma'lum
 
 Bemor: Narxlar qancha?
-Admin: Qaysi masala bo'yicha konsultatsiya kerak?
-Bemor: Prostatit
-Admin: Ha, doktor shu bilan shug'ullanadi. Konsultatsiya narxi va tartibi rasmda. Ismingiz nima?
+Admin: Konsultatsiya narxi masalaga qarab rasmda. Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?
+Bemor: Sardor
+Admin: Sardor, qayerdansiz: Toshkentdanmisiz yoki viloyatdanmi?
+Bemor: Toshkent
+Admin: Qanday masala yoki shikoyat bilan murojaat qilyapsiz?
