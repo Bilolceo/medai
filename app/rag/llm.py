@@ -135,6 +135,14 @@ def get_review_llm_provider() -> LLMProvider:
 
 
 @lru_cache
+def get_reader_llm_provider() -> LLMProvider:
+    """For reading what a patient's message says (app.services.message_reader):
+    the same model, thinking little -- it fills in facts, it writes nothing."""
+    settings = get_settings()
+    return _select_llm_provider(settings.model_copy(update={"openai_reasoning_effort": "low"}))
+
+
+@lru_cache
 def get_comment_llm_provider() -> LLMProvider:
     """The same model, thinking harder: a comment answer is read by nobody
     waiting in a chat, so the seconds a Direct reply cannot spare are free here.

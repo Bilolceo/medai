@@ -21,7 +21,7 @@ from app.core.config import Settings, get_settings
 from app.core.tenant_context import get_current_tenant
 from app.models.tenant import Tenant
 from app.rag.embeddings import EmbeddingProvider
-from app.rag.llm import ChatMessage, LLMProvider, get_llm_provider
+from app.rag.llm import ChatMessage, LLMProvider, get_llm_provider, get_reader_llm_provider
 from app.rag.retrieval import retrieve_knowledge
 from app.repositories.appointment import AppointmentRepository
 from app.repositories.doctor import DoctorRepository
@@ -31,6 +31,7 @@ from app.services import (
     booking_offer,
     bubbles,
     medical_safety,
+    message_reader,
     phone_guard,
     price_guard,
     promo_images,
@@ -414,8 +415,23 @@ async def generate_answer(
         {"libido": stored["scripted_flow"]} if stored.get("scripted_flow") else None
     )
     now_local = datetime.now(UTC).astimezone(CLINIC_TIMEZONE)
+    # The model reads the message for the flows (app.services.message_reader)
+    # -- only for the clinic's live provider: a caller handing in its own
+    # provider (the tests) gets the patterns, and its scripted replies are
+    # not spent on reading.
+    reading = None
+    if flows and llm_provider is None:
+        last_own = next(
+            (t["content"] for t in reversed(history or []) if t.get("role") == "assistant"), None
+        )
+        reading = await message_reader.read(get_reader_llm_provider(), user_message, last_own)
     scripted = scripted_flow.plan(
-        flows, script=script, user_message=user_message, history=history, now=now_local
+        flows,
+        script=script,
+        user_message=user_message,
+        history=history,
+        now=now_local,
+        reading=reading,
     )
     if scripted is not None and scripted.reply is not None:
         reply = scripted.reply

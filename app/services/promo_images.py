@@ -53,10 +53,12 @@ def sent_line(title: str) -> str:
 
 
 # Wanting a visit, a call or a time -- "qachon", "soat 19 da", "yozilmoqchiman".
+# Asking the hours ("ish vaqtingiz?") is not asking for a visit: words of
+# time alone do not count, only a visit, a booking or a call.
 _WANTS_VISIT = re.compile(
-    r"qabul|yozil|yozib|ko['‘ʻ’`]?rik|konsult|qo['‘ʻ’`]?ng['‘ʻ’`]?iroq|vaqt|soat|qachon|ish\s*vaqt|"
-    r"қабул|ёзил|кўрик|консульт|қўнғироқ|вақт|соат|қачон|"
-    r"запис|приём|прием|консульт|позвон|время|когда",
+    r"qabul|yozil|yozib|ko['‘ʻ’`]?rik|konsult|qo['‘ʻ’`]?ng['‘ʻ’`]?iroq|"
+    r"қабул|ёзил|кўрик|консульт|қўнғироқ|"
+    r"запис|приём|прием|консульт|позвон",
     re.IGNORECASE,
 )
 # The clinic's daytime hours: outside them the evening card is the one on offer.

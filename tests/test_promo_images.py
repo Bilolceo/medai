@@ -128,3 +128,11 @@ def test_a_sentence_said_word_for_word_last_time_is_not_said_again() -> None:
     reply = "Telefon raqamingizni va qaysi vaqtda qo'ng'iroq qilsak qulayligini yozing."
     text, _ = promo_images.split(promo_images.attach(reply, CARDS[0], own_turns=[last]))
     assert text == "Konsultatsiya narxi va tartibi rasmda."
+
+
+def test_asking_the_hours_after_hours_is_not_a_wish_for_the_evening() -> None:
+    for asked in ("Ish vaqtingiz?", "Иш вақтингиз?", "Ishvoht nechida tugaydi"):
+        card = promo_images.choose(
+            CARDS, user_message=asked, patient_turns=["Prostatit"], own_turns=[], reply="", hour=18
+        )
+        assert card is None, asked

@@ -32,11 +32,12 @@ from app.services import bubbles, phone_check
 # A complaint about desire, in any of the three alphabets, with a word that
 # says it is low or gone -- "qabulga yozilish xohishim bor" is not one.
 _DESIRE = re.compile(
-    r"xohish|xoxish|hohish|istak|libido|mayl|хоҳиш|хохиш|ҳоҳиш|истак|либидо|майл|желани|влечени",
+    r"xohish|xoxish|hohish|istak|libido|mayl|qiziqish|havas|хоҳиш|хохиш|ҳоҳиш|истак|либидо|майл|"
+    r"қизиқиш|желани|влечени|интерес",
     re.IGNORECASE,
 )
 _LOW = re.compile(
-    r"pas|past|yo['‘ʻ’`]?q|yoq|kam|ket|so['‘ʻ’`]?n|qolma|jinsiy|"
+    r"pas|past|yo['‘ʻ’`]?q|yoq|kam|ket|so['‘ʻ’`]?n|qolma|jinsiy|xotin|"
     r"пас|йўқ|йук|кам|кет|сўн|жинсий|нет|пропал|сниж|сниз|упал|пропад|мало",
     re.IGNORECASE,
 )
@@ -387,6 +388,70 @@ def _greeting_only(text: str) -> bool:
     return bool(_GREETING.search(text)) and len(words) <= 5 and not _COMPLAINT.search(text)
 
 
+@dataclass(frozen=True)
+class _Understood:
+    """The current message, as the model read it -- or, without a reading,
+    as the patterns do."""
+
+    complaint: bool
+    greeting_only: bool
+    question: bool
+    asks_price: bool
+    refuses: bool
+    abroad: bool
+    name: str | None
+    when: str | None
+    messenger: str | None
+    yes: bool
+    complaint_words: str | None
+
+
+def _understand(message: str, reading: Any, *, asked_name: bool) -> _Understood:
+    if reading is None:
+        word = message.split()[0].strip(".,!") if message.split() else ""
+        name = None
+        if asked_name and len(message.split()) <= 2 and _NAME_WORD.match(word):
+            name = _cap(word)
+        return _Understood(
+            complaint=bool(_COMPLAINT.search(message)),
+            greeting_only=_greeting_only(message),
+            question=_is_question(message),
+            asks_price=bool(_ASKS_PRICE.search(message)) and _is_question(message),
+            refuses=bool(_REFUSE.search(message)) and not _is_question(message),
+            abroad=bool(_ABROAD.search(message)),
+            name=name,
+            when=_when(message),
+            messenger=(
+                "WhatsApp"
+                if _WHATSAPP.search(message)
+                else ("Telegram" if _TELEGRAM.search(message) else None)
+            ),
+            yes=bool(_YES.search(message)) and not _is_question(message),
+            complaint_words=None,
+        )
+    name = reading.name
+    if name and (_ABROAD.search(name) or _COMPLAINT.search(name)):
+        name = None
+    when = reading.time or None
+    if when and _PHONE_DIGITS.search(when):
+        when = _when(when)
+    messenger = {"telegram": "Telegram", "whatsapp": "WhatsApp"}.get(reading.messenger or "")
+    return _Understood(
+        complaint=reading.complaint_kind in ("urology", "steroid", "libido_only")
+        or bool(_COMPLAINT.search(message)),
+        greeting_only=reading.greeting_only and reading.complaint_kind == "none",
+        question=bool(reading.question) or reading.who_are_you,
+        asks_price=reading.asks_price,
+        refuses=reading.refuses,
+        abroad=reading.abroad,
+        name=name,
+        when=when,
+        messenger=messenger,
+        yes=reading.yes,
+        complaint_words=reading.complaint,
+    )
+
+
 def plan_intake(
     flow: Mapping[str, Any] | None,
     *,
@@ -394,6 +459,7 @@ def plan_intake(
     user_message: str,
     history: Sequence[Mapping[str, Any]] | None,
     now: datetime,
+    reading: Any = None,
 ) -> Plan | None:
     """Dr Sultonbek's ordinary sequence, said as written: the doctor handles
     it, name, place, telephone and a time, then the operator will ring.
@@ -419,7 +485,12 @@ def plan_intake(
             parts.append(texts["intro"])
         return " ".join(parts) or None
 
-    first = next(
+    last_own = own[-1] if own else ""
+    u = _understand(message, reading, asked_name=bool(_said(flow, "ask_name", [last_own])))
+    # Where the sequence began: the patient's first complaint by pattern, or
+    # -- for one only the model understood -- the turn before the bot first
+    # said "Ha, doktor shu bilan shug'ullanadi".
+    by_pattern = next(
         (
             i
             for i, turn in enumerate(turns)
@@ -427,8 +498,18 @@ def plan_intake(
         ),
         None,
     )
-    if first is None and not _COMPLAINT.search(message):
-        if not own and _greeting_only(message):
+    by_own_line = next(
+        (
+            max(i - 1, 0)
+            for i, turn in enumerate(turns)
+            if turn.get("role") == "assistant" and _said(flow, "handles", [turn["content"]])
+        ),
+        None,
+    )
+    starts = [i for i in (by_pattern, by_own_line) if i is not None]
+    first = min(starts) if starts else None
+    if first is None and not u.complaint:
+        if not own and u.greeting_only:
             return Plan(reply=f"{opening()} {bubbles.MARKER} {texts['ask_help']}")
         return None
     since_turns = turns[first:] if first is not None else []
@@ -444,12 +525,16 @@ def plan_intake(
     if any("📎" in turn for turn in since if "kechki" in turn.lower() or "кечки" in turn.lower()):
         return None
     patient_since = [t["content"] for t in since_turns if t.get("role") == "user"] + [message]
-    complaint = next((t for t in patient_since if _COMPLAINT.search(t)), message)
+    complaint = u.complaint_words or next(
+        (t for t in patient_since if _COMPLAINT.search(t)), message
+    )
     reason = " ".join(complaint.split()[:12]) or texts["default_reason"]
-    question = _is_question(message)
-    asks_price = bool(_ASKS_PRICE.search(message)) and question
+    question = u.question
+    asks_price = u.asks_price
 
     def given_name() -> str | None:
+        if u.name and reading is not None:
+            return u.name
         for text in patient_since:
             for found in _GIVEN_NAME.finditer(text):
                 word = found.group(1)
@@ -491,13 +576,9 @@ def plan_intake(
         return Plan(reply=f"{text} [[CALLBACK:{phone}|{reason}|{when}]]")
 
     def foreign(found: phone_check.Phone, said_now: str) -> Plan:
-        app = (
-            "WhatsApp"
-            if _WHATSAPP.search(said_now)
-            else ("Telegram" if _TELEGRAM.search(said_now) else None)
-        )
+        app = u.messenger
         if app is None:
-            if _YES.search(said_now) and not _is_question(said_now):
+            if u.yes:
                 return Plan(reply=texts["ask_app"])
             return Plan(reply=texts["phone_foreign"].format(shown=found.shown))
         when = earlier_when() or texts["any_time"]
@@ -529,7 +610,7 @@ def plan_intake(
             }[found.kind]
             return Plan(reply=texts[key].format(shown=found.shown))
         # A time said with the number that had to be retyped still stands.
-        when = _when(message) or earlier_when()
+        when = u.when or earlier_when()
         return confirm(found.shown, when) if when else Plan(reply=texts["ask_time"])
 
     # The first turn of the sequence.
@@ -578,14 +659,14 @@ def plan_intake(
             ),
             None,
         )
-        when = _when(message)
+        when = u.when
         if phone and when and not question:
             return confirm(phone, when)
         if question:
             return Plan(then=texts["ask_time"], instruction=INSTRUCTION)
         return None
 
-    if _REFUSE.search(message) and not question:
+    if u.refuses and not question:
         # "Yo'q", "keyin o'zim yozaman": respected, by the model, once.
         return None
     if question:
@@ -605,16 +686,18 @@ def plan_intake(
         return Plan(then=again, instruction=INSTRUCTION)
 
     if pending == "ask_name":
-        word = message.split()[0].strip(".,!") if message else ""
-        if len(message.split()) <= 2 and _NAME_WORD.match(word):
-            return Plan(reply=texts["ask_place_named"].format(name=_cap(word)))
+        if u.name:
+            if u.abroad:
+                # "Bilol, Rossiyadaman" -- name and place in one go.
+                return Plan(reply=f"{texts['abroad_online']} {bubbles.MARKER} {texts['ask_phone']}")
+            return Plan(reply=texts["ask_place_named"].format(name=u.name))
         return Plan(reply=texts["ask_place"])
     told_online = any(_said(flow, "abroad_online", [turn]) for turn in since)
-    if pending in ("ask_phone", "ask_time") and _ABROAD.search(message) and not told_online:
+    if pending in ("ask_phone", "ask_time") and u.abroad and not told_online:
         # "Hozir men Rossiyadaman", said after the place question was answered.
         return Plan(reply=f"{texts['abroad_online']} {bubbles.MARKER} {texts['ask_phone']}")
     if pending == "ask_place":
-        if _ABROAD.search(message):
+        if u.abroad:
             return Plan(reply=f"{texts['abroad_online']} {bubbles.MARKER} {texts['ask_phone']}")
         return Plan(reply=texts["ask_phone"])
     if pending == "ask_phone":
@@ -631,11 +714,14 @@ def plan(
     user_message: str,
     history: Sequence[Mapping[str, Any]] | None,
     now: datetime,
+    reading: Any = None,
 ) -> Plan | None:
     """The scripted answer from whichever flow this conversation is in."""
     if not flows:
         return None
-    if _EMERGENCY.search(user_message):
+    if _EMERGENCY.search(user_message) or (
+        reading is not None and reading.complaint_kind == "emergency"
+    ):
         return None
     libido = flows.get("libido")
     if libido:
@@ -648,5 +734,10 @@ def plan(
                 libido, script=script, user_message=user_message, history=history, now=now
             )
     return plan_intake(
-        flows.get("intake"), script=script, user_message=user_message, history=history, now=now
+        flows.get("intake"),
+        script=script,
+        user_message=user_message,
+        history=history,
+        now=now,
+        reading=reading,
     )
