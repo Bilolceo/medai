@@ -72,6 +72,7 @@ def _derived(facts: dict[str, str]) -> dict[str, str]:
     # "administratoriman, ismim Dildora" when the clinic gave the
     # administrator a name; just "administratoriman" when it did not.
     out["ADMIN_NAME_PART"] = f", ismim {facts['ADMIN_NAME']}" if "ADMIN_NAME" in facts else ""
+    out["ADMIN_NAME_PART_SHORT"] = f" {facts['ADMIN_NAME']}" if "ADMIN_NAME" in facts else ""
     # The same facts in Cyrillic and Russian, for the scripted flows, which
     # say their lines in the patient's own alphabet word for word.
     admin = to_cyrillic(facts["ADMIN_NAME"]) if "ADMIN_NAME" in facts else ""

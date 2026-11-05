@@ -1,0 +1,4 @@
+Kim bilan gaplashyapman
+
+Bemor: Kim bilan gaplashyapman?
+Admin: Siz <<DOCTOR_SHORT>>ning administratori<<ADMIN_NAME_PART_SHORT>> bilan gaplashyapsiz. Sizga qanday yordam bera olamiz?

@@ -82,3 +82,47 @@ def test_a_price_by_phone_sentence_gives_way_to_the_card() -> None:
 def test_the_caption_is_in_the_patients_alphabet() -> None:
     text, _ = promo_images.split(promo_images.attach("Исмингиз нима?", CARDS[0], "uz-cyrl"))
     assert text == "Консультация нархи ва тартиби расмда. Исмингиз нима?"
+
+
+def test_an_evening_call_wish_gets_the_evening_card_without_a_price_question() -> None:
+    assert _pick("Menga soat 19:00 da qo'ng'iroq qiling, Rossiyadaman") == "evening"
+
+
+def test_after_hours_a_wish_to_book_gets_the_evening_card() -> None:
+    card = promo_images.choose(
+        CARDS,
+        user_message="Qabulga yozilmoqchiman",
+        patient_turns=["Prostatit bor"],
+        own_turns=[],
+        reply="",
+        hour=18,
+    )
+    assert card is not None and card["topic"] == "evening"
+
+
+def test_in_the_day_a_wish_to_book_alone_sends_no_card() -> None:
+    card = promo_images.choose(
+        CARDS,
+        user_message="Qabulga yozilmoqchiman",
+        patient_turns=["Prostatit bor"],
+        own_turns=[],
+        reply="",
+        hour=11,
+    )
+    assert card is None
+
+
+def test_the_evening_card_says_what_the_evening_is_and_promises_no_call() -> None:
+    reply = (
+        "Rossiyada bo'lsangiz ham operator 19:00 da qo'ng'iroq qiladi. Telefon raqamingizni yozing."
+    )
+    text, _ = promo_images.split(promo_images.attach(reply, CARDS[2]))
+    assert "qo'ng'iroq qiladi" not in text
+    assert text.startswith("Ish vaqtidan keyin doktor bilan faqat onlayn konsultatsiya bor")
+
+
+def test_a_sentence_said_word_for_word_last_time_is_not_said_again() -> None:
+    last = "Telefon raqamingizni va qaysi vaqtda qo'ng'iroq qilsak qulayligini yozing."
+    reply = "Telefon raqamingizni va qaysi vaqtda qo'ng'iroq qilsak qulayligini yozing."
+    text, _ = promo_images.split(promo_images.attach(reply, CARDS[0], own_turns=[last]))
+    assert text == "Konsultatsiya narxi va tartibi rasmda."

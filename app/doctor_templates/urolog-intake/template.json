@@ -151,6 +151,16 @@
         "PROMO_DAY_URL",
         "EVENING_HOURS"
       ]
+    },
+    {
+      "file": "examples/who_am_i_talking_to.txt"
+    },
+    {
+      "file": "examples/evening_call_wanted.txt",
+      "needs": [
+        "EVENING_HOURS",
+        "PROMO_EVENING_URL"
+      ]
     }
   ],
   "rules": [

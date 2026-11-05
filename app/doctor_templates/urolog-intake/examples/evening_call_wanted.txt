@@ -1,0 +1,4 @@
+Ish vaqtidan keyin qo'ng'iroq so'rasa
+
+Bemor: Menga soat 19:00 da qo'ng'iroq qiling, men Rossiyadaman
+Admin: Ish vaqtidan keyin doktor bilan faqat onlayn konsultatsiya bor, <<EVENING_HOURS>> -- narxi va tartibi rasmda. Qaysi vaqt sizga qulay?

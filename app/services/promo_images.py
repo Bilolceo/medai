@@ -52,6 +52,17 @@ def sent_line(title: str) -> str:
     return f"📎 {title}"
 
 
+# Wanting a visit, a call or a time -- "qachon", "soat 19 da", "yozilmoqchiman".
+_WANTS_VISIT = re.compile(
+    r"qabul|yozil|yozib|ko['‘ʻ’`]?rik|konsult|qo['‘ʻ’`]?ng['‘ʻ’`]?iroq|vaqt|soat|qachon|ish\s*vaqt|"
+    r"қабул|ёзил|кўрик|консульт|қўнғироқ|вақт|соат|қачон|"
+    r"запис|приём|прием|консульт|позвон|время|когда",
+    re.IGNORECASE,
+)
+# The clinic's daytime hours: outside them the evening card is the one on offer.
+DAY_START_HOUR, DAY_END_HOUR = 9, 16
+
+
 def choose(
     images: Sequence[Mapping[str, Any]] | None,
     *,
@@ -59,18 +70,32 @@ def choose(
     patient_turns: Sequence[str],
     own_turns: Sequence[str],
     reply: str,
+    hour: int | None = None,
 ) -> Mapping[str, Any] | None:
-    """The card to send with this reply, or None."""
+    """The card to send with this reply, or None.
+
+    ``hour`` is the clinic's local hour now: a patient wanting a visit after
+    the day's hours is offered the evening one, since that is the only one
+    there is then.
+    """
     if not images:
         return None
     by_topic = {str(image.get("topic")): image for image in images}
     asked_topic_last = bool(own_turns) and bool(_ASKED_TOPIC.search(own_turns[-1]))
-    wants = price_guard.asks_price(user_message, list(patient_turns)) or asked_topic_last
-    if not wants:
-        return None
     recent = [*patient_turns[-3:], user_message]
     everything = [*patient_turns, user_message]
-    if any(_EVENING.search(text) for text in recent):
+    after_hours = hour is not None and not (DAY_START_HOUR <= hour < DAY_END_HOUR)
+    evening_wish = bool(_EVENING.search(user_message)) or (
+        after_hours and bool(_WANTS_VISIT.search(user_message))
+    )
+    wants = (
+        price_guard.asks_price(user_message, list(patient_turns))
+        or asked_topic_last
+        or (evening_wish and bool(_WANTS_VISIT.search(user_message)))
+    )
+    if not wants:
+        return None
+    if evening_wish or any(_EVENING.search(text) for text in recent):
         topic = "evening"
     elif any(_STEROID.search(text) for text in everything):
         topic = "steroid"
@@ -101,11 +126,45 @@ _PRICE_BY_PHONE = re.compile(
 )
 
 
-def attach(reply: str, image: Mapping[str, Any], script: str = "uz-latn") -> str:
+_EVENING_CAPTIONS = {
+    "uz-latn": (
+        "Ish vaqtidan keyin doktor bilan faqat onlayn konsultatsiya bor, 19:00 dan 22:00 gacha"
+        " -- narxi va tartibi rasmda. Qaysi vaqt sizga qulay?"
+    ),
+    "uz-cyrl": (
+        "Иш вақтидан кейин доктор билан фақат онлайн консультация бор, 19:00 дан 22:00 гача"
+        " -- нархи ва тартиби расмда. Қайси вақт сизга қулай?"
+    ),
+    "ru": (
+        "После рабочего времени — только онлайн-консультация с доктором, с 19:00 до 22:00;"
+        " цена и порядок — на картинке. Какое время вам удобно?"
+    ),
+}
+_SENTENCE = re.compile(r"[^.!?]+[.!?]?")
+
+
+def _norm(text: str) -> str:
+    return " ".join(re.sub(r"[‘ʻ’`]", "'", text).lower().split()).strip(" .!?")
+
+
+def attach(
+    reply: str,
+    image: Mapping[str, Any],
+    script: str = "uz-latn",
+    own_turns: Sequence[str] = (),
+) -> str:
     """The reply with the card under it, and with nothing in it that says
-    the price comes some other way."""
+    the price comes some other way, that was said word for word last time,
+    or -- under the evening card -- that promises a call after hours."""
+    evening = image.get("topic") == "evening"
+    if evening:
+        text = _EVENING_CAPTIONS.get(script, _EVENING_CAPTIONS["uz-latn"])
+        return f"{text} [[IMAGE:{image['url']}|{image.get('title', '')}]]"
     caption = _CAPTIONS.get(script, _CAPTIONS["uz-latn"])
     text = _PRICE_BY_PHONE.sub(" ", reply)
+    if own_turns:
+        said = {_norm(s) for s in _SENTENCE.findall(own_turns[-1]) if len(_norm(s)) > 12}
+        text = " ".join(s.strip() for s in _SENTENCE.findall(text) if _norm(s) not in said)
     text = re.sub(r"[ \t]{2,}", " ", text).strip()
     if not _POINTS_AT_PICTURE.search(text):
         lead = re.match(r"^(?:Ha|Ҳа|Да)[^.!?]*[.!?]\s*", text)

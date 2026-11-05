@@ -502,10 +502,11 @@ async def generate_answer(
         patient_turns=patient_turns,
         own_turns=own_turns,
         reply=reply,
+        hour=datetime.now(UTC).astimezone(CLINIC_TIMEZONE).hour,
     )
     if card is not None:
         logger.info("promo_image_attached", extra={"title": card.get("title")})
-        reply = promo_images.attach(reply, card, script)
+        reply = promo_images.attach(reply, card, script, own_turns)
     return reply
 
 
