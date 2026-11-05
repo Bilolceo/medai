@@ -40,7 +40,7 @@ from app.models.message import Message, MessageSender
 from app.models.operator import Operator
 from app.models.patient_media import MediaKind, PatientMedia
 from app.models.user import User
-from app.repositories.conversation import ConversationRepository
+from app.repositories.conversation import CLOSED_STATUS, ConversationRepository
 from app.repositories.message import MessageRepository
 from app.services import handoff, message_labels, patient_media, search
 from app.services.conversation import (
@@ -652,6 +652,35 @@ async def resolve_conversation(
     doctor rang them, or they came in."""
     conversation = await _load(session, conversation_id)
     await handoff.clear(session, conversation.id)
+    await session.commit()
+    await session.refresh(conversation)
+    [summary] = await _summaries(session, [conversation])
+    return summary
+
+
+@router.post(
+    "/{conversation_id}/restart",
+    response_model=ConversationSummary,
+    dependencies=[Depends(verify_csrf_header)],
+)
+async def restart_conversation(
+    conversation_id: uuid.UUID,
+    operator: Operator = Depends(require_patient_access),
+    session: AsyncSession = Depends(get_db_session),
+) -> ConversationSummary:
+    """Close this conversation so the patient's next message opens a new one.
+
+    The assistant reads an open conversation's last thirty messages as
+    history, and treats a patient with history as mid-conversation: no
+    greeting, no introduction, nothing asked again. That is right for a
+    patient and wrong for the clinic's own testers, whose chats carry weeks
+    of old turns -- and for a patient coming back months later with a new
+    complaint. Closed, the thread stays readable here; the next message
+    starts from the first hello, the way a first contact does.
+    """
+    conversation = await _load(session, conversation_id)
+    await handoff.clear(session, conversation.id)
+    await ConversationRepository(session).update(conversation, status=CLOSED_STATUS)
     await session.commit()
     await session.refresh(conversation)
     [summary] = await _summaries(session, [conversation])

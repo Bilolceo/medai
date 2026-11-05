@@ -2502,7 +2502,11 @@ async function _loadChats(options = {}) {
           : null,
         canManage() && c.needs_doctor_since
           ? el("button", { class: "act", title: "Bemorga boshqa yo'l bilan javob berildi (masalan, telefonda)", onclick: () => resolveChat(c.id) }, "Hal qilindi")
-          : null))
+          : null,
+        canManage() && c.status === "open"
+          ? el("button", { class: "act", title: "Keyingi xabar yangi suhbat bo'ladi: bot qayta salomlashib tanishadi va tartibni boshidan boshlaydi", onclick: () => restartChat(c.id) }, "Yangi suhbat")
+          : null,
+        c.status !== "open" ? el("span", { class: "pill", title: "Yopilgan: keyingi xabar yangi suhbat ochadi" }, "yopilgan") : null))
     )
   ));
   if (!rows.length) {
@@ -2555,6 +2559,20 @@ async function resolveChat(id) {
   try {
     await api(`/conversations/${id}/resolve`, { method: "POST", body: {} });
     toast("Belgi olib tashlandi");
+    await loadChats();
+  } catch (err) { toast(err.message, true); }
+}
+
+async function restartChat(id) {
+  const yes = await uiDialog({
+    title: "Yangi suhbat boshlansinmi?",
+    text: "Bu suhbat yopiladi, yozishma saqlanib qoladi. Bemorning keyingi xabari yangi suhbat bo'ladi: bot qayta salomlashib tanishadi va tartibni boshidan boshlaydi.",
+    okText: "Ha, yangi suhbat",
+  });
+  if (!yes) return;
+  try {
+    await api(`/conversations/${id}/restart`, { method: "POST", body: {} });
+    toast("Suhbat yopildi — keyingi xabar yangi suhbat bo'ladi");
     await loadChats();
   } catch (err) { toast(err.message, true); }
 }

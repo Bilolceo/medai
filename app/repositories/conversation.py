@@ -11,6 +11,9 @@ from app.repositories.base import CrossTenantAccessError, TenantScopedRepository
 # by moving it off this value, which is what makes "the open one" a
 # single-row lookup rather than a guess at the most recent.
 OPEN_STATUS = "open"
+# Where a conversation goes when the clinic starts the patient afresh: the
+# next message opens a new one, and this one stays readable as history.
+CLOSED_STATUS = "closed"
 
 
 class ConversationRepository(TenantScopedRepository[Conversation]):

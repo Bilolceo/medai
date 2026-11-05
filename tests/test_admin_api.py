@@ -437,6 +437,49 @@ async def test_marking_a_conversation_done_unpins_it(
     assert response.json()["needs_doctor_since"] is None
 
 
+async def test_starting_afresh_closes_the_conversation_and_the_next_message_opens_a_new_one(
+    client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    seed: Seed,
+    manager: Any,
+    as_tenant: Callable[[UUID], AbstractContextManager[None]],
+) -> None:
+    """The clinic's testers write in chats with weeks of old turns, which the
+    assistant reads as mid-conversation; "Yangi suhbat" closes the thread
+    so the next message is a first contact again."""
+    from app.repositories.conversation import CLOSED_STATUS
+    from app.services.conversation import _get_or_create_open_conversation
+
+    csrf = _login_as(client, manager)
+
+    response = await client.post(
+        f"/api/admin/conversations/{seed.a.conversation.id}/restart", headers={CSRF_HEADER: csrf}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == CLOSED_STATUS
+    with as_tenant(seed.tenant_a.id):
+        await db_session.refresh(seed.a.conversation)
+        assert seed.a.conversation.status == CLOSED_STATUS
+        reopened = await _get_or_create_open_conversation(
+            db_session, user_id=seed.a.conversation.user_id
+        )
+    assert reopened.id != seed.a.conversation.id
+    # The old thread is still there to read.
+    old = await client.get(f"/api/admin/conversations/{seed.a.conversation.id}")
+    assert old.status_code == 200
+
+
+async def test_starting_afresh_needs_the_csrf_token(
+    client: httpx.AsyncClient,
+    seed: Seed,
+    manager: Any,
+) -> None:
+    _login_as(client, manager)
+    response = await client.post(f"/api/admin/conversations/{seed.a.conversation.id}/restart")
+    assert response.status_code == 403
+
+
 async def test_marking_done_needs_the_csrf_token(
     client: httpx.AsyncClient,
     db_session: AsyncSession,
