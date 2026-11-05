@@ -184,5 +184,17 @@
         "ONLINE_HOURS"
       ]
     }
+  ],
+  "flows": [
+    {
+      "file": "flows/libido.json",
+      "needs": [
+        "ONLINE_PRICE",
+        "ONLINE_PREPAY",
+        "CARD",
+        "CARD_NAME",
+        "ONLINE_HOURS"
+      ]
+    }
   ]
 }

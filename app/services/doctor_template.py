@@ -72,7 +72,69 @@ def _derived(facts: dict[str, str]) -> dict[str, str]:
     # "administratoriman, ismim Dildora" when the clinic gave the
     # administrator a name; just "administratoriman" when it did not.
     out["ADMIN_NAME_PART"] = f", ismim {facts['ADMIN_NAME']}" if "ADMIN_NAME" in facts else ""
+    # The same facts in Cyrillic and Russian, for the scripted flows, which
+    # say their lines in the patient's own alphabet word for word.
+    admin = to_cyrillic(facts["ADMIN_NAME"]) if "ADMIN_NAME" in facts else ""
+    out["ADMIN_NAME_PART_CYR"] = f", исмим {admin}" if admin else ""
+    out["ADMIN_NAME_PART_RU"] = f", меня зовут {admin}" if admin else ""
+    if "DOCTOR_SHORT" in facts:
+        out["DOCTOR_SHORT_CYR"] = to_cyrillic(facts["DOCTOR_SHORT"])
+        bare = re.sub(r"(?i)^doktor\s+", "", facts["DOCTOR_SHORT"]).strip()
+        out["DOCTOR_RU_GEN"] = f"доктора {to_cyrillic(bare)}а"
+        out["DOCTOR_RU_INS"] = f"доктором {to_cyrillic(bare)}ом"
+    for key in ("ONLINE_PRICE", "ONLINE_PREPAY"):
+        if key in facts:
+            out[f"{key}_CYR"] = to_cyrillic(facts[key])
+            out[f"{key}_RU"] = re.sub(r"(?i)so['‘ʻ’`]?m", "сум", facts[key])
+    if "CARD_NAME" in facts:
+        out["CARD_NAME_CYR"] = to_cyrillic(facts["CARD_NAME"])
+    if "ONLINE_HOURS" in facts:
+        times = re.findall(r"\d{1,2}:\d{2}", facts["ONLINE_HOURS"])
+        if len(times) == 2:
+            out["ONLINE_START"], out["ONLINE_END"] = times
     return out
+
+
+_CYRILLIC_PAIRS = [
+    ("o'", "ў"),
+    ("g'", "ғ"),
+    ("sh", "ш"),
+    ("ch", "ч"),
+    ("yo", "ё"),
+    ("yu", "ю"),
+    ("ya", "я"),
+    ("ye", "е"),
+    ("ts", "ц"),
+]
+_CYRILLIC_SINGLE = dict(zip("abcdfghijklmnopqrstuvxyz", "абцдфгҳижклмнопқрстувхйз", strict=True))
+
+
+def to_cyrillic(text: str) -> str:
+    """Uzbek Latin in Cyrillic, as a person would write a name or a price:
+    "Sultonbek Norkuziev" -> "Султонбек Норкузиев", "500 000 so'm" ->
+    "500 000 сўм". Enough for names and sums; not a general transliterator."""
+    text = re.sub(r"[‘ʻ’`]", "'", text)
+    out: list[str] = []
+    i = 0
+    while i < len(text):
+        pair = text[i : i + 2]
+        hit = next((cyr for lat, cyr in _CYRILLIC_PAIRS if pair.lower() == lat), None)
+        if hit:
+            out.append(hit.upper() if pair[0].isupper() else hit)
+            i += 2
+            continue
+        ch = text[i]
+        low = ch.lower()
+        if low == "e":
+            # "e" opens a word as "э" and is "е" inside it.
+            cyr = "э" if i == 0 or not text[i - 1].isalpha() else "е"
+        elif low == "'":
+            cyr = "ъ"
+        else:
+            cyr = _CYRILLIC_SINGLE.get(low, ch)
+        out.append(cyr.upper() if ch.isupper() else cyr)
+        i += 1
+    return "".join(out)
 
 
 def _fill(text: str, facts: Mapping[str, str], where: str) -> str:
@@ -162,6 +224,12 @@ def build_settings(template: str, doctor: Mapping[str, Any]) -> dict[str, Any]:
     }
     if "LANDMARK" in facts:
         settings["clinic_landmark"] = facts["LANDMARK"]
+    # A scripted flow: lines the clinic wants said word for word and in
+    # order, run by app.services.scripted_flow instead of the model.
+    for item in manifest.get("flows", []):
+        if _wanted(item, facts):
+            raw = _fill((root / item["file"]).read_text(), facts, item["file"])
+            settings["scripted_flow"] = json.loads(raw)
     settings.update(_schedule_settings(facts))
     return settings
 

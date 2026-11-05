@@ -29,13 +29,16 @@ from app.repositories.knowledge_base import KnowledgeBaseMatch
 from app.repositories.knowledge_document import ChunkMatch
 from app.services import (
     booking_offer,
+    bubbles,
     medical_safety,
     phone_guard,
     price_guard,
     repetition,
+    scripted_flow,
     spelling,
 )
 from app.services import persona as persona_service
+from app.services.appointment import CLINIC_TIMEZONE
 from app.services.language import (
     clear_script,
     conversation_script,
@@ -402,6 +405,21 @@ async def generate_answer(
             else None
         ),
     )
+    # A flow the clinic wants said word for word (app.services.scripted_flow)
+    # answers before the model does; off its script, the model answers the
+    # patient's question and the flow's own question follows.
+    scripted = scripted_flow.plan(
+        tenant.settings.get("scripted_flow") if tenant is not None else None,
+        script=script,
+        user_message=user_message,
+        history=history,
+        now=datetime.now(UTC).astimezone(CLINIC_TIMEZONE),
+    )
+    if scripted is not None and scripted.reply is not None:
+        logger.info("scripted_flow_reply", extra={"reply": scripted.reply[:200]})
+        return scripted.reply
+    if scripted is not None and scripted.instruction:
+        situation = "\n\n".join(filter(None, (situation, scripted.instruction)))
     if situation:
         system_prompt += "\n\n" + situation
     provider = llm_provider or get_llm_provider()
@@ -473,6 +491,8 @@ async def generate_answer(
         if stripped != reply:
             logger.info("booking_offer_removed", extra={"reply": reply[:300]})
         reply = stripped
+    if scripted is not None and scripted.then:
+        reply = f"{scripted_flow.drop_questions(reply)} {bubbles.MARKER} {scripted.then}"
     return reply
 
 
