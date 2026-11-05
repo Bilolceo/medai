@@ -104,6 +104,18 @@ class ChannelAdapter(ABC):
         the recipient.
         """
 
+    async def send_image(
+        self,
+        *,
+        credentials: str,
+        recipient_external_id: str,
+        image_url: str,
+        reply_context: Mapping[str, Any] | None = None,
+    ) -> bool:
+        """Send a picture by its public address; False on a platform this
+        does not do pictures for, so the caller can say so in the log."""
+        return False
+
     def delivery_block_reason(
         self, *, credentials: str, last_user_message_at: datetime
     ) -> DeliveryBlocked | None:

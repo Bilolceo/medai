@@ -53,6 +53,23 @@ class InstagramAdapter(ChannelAdapter):
             sender_igsid=str(sender) if sender else None,
         )
 
+    async def send_image(
+        self,
+        *,
+        credentials: str,
+        recipient_external_id: str,
+        image_url: str,
+        reply_context: Mapping[str, Any] | None = None,
+    ) -> bool:
+        sender = (reply_context or {}).get(CHANNEL_EXTERNAL_ID)
+        await self._resolve_client().send_image(
+            access_token=credentials,
+            recipient_igsid=recipient_external_id,
+            image_url=image_url,
+            sender_igsid=str(sender) if sender else None,
+        )
+        return True
+
     def delivery_block_reason(
         self, *, credentials: str, last_user_message_at: datetime
     ) -> DeliveryBlocked | None:

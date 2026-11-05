@@ -33,6 +33,7 @@ from app.services import (
     medical_safety,
     phone_guard,
     price_guard,
+    promo_images,
     repetition,
     scripted_flow,
     spelling,
@@ -493,6 +494,18 @@ async def generate_answer(
         reply = stripped
     if scripted is not None and scripted.then:
         reply = f"{scripted_flow.drop_questions(reply)} {bubbles.MARKER} {scripted.then}"
+    # The clinic's price card, when the patient asked the price (see
+    # app.services.promo_images): chosen here, sent by delivery after the words.
+    card = promo_images.choose(
+        tenant.settings.get("promo_images") if tenant is not None else None,
+        user_message=user_message,
+        patient_turns=patient_turns,
+        own_turns=own_turns,
+        reply=reply,
+    )
+    if card is not None:
+        logger.info("promo_image_attached", extra={"title": card.get("title")})
+        reply = promo_images.attach(reply, card, script)
     return reply
 
 

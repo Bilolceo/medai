@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.channels.base import CHANNEL_EXTERNAL_ID, ChannelAdapter, get_adapter
 from app.core.encryption import decrypt
 from app.repositories.channel import ChannelRepository
-from app.services import bubbles
+from app.services import bubbles, promo_images
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +99,8 @@ async def send_reply(
     # the way an administrator would send an introduction and then the
     # question (app.services.bubbles). A short pause between them keeps the
     # platform from reordering two sends that leave in the same instant.
-    messages = bubbles.parts(text)
+    text, pictures = promo_images.split(text)
+    messages = bubbles.parts(text) if text else []
     for index, message in enumerate(messages):
         if index:
             await asyncio.sleep(PAUSE_BETWEEN_MESSAGES_SECONDS)
@@ -111,6 +112,17 @@ async def send_reply(
             # caller gave: a platform that must name the sender finds it here.
             reply_context={**(reply_context or {}), CHANNEL_EXTERNAL_ID: channel.external_id},
         )
+    for url in pictures:
+        # After the words, as an administrator sends the card under her line.
+        await asyncio.sleep(PAUSE_BETWEEN_MESSAGES_SECONDS)
+        sent = await resolved_adapter.send_image(
+            credentials=credentials,
+            recipient_external_id=recipient_external_id,
+            image_url=url,
+            reply_context={**(reply_context or {}), CHANNEL_EXTERNAL_ID: channel.external_id},
+        )
+        if not sent:
+            logger.warning("reply_picture_not_supported", extra={"channel_type": channel.type})
     logger.info(
         "reply_sent",
         extra={
@@ -119,6 +131,7 @@ async def send_reply(
             "recipient": recipient_external_id,
             "reply_length": len(text),
             "messages": len(messages),
+            "pictures": len(pictures),
         },
     )
     return channel.type

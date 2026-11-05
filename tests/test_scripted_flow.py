@@ -24,6 +24,9 @@ FACTS = {
     "CARD": "9860 1501 1048 3446",
     "CARD_NAME": "Sultonbek Norkuziev",
     "ONLINE_HOURS": "09:00–16:00",
+    "EVENING_PRICE": "990 000 so'm",
+    "EVENING_PREPAY": "495 000 so'm",
+    "EVENING_HOURS": "19:00–22:00",
 }
 FLOW = build_settings("urolog-intake", FACTS)["scripted_flow"]
 # A Tuesday: tomorrow is a working day.
@@ -113,9 +116,20 @@ def test_another_question_goes_to_the_model_and_the_step_question_follows() -> N
     assert replies[1] == "<model>Ismingiz nima?"
 
 
-def test_an_hour_outside_the_online_hours_is_asked_again() -> None:
-    replies = _talk(["Xohish pasaygan", "Sardor", "Buxoro", "30", "Ertaga 20:00 da"])
-    assert replies[4].startswith("Onlayn konsultatsiya 09:00 dan 16:00 gacha.")
+def test_an_hour_outside_both_windows_is_asked_again() -> None:
+    replies = _talk(["Xohish pasaygan", "Sardor", "Buxoro", "30", "Ertaga 17:30 da"])
+    assert replies[4].startswith(
+        "Onlayn konsultatsiya kunduzi 09:00 dan 16:00 gacha, kechqurun 19:00 dan 22:00 gacha."
+    )
+
+
+def test_an_evening_hour_gets_the_evening_price() -> None:
+    replies = _talk(["Xohish pasaygan", "Sardor", "Buxoro", "30", "Narxi qancha?", "kechki 8 da"])
+    slot, why, prepay, card = bubbles.parts(replies[5])
+    assert "20:00" in slot
+    assert "990 000 so'm" in why and "ish vaqtidan tashqari" in why
+    assert "495 000 so'm" in prepay and "20:00" in prepay
+    assert "9860" in card
 
 
 def test_no_hour_gets_an_example() -> None:

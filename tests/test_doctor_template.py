@@ -265,8 +265,11 @@ def test_the_intake_template_has_the_online_flow_only_when_the_clinic_gave_its_f
         "urolog-intake",
         _facts(
             ADMIN_NAME="Dildora",
-            ONLINE_PRICE="500 000 so'm",
-            ONLINE_PREPAY="250 000 so'm",
+            ONLINE_PRICE="330 000 so'm",
+            ONLINE_PREPAY="165 000 so'm",
+            EVENING_PRICE="990 000 so'm",
+            EVENING_PREPAY="495 000 so'm",
+            EVENING_HOURS="19:00-22:00",
             CARD="9860 1501 1048 3446",
             CARD_NAME="Sultonbek Norkuziev",
             ONLINE_HOURS="09:00-16:00",
@@ -279,13 +282,17 @@ def test_the_intake_template_has_the_online_flow_only_when_the_clinic_gave_its_f
     )
     # A clinic that named no online consultation never hears of one.
     assert "JINSIY XOHISH" not in without["assistant_prompt"]
-    assert "500 000" not in json.dumps(without, ensure_ascii=False)
+    assert "330 000" not in json.dumps(without, ensure_ascii=False)
     assert any(rule.startswith("Hech qanday narx") for rule in without["strict_rules"])
     # The clinic that did gets the flow, the price rule the guard reads, and
     # the plain no-price rule steps aside for the one with the exception.
     assert "JINSIY XOHISH PASTLIGI" in with_online["assistant_prompt"]
     assert "9860 1501 1048 3446" in with_online["assistant_prompt"]
-    assert any("500 000 so'm" in r and "250 000 so'm" in r for r in with_online["strict_rules"])
+    assert any(
+        "330 000 so'm" in r and "165 000 so'm" in r and "990 000 so'm" in r
+        for r in with_online["strict_rules"]
+    )
+    assert "scripted_flow" in with_online and "scripted_flow" not in without
     assert not any(rule.startswith("Hech qanday narx") for rule in with_online["strict_rules"])
     assert "Yoshingiz nechada?" in with_online["assistant_examples"]
     assert "<<" not in json.dumps(with_online, ensure_ascii=False)

@@ -2,7 +2,14 @@
   "name": "libido",
   "online_start": "<<ONLINE_START>>",
   "online_end": "<<ONLINE_END>>",
-  "work_days": [1, 2, 3, 4, 5, 6],
+  "work_days": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
   "texts": {
     "uz-latn": {
       "greet_back": "Va alaykum assalom.",
@@ -17,14 +24,16 @@
       "today_full": "Bugun onlayn konsultatsiyaga joylarimiz to'lgan, {day} bo'sh joylarimiz bor. {Day} soat nechiga sizga qulay?",
       "ask_time": "{Day} soat nechiga sizga qulay?",
       "time_example": "Soatini yozing, masalan 10:00 yoki 14:30.",
-      "hours": "Onlayn konsultatsiya <<ONLINE_START>> dan <<ONLINE_END>> gacha. {Day} shu oraliqda soat nechiga qulay?",
+      "hours": "Onlayn konsultatsiya kunduzi <<ONLINE_START>> dan <<ONLINE_END>> gacha, kechqurun <<EVENING_START>> dan <<EVENING_END>> gacha. {Day} soat nechiga qulay?",
       "slot_ok": "Yaxshi, {day} bizda {time} ga bo'sh joy bor ekan, sizni shu vaqtga navbatga yozib qo'yishim mumkin.",
       "paid_info": "Bizda konsultatsiyalar pulli: onlayn konsultatsiya narxi <<ONLINE_PRICE>>.",
       "prepay": "Konsultatsiyaning birinchi bosqichi uchun to'lovning birinchi yarmini (<<ONLINE_PREPAY>>) kiritib qo'ysangiz, sizni {day} {time} ga yozib qo'yaman.",
       "card": "To'lov uchun karta: <<CARD>> (<<CARD_NAME>>). To'lagach chekni va telefon raqamingizni shu yerga yuboring.",
       "price_early": "Onlayn konsultatsiya narxi <<ONLINE_PRICE>>, birinchi bosqich uchun to'lovning yarmi (<<ONLINE_PREPAY>>) oldindan kiritiladi.",
       "tomorrow": "ertaga",
-      "monday": "dushanba kuni"
+      "monday": "dushanba kuni",
+      "paid_info_evening": "Kechki onlayn konsultatsiya kunduzgi ish vaqtidan tashqari bo'lgani uchun narxi <<EVENING_PRICE>>.",
+      "prepay_evening": "Konsultatsiyaning birinchi bosqichi uchun to'lovning birinchi yarmini (<<EVENING_PREPAY>>) kiritib qo'ysangiz, sizni {day} {time} ga yozib qo'yaman."
     },
     "uz-cyrl": {
       "greet_back": "Ва алайкум ассалом.",
@@ -39,14 +48,16 @@
       "today_full": "Бугун онлайн консультацияга жойларимиз тўлган, {day} бўш жойларимиз бор. {Day} соат нечига сизга қулай?",
       "ask_time": "{Day} соат нечига сизга қулай?",
       "time_example": "Соатини ёзинг, масалан 10:00 ёки 14:30.",
-      "hours": "Онлайн консультация <<ONLINE_START>> дан <<ONLINE_END>> гача. {Day} шу оралиқда соат нечига қулай?",
+      "hours": "Онлайн консультация кундузи <<ONLINE_START>> дан <<ONLINE_END>> гача, кечқурун <<EVENING_START>> дан <<EVENING_END>> гача. {Day} соат нечига қулай?",
       "slot_ok": "Яхши, {day} бизда {time} га бўш жой бор экан, сизни шу вақтга навбатга ёзиб қўйишим мумкин.",
       "paid_info": "Бизда консультациялар пулли: онлайн консультация нархи <<ONLINE_PRICE_CYR>>.",
       "prepay": "Консультациянинг биринчи босқичи учун тўловнинг биринчи ярмини (<<ONLINE_PREPAY_CYR>>) киритиб қўйсангиз, сизни {day} {time} га ёзиб қўяман.",
       "card": "Тўлов учун карта: <<CARD>> (<<CARD_NAME_CYR>>). Тўлагач чекни ва телефон рақамингизни шу ерга юборинг.",
       "price_early": "Онлайн консультация нархи <<ONLINE_PRICE_CYR>>, биринчи босқич учун тўловнинг ярми (<<ONLINE_PREPAY_CYR>>) олдиндан киритилади.",
       "tomorrow": "эртага",
-      "monday": "душанба куни"
+      "monday": "душанба куни",
+      "paid_info_evening": "Кечки онлайн консультация кундузги иш вақтидан ташқари бўлгани учун нархи <<EVENING_PRICE_CYR>>.",
+      "prepay_evening": "Консультациянинг биринчи босқичи учун тўловнинг биринчи ярмини (<<EVENING_PREPAY_CYR>>) киритиб қўйсангиз, сизни {day} {time} га ёзиб қўяман."
     },
     "ru": {
       "greet_back": "Здравствуйте.",
@@ -61,14 +72,18 @@
       "today_full": "Сегодня онлайн-консультации уже заняты, {day} есть свободные места. {Day} во сколько вам удобно?",
       "ask_time": "{Day} во сколько вам удобно?",
       "time_example": "Напишите время, например 10:00 или 14:30.",
-      "hours": "Онлайн-консультации с <<ONLINE_START>> до <<ONLINE_END>>. {Day} в какое время в этом промежутке вам удобно?",
+      "hours": "Онлайн-консультации днём с <<ONLINE_START>> до <<ONLINE_END>>, вечером с <<EVENING_START>> до <<EVENING_END>>. {Day} во сколько вам удобно?",
       "slot_ok": "Хорошо, {day} у нас есть свободное место на {time}, могу записать вас на это время.",
       "paid_info": "Консультации у нас платные: онлайн-консультация стоит <<ONLINE_PRICE_RU>>.",
       "prepay": "Если внесёте первую половину оплаты (<<ONLINE_PREPAY_RU>>) за первый этап консультации, я запишу вас {day} на {time}.",
       "card": "Карта для оплаты: <<CARD>> (<<CARD_NAME_CYR>>). После оплаты отправьте сюда чек и номер телефона.",
       "price_early": "Онлайн-консультация стоит <<ONLINE_PRICE_RU>>, половина оплаты за первый этап (<<ONLINE_PREPAY_RU>>) вносится заранее.",
       "tomorrow": "завтра",
-      "monday": "в понедельник"
+      "monday": "в понедельник",
+      "paid_info_evening": "Вечерняя онлайн-консультация проходит вне рабочего времени, поэтому стоит <<EVENING_PRICE_RU>>.",
+      "prepay_evening": "Если внесёте первую половину оплаты (<<EVENING_PREPAY_RU>>) за первый этап консультации, я запишу вас {day} на {time}."
     }
-  }
+  },
+  "evening_start": "<<EVENING_START>>",
+  "evening_end": "<<EVENING_END>>"
 }

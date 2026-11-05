@@ -82,16 +82,17 @@ def _derived(facts: dict[str, str]) -> dict[str, str]:
         bare = re.sub(r"(?i)^doktor\s+", "", facts["DOCTOR_SHORT"]).strip()
         out["DOCTOR_RU_GEN"] = f"доктора {to_cyrillic(bare)}а"
         out["DOCTOR_RU_INS"] = f"доктором {to_cyrillic(bare)}ом"
-    for key in ("ONLINE_PRICE", "ONLINE_PREPAY"):
+    for key in ("ONLINE_PRICE", "ONLINE_PREPAY", "EVENING_PRICE", "EVENING_PREPAY"):
         if key in facts:
             out[f"{key}_CYR"] = to_cyrillic(facts[key])
             out[f"{key}_RU"] = re.sub(r"(?i)so['‘ʻ’`]?m", "сум", facts[key])
     if "CARD_NAME" in facts:
         out["CARD_NAME_CYR"] = to_cyrillic(facts["CARD_NAME"])
-    if "ONLINE_HOURS" in facts:
-        times = re.findall(r"\d{1,2}:\d{2}", facts["ONLINE_HOURS"])
-        if len(times) == 2:
-            out["ONLINE_START"], out["ONLINE_END"] = times
+    for key, prefix in (("ONLINE_HOURS", "ONLINE"), ("EVENING_HOURS", "EVENING")):
+        if key in facts:
+            times = re.findall(r"\d{1,2}:\d{2}", facts[key])
+            if len(times) == 2:
+                out[f"{prefix}_START"], out[f"{prefix}_END"] = times
     return out
 
 
@@ -224,6 +225,18 @@ def build_settings(template: str, doctor: Mapping[str, Any]) -> dict[str, Any]:
     }
     if "LANDMARK" in facts:
         settings["clinic_landmark"] = facts["LANDMARK"]
+    # The price cards a patient asking the price is sent (app.services.promo_images).
+    cards = [
+        {"topic": topic, "title": title, "url": facts[key]}
+        for key, topic, title in (
+            ("PROMO_DAY_URL", "day", "Kunduzgi konsultatsiya: narx va tartib"),
+            ("PROMO_STEROID_URL", "steroid", "Steroid va gormonal muammolar: narx va tartib"),
+            ("PROMO_EVENING_URL", "evening", "Kechki onlayn konsultatsiya: narx va tartib"),
+        )
+        if key in facts
+    ]
+    if cards:
+        settings["promo_images"] = cards
     # A scripted flow: lines the clinic wants said word for word and in
     # order, run by app.services.scripted_flow instead of the model.
     for item in manifest.get("flows", []):

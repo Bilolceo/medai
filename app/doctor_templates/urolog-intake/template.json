@@ -22,7 +22,13 @@
     "ONLINE_PREPAY",
     "CARD",
     "CARD_NAME",
-    "ONLINE_HOURS"
+    "ONLINE_HOURS",
+    "EVENING_PRICE",
+    "EVENING_PREPAY",
+    "EVENING_HOURS",
+    "PROMO_DAY_URL",
+    "PROMO_STEROID_URL",
+    "PROMO_EVENING_URL"
   ],
   "prompt": "prompt.txt",
   "examples": [
@@ -39,7 +45,10 @@
       "file": "examples/wants_to_book.txt"
     },
     {
-      "file": "examples/price_asked.txt"
+      "file": "examples/price_asked.txt",
+      "unless": [
+        "PROMO_DAY_URL"
+      ]
     },
     {
       "file": "examples/question_then_step.txt"
@@ -81,7 +90,10 @@
       "file": "examples/off_topic.txt"
     },
     {
-      "file": "examples/instagram_order_button.txt"
+      "file": "examples/instagram_order_button.txt",
+      "unless": [
+        "PROMO_DAY_URL"
+      ]
     },
     {
       "file": "examples/same_question_twice.txt"
@@ -118,6 +130,27 @@
         "CARD",
         "CARD_NAME"
       ]
+    },
+    {
+      "file": "examples/price_card_asked.txt",
+      "needs": [
+        "PROMO_DAY_URL",
+        "EVENING_HOURS"
+      ]
+    },
+    {
+      "file": "examples/price_card_unknown_topic.txt",
+      "needs": [
+        "PROMO_DAY_URL",
+        "EVENING_HOURS"
+      ]
+    },
+    {
+      "file": "examples/price_card_evening.txt",
+      "needs": [
+        "PROMO_DAY_URL",
+        "EVENING_HOURS"
+      ]
     }
   ],
   "rules": [
@@ -139,13 +172,17 @@
     {
       "file": "rules/prices_by_phone.txt",
       "unless": [
-        "ONLINE_PRICE"
+        "ONLINE_PRICE",
+        "PROMO_DAY_URL"
       ]
     },
     {
       "file": "rules/prices_by_phone_except_online.txt",
       "needs": [
         "ONLINE_PRICE"
+      ],
+      "unless": [
+        "PROMO_DAY_URL"
       ]
     },
     {
@@ -154,7 +191,10 @@
         "ONLINE_PRICE",
         "ONLINE_PREPAY",
         "CARD",
-        "CARD_NAME"
+        "CARD_NAME",
+        "EVENING_PRICE",
+        "EVENING_PREPAY",
+        "EVENING_HOURS"
       ]
     },
     {
@@ -171,6 +211,13 @@
     },
     {
       "file": "rules/services_not_listed.txt"
+    },
+    {
+      "file": "rules/price_cards.txt",
+      "needs": [
+        "PROMO_DAY_URL",
+        "EVENING_HOURS"
+      ]
     }
   ],
   "prompt_sections": [
@@ -193,7 +240,10 @@
         "ONLINE_PREPAY",
         "CARD",
         "CARD_NAME",
-        "ONLINE_HOURS"
+        "ONLINE_HOURS",
+        "EVENING_PRICE",
+        "EVENING_PREPAY",
+        "EVENING_HOURS"
       ]
     }
   ]

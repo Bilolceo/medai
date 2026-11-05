@@ -107,6 +107,17 @@ class InstagramClient(ABC):
         Raises InstagramSendError on any non-2xx response.
         """
 
+    async def send_image(
+        self,
+        *,
+        access_token: str,
+        recipient_igsid: str,
+        image_url: str,
+        sender_igsid: str | None = None,
+    ) -> None:
+        """Send a picture by its public address. Not every client can."""
+        raise InstagramSendError("this client cannot send pictures")
+
     @abstractmethod
     async def reply_to_comment(self, *, access_token: str, comment_id: str, text: str) -> None:
         """Reply under a comment, publicly.
@@ -230,6 +241,26 @@ class GraphAPIInstagramClient(InstagramClient):
                 },
             )
             raise InstagramSendError(f"Instagram send failed with status {response.status_code}")
+
+    async def send_image(
+        self,
+        *,
+        access_token: str,
+        recipient_igsid: str,
+        image_url: str,
+        sender_igsid: str | None = None,
+    ) -> None:
+        # Instagram fetches the picture from the address itself, so it must
+        # be public -- the clinic's price cards are served from /admin/promo.
+        response = await self._client_for(access_token).post(
+            f"/{self._own(access_token, sender_igsid)}/messages",
+            params={"access_token": access_token},
+            json={
+                "recipient": {"id": recipient_igsid},
+                "message": {"attachment": {"type": "image", "payload": {"url": image_url}}},
+            },
+        )
+        self._raise_for_error(response, "instagram_image_send_failed", recipient_igsid)
 
     def _raise_for_error(self, response: httpx.Response, event: str, subject: str) -> None:
         if not response.is_error:

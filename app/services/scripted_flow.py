@@ -158,10 +158,14 @@ def parse_time(message: str) -> time | None:
     return time(hour, minute)
 
 
-def _within(flow: Mapping[str, Any], at: time) -> bool:
-    start = time.fromisoformat(flow.get("online_start") or "09:00")
-    end = time.fromisoformat(flow.get("online_end") or "16:00")
-    return start <= at < end
+def _within(flow: Mapping[str, Any], at: time, prefix: str = "online") -> bool:
+    start, end = flow.get(f"{prefix}_start"), flow.get(f"{prefix}_end")
+    if not start or not end:
+        return False
+    return time.fromisoformat(start) <= at < time.fromisoformat(end)
+
+
+_EVENING_WORD = re.compile(r"kech|кеч|вечер", re.IGNORECASE)
 
 
 def plan(
@@ -240,9 +244,21 @@ def plan(
             if question:
                 return Plan(then=fill("ask_time"), instruction=INSTRUCTION)
             return Plan(reply=fill("time_example"))
+        if _EVENING_WORD.search(message) and at.hour < 12:
+            # "kechki 8" is eight in the evening.
+            at = at.replace(hour=at.hour + 12)
+        clock = f"{at:%H:%M}"
+        if _within(flow, at, "evening") and "paid_info_evening" in texts:
+            # The evening hours cost more, and say why, whatever was said before.
+            parts = [
+                fill("slot_ok", time=clock),
+                texts["paid_info_evening"],
+                fill("prepay_evening", time=clock),
+                texts["card"],
+            ]
+            return Plan(reply=f" {bubbles.MARKER} ".join(parts))
         if not _within(flow, at):
             return Plan(reply=fill("hours"))
-        clock = f"{at:%H:%M}"
         parts = [fill("slot_ok", time=clock)]
         if not said["price_early"] and not said["paid_info"]:
             parts.append(texts["paid_info"])
