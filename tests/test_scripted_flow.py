@@ -64,9 +64,9 @@ def test_the_whole_flow_goes_in_the_doctors_order_and_words() -> None:
     first = bubbles.parts(replies[0])
     assert first == [
         "Va alaykum assalom. Men doktor Sultonbekning administratoriman, ismim Dildora.",
-        "Ismingiz nima?",
+        "Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?",
     ]
-    assert replies[1] == "Farrux, qayerdansiz?"
+    assert replies[1] == "Farrux, qayerdansiz: Toshkentdanmisiz yoki viloyatdanmi?"
     assert replies[2] == "Yoshingiz nechada?"
     causes, online, today = bubbles.parts(replies[3])
     assert causes.startswith(
@@ -101,8 +101,8 @@ def test_a_price_question_is_answered_and_the_same_question_asked_again() -> Non
     replies = _talk(["Xohishim yo'q bo'lib qoldi", "Narxi qancha?", "Bobur"])
     price, again = bubbles.parts(replies[1])
     assert "330 000 so'm" in price and "165 000 so'm" in price
-    assert again == "Ismingiz nima?"
-    assert replies[2] == "Bobur, qayerdansiz?"
+    assert again == "Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?"
+    assert replies[2] == "Bobur, qayerdansiz: Toshkentdanmisiz yoki viloyatdanmi?"
 
 
 def test_a_price_said_early_is_not_said_again_with_the_slot() -> None:
@@ -113,7 +113,7 @@ def test_a_price_said_early_is_not_said_again_with_the_slot() -> None:
 
 def test_another_question_goes_to_the_model_and_the_step_question_follows() -> None:
     replies = _talk(["Jinsiy xohishim pasaygan", "Doktor o'zi ko'radimi?"])
-    assert replies[1] == "<model>Ismingiz nima?"
+    assert replies[1] == "<model>Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?"
 
 
 def test_an_hour_outside_both_windows_is_asked_again() -> None:
@@ -163,11 +163,11 @@ def test_other_complaints_and_other_wishes_are_left_to_the_ordinary_sequence(mes
 
 def test_cyrillic_and_russian_are_said_in_their_own_alphabet() -> None:
     cyr = _talk(["Жинсий хоҳишим пасайган", "Ботир", "Фарғона", "35", "Эртага 14 да"], "uz-cyrl")
-    assert bubbles.parts(cyr[0])[-1] == "Исмингиз нима?"
-    assert cyr[1] == "Ботир, қаердансиз?"
+    assert bubbles.parts(cyr[0])[-1] == "Исмингиз нима, сизга қандай мурожаат қилсам бўлади?"
+    assert cyr[1] == "Ботир, қаердансиз: Тошкентданмисиз ёки вилоятданми?"
     assert "14:00" in cyr[4] and "165 000 сўм" in cyr[4]
     ru = _talk(["Пропало влечение", "Руслан", "Ташкент", "40", "в 12"], "ru")
-    assert bubbles.parts(ru[0])[-1] == "Как вас зовут?"
+    assert bubbles.parts(ru[0])[-1] == "Как вас зовут, как к вам обращаться?"
     assert ru[2] == "Сколько вам лет?"
     assert "12:00" in ru[4] and "165 000 сум" in ru[4]
 
@@ -198,4 +198,4 @@ def test_an_old_name_question_in_the_same_chat_does_not_skip_the_first_step() ->
         FLOW, script="uz-latn", user_message="Xohishim pasayib ketdi", history=history, now=TUESDAY
     )
     assert plan is not None and plan.reply is not None
-    assert bubbles.parts(plan.reply)[-1] == "Ismingiz nima?"
+    assert bubbles.parts(plan.reply)[-1] == "Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?"

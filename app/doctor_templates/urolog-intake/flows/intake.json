@@ -46,7 +46,8 @@
       "contact_answer": "Doktor bilan konsultatsiyaga shu yerning o'zida yozib qo'yaman.",
       "visit_choice": "Klinikaga kelib qabulga yozilasizmi yoki doktor bilan onlayn videoqo'ng'iroqda konsultatsiya olasizmi?",
       "mode_online": "onlayn konsultatsiyaga",
-      "mode_visit": "klinikaga qabulga"
+      "mode_visit": "klinikaga qabulga",
+      "paid_ask": "Chek rasmini va telefon raqamingizni shu yerga yuboring, administratorimiz tekshirib tasdiqlaydi."
     },
     "uz-cyrl": {
       "greet_back": "Ва алайкум ассалом.",
@@ -91,7 +92,8 @@
       "contact_answer": "Доктор билан консультацияга шу ернинг ўзида ёзиб қўяман.",
       "visit_choice": "Клиникага келиб қабулга ёзиласизми ёки доктор билан онлайн видеоқўнғироқда консультация оласизми?",
       "mode_online": "онлайн консультацияга",
-      "mode_visit": "клиникага қабулга"
+      "mode_visit": "клиникага қабулга",
+      "paid_ask": "Чек расмини ва телефон рақамингизни шу ерга юборинг, администраторимиз текшириб тасдиқлайди."
     },
     "ru": {
       "greet_back": "Здравствуйте.",
@@ -136,7 +138,8 @@
       "contact_answer": "На консультацию к доктору я запишу вас прямо здесь.",
       "visit_choice": "Записать вас на приём в клинику или на онлайн-консультацию с доктором по видеозвонку?",
       "mode_online": "на онлайн-консультацию",
-      "mode_visit": "на приём в клинику"
+      "mode_visit": "на приём в клинику",
+      "paid_ask": "Отправьте сюда фото чека и номер телефона, администратор проверит и подтвердит запись."
     }
   },
   "prices": {

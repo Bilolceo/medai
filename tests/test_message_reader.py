@@ -9,6 +9,10 @@ from app.services.appointment import CLINIC_TIMEZONE
 from tests.test_intake_flow import FLOWS
 
 NOW = datetime(2026, 11, 3, 11, 0, tzinfo=CLINIC_TIMEZONE)
+HANDLES_NAME = (
+    "Ha, doktor shu bilan shug'ullanadi. Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?"
+)
+PLACE = "qayerdansiz: Toshkentdanmisiz yoki viloyatdanmi?"
 
 
 def _reading(**fields: Any) -> message_reader.Reading:
@@ -46,10 +50,7 @@ def _plan(message: str, history: list[dict[str, str]], **fields: Any) -> scripte
 def test_a_complaint_only_the_model_understood_starts_the_sequence() -> None:
     plan = _plan("tez tugatib qo'yaman", [], complaint_kind="urology", complaint="tez tugatish")
     assert plan is not None and plan.reply is not None
-    assert (
-        bubbles.parts(plan.reply)[-1]
-        == "Ha, doktor shu bilan shug'ullanadi. Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?"
-    )
+    assert bubbles.parts(plan.reply)[-1] == HANDLES_NAME
 
 
 def test_the_sequence_holds_on_the_bots_own_line_after_such_a_start() -> None:
@@ -58,13 +59,11 @@ def test_the_sequence_holds_on_the_bots_own_line_after_such_a_start() -> None:
         {
             "role": "assistant",
             "content": "Assalomu alaykum. Men doktor Sultonbekning administratoriman, "
-            "ismim Dildora.\n\nHa, doktor shu bilan shug'ullanadi. Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?",
+            "ismim Dildora.\n\n" + HANDLES_NAME,
         },
     ]
     plan = _plan("bilol", history, name="Bilol")
-    assert (
-        plan is not None and plan.reply == "Bilol, qayerdansiz: Toshkentdanmisiz yoki viloyatdanmi?"
-    )
+    assert plan is not None and plan.reply == "Bilol, " + PLACE
 
 
 def test_a_misspelt_country_the_model_understood_brings_the_online_line() -> None:
@@ -72,10 +71,10 @@ def test_a_misspelt_country_the_model_understood_brings_the_online_line() -> Non
         {"role": "user", "content": "ereksiya muammosi"},
         {
             "role": "assistant",
-            "content": "Ha, doktor shu bilan shug'ullanadi. Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?",
+            "content": HANDLES_NAME,
         },
         {"role": "user", "content": "Bilol"},
-        {"role": "assistant", "content": "Bilol, qayerdansiz: Toshkentdanmisiz yoki viloyatdanmi?"},
+        {"role": "assistant", "content": "Bilol, " + PLACE},
     ]
     plan = _plan("raseyadaman hozir", history, abroad=True, place="Rossiya")
     assert plan is not None and plan.reply is not None
@@ -87,10 +86,10 @@ def test_a_time_the_model_understood_confirms_the_call() -> None:
         {"role": "user", "content": "prostatit"},
         {
             "role": "assistant",
-            "content": "Ha, doktor shu bilan shug'ullanadi. Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?",
+            "content": HANDLES_NAME,
         },
         {"role": "user", "content": "Akmal"},
-        {"role": "assistant", "content": "Akmal, qayerdansiz: Toshkentdanmisiz yoki viloyatdanmi?"},
+        {"role": "assistant", "content": "Akmal, " + PLACE},
         {"role": "user", "content": "Toshkent"},
         {
             "role": "assistant",
@@ -119,7 +118,7 @@ def test_a_soft_no_the_model_understood_is_respected() -> None:
         {"role": "user", "content": "prostatit"},
         {
             "role": "assistant",
-            "content": "Ha, doktor shu bilan shug'ullanadi. Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?",
+            "content": HANDLES_NAME,
         },
     ]
     assert _plan("hozircha o'ylab ko'raman", history, refuses=True) is None
@@ -146,8 +145,5 @@ def test_a_time_with_call_me_in_it_is_just_the_time() -> None:
 def test_a_sport_complaint_the_model_read_is_a_complaint_with_the_evening_card() -> None:
     plan = _plan("Steroid kursidan keyin gormonlarim buzildi", [], complaint_kind="sport")
     assert plan is not None and plan.reply is not None
-    assert (
-        bubbles.parts(plan.reply)[-1]
-        == "Ha, doktor shu bilan shug'ullanadi. Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?"
-    )
+    assert bubbles.parts(plan.reply)[-1] == HANDLES_NAME
     assert plan.card_topic == "evening"

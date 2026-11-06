@@ -443,3 +443,67 @@ def test_a_steroid_patient_is_offered_only_the_evening_online() -> None:
     assert replies[3].startswith("Sport farmakologiyasi bo'yicha doktor faqat onlayn")
     assert "990 000 so'm" in replies[4] and "495 000 so'm" in replies[4]
     assert "onlayn konsultatsiyaga" in replies[4]
+
+
+# --- from the mock run of 2026-11-06 ---
+
+
+def test_a_place_in_the_first_message_is_not_asked_again() -> None:
+    replies = _talk(["Moskvada ishlayman, prostatit bor", "Sardor"])
+    assert bubbles.parts(replies[0])[-1] == f"{HANDLES} {NAME}"
+    assert replies[1] == ONLINE
+
+
+def test_name_place_and_complaint_at_once_go_straight_to_the_choice() -> None:
+    replies = _talk(["Salom men Bobur, Rossiyadaman, ereksiya muammosi"])
+    assert bubbles.parts(replies[0])[-1] == f"{HANDLES} {ONLINE}"
+
+
+def test_abroad_said_after_tashkent_is_offered_online_not_the_clinic() -> None:
+    replies = _talk(["Salom", "Nodir", "Toshkent", "Hozr men Rassiyadaman, prostatit bor"])
+    assert replies[3] == f"{HANDLES} {ONLINE}"
+
+
+def test_asking_for_the_call_at_the_choice_asks_for_the_number() -> None:
+    replies = _talk(["Prostatit bor", "Rustam", "Toshkent", "qo'ng'iroq qilinglar"])
+    assert replies[3].startswith("Operatorimiz qo'ng'iroq qilib")
+
+
+def test_no_name_moves_on_to_the_place_once() -> None:
+    replies = _talk(["Salom", "Ismimni aytmayman", "Buxoro"])
+    assert replies[1] == "Qayerdansiz: Toshkentdanmisiz yoki viloyatdanmi?"
+    assert replies[2] == TOPIC
+
+
+def test_a_complaint_given_for_the_place_is_taken_and_the_place_asked_again() -> None:
+    replies = _talk(["Salom", "Otabek", "prostatit bor", "Samarqand"])
+    assert replies[2] == f"{HANDLES} Qayerdansiz: Toshkentdanmisiz yoki viloyatdanmi?"
+    assert replies[3] == ONLINE
+
+
+def test_a_dollar_question_brings_no_price_card() -> None:
+    plan = scripted_flow.plan(
+        FLOWS, script="uz-latn", user_message="Dollar kursi qancha?", history=[], now=NOW
+    )
+    assert plan is None or not plan.cards
+
+
+def test_a_number_alone_first_asks_the_name() -> None:
+    replies = _talk(["+998 90 123 45 67"])
+    assert bubbles.parts(replies[0])[-1] == NAME
+
+
+def test_a_gynaecological_question_is_the_models() -> None:
+    assert _talk(["Men ayolman, hayz ko'rmayapman"]) == ["<model>"]
+
+
+def test_paid_without_a_number_asks_for_the_receipt_and_the_number() -> None:
+    replies = _book(["Prostatit bor", "Aziz", "Termiz", "ha", "ertaga 10:00", "to'ladim"])
+    assert replies[5].startswith("Chek rasmini va telefon raqamingizni")
+
+
+def test_a_foreign_number_at_payment_is_marked_for_telegram() -> None:
+    replies = _book(
+        ["Prostatit bor", "Bilol", "Germaniya", "ha", "ertaga 10:00", "+49 151 2345 6789"]
+    )
+    assert "ONLAYN (chet el raqami: Telegram/WhatsApp)" in replies[5]
