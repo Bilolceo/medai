@@ -974,7 +974,7 @@ def plan_intake(
         pending in ("ask_name", "ask_place", "ask_topic")
         and (_CONTACT.search(message) or _WANTS_PERSON.search(message))
         and phone_check.read(message) is None
-        and said[pending] < 3
+        and said[pending] < 2
     ):
         # "Doktor raqamini bering" again: the same answer, the same step -- no
         # number, and not the model's own wording of the question twice over.
