@@ -257,6 +257,74 @@ S: list[tuple[str, set[str], list[str]]] = [
     ("E01 emergency", {"emergency"}, ["Moyagim birdan shishib ketdi, qattiq og'riyapti"]),
     ("E02 emergency abroad", {"emergency"}, ["Rossiyadaman, 10 soatdan beri siya olmayapman"]),
     ("E03 woman", {"nobook"}, ["Men ayolman, hayz ko'rmayapman"]),
+    # --- asked for the doctor or the administrator: their number after the complaint ---
+    (
+        "P01 talk to doctor",
+        {"tashkent", "person"},
+        [
+            "Doktor bilan gaplashmoqchiman",
+            "Akmal",
+            "Toshkent",
+            "prostatit bor",
+            "+998 90 123 45 67",
+            "klinikaga",
+            "ertaga 10:00",
+        ],
+    ),
+    (
+        "P02 admin no number",
+        {"region", "person"},
+        [
+            "Administrator bilan gaplashsam bo'ladimi?",
+            "Bobur",
+            "Samarqand",
+            "ereksiya",
+            "raqam bermayman",
+            "ha",
+        ],
+    ),
+    (
+        "P03 number please abroad",
+        {"abroad", "person"},
+        [
+            "Doktorning raqamini bering",
+            "Sardor",
+            "Rossiyadaman",
+            "prostatit",
+            "+7 999 123 45 67",
+            "ha",
+        ],
+    ),
+    (
+        "P04 russian talk",
+        {"abroad", "person"},
+        ["Хочу поговорить с доктором", "Руслан", "Москва", "простатит", "+998 99 111 22 33"],
+    ),
+    # --- hesitant: the number, once ---
+    (
+        "H01 hesitate at choice",
+        {"region"},
+        ["Prostatit bor", "Aziz", "Buxoro", "o'ylab ko'raman", "+998 91 234 56 78"],
+    ),
+    (
+        "H02 too dear",
+        {"region"},
+        [
+            "Salom",
+            "Aziz",
+            "Navoiy",
+            "ereksiya",
+            "ha",
+            "ertaga 10:00",
+            "qimmat ekan",
+            "yo'q raqam bermayman",
+        ],
+    ),
+    (
+        "H03 russian later",
+        {"abroad"},
+        ["Здравствуйте, простатит", "Руслан", "Москва", "я подумаю", "+998 99 111 22 33"],
+    ),
     ("L01 libido abroad", {"nobook"}, ["Jinsiy xohishim yo'q", "Farrux", "Rossiya", "35"]),
 ]
 
@@ -272,6 +340,7 @@ CARD = re.compile(r"9860 1501")
 HALF = re.compile(r"50%|50 foiz|ярм|yarm|половин")
 DAY_PRICE = re.compile(r"330 000")
 OK_SUMS = re.compile(r"330 000|165 000|990 000|495 000")
+PASS_ON = re.compile(r"(?i)doktorga uzataman|докторга узатаман|передам ваши данные доктору")
 SUMS = re.compile(r"\b\d{2,3}\s?000\b")
 
 
@@ -306,6 +375,8 @@ def check(tags: set[str], replies: list[str]) -> list[str]:
                 flags.append(f"t{i+1}:ODD_SUM:{m.group(0)}")
         if "<<ERROR" in r:
             flags.append(f"t{i+1}:ERROR")
+    if "person" in tags and not PASS_ON.search(joined):
+        flags.append("PERSON_NUMBER_NOT_ASKED")
     for key, rx in (("name", ASK_NAME), ("place", ASK_PLACE), ("topic", ASK_TOPIC)):
         n = sum(1 for r in replies if rx.search(r))
         if n >= 3:

@@ -344,9 +344,11 @@ _INTAKE_STEPS = (
     "ask_name",
     "ask_place",
     "ask_topic",
+    "contact_phone",
     "online_choice",
     "offer_slots",
     "book_ok",
+    "hesitate_ask",
     "ask_phone",
     "ask_time",
     "confirm",
@@ -392,6 +394,20 @@ _WANTS_VISIT = re.compile(
 _CONTACT = re.compile(
     r"bog['‘ʻ’`]?lan|aloqa|raqam|nomer|telefon|telegram|tel\b|"
     r"боғлан|алоқа|рақам|номер|телефон|телеграм|связат|связь",
+    re.IGNORECASE,
+)
+# "Doktor bilan gaplashmoqchiman": wants the doctor or the administrator.
+_WANTS_PERSON = re.compile(
+    r"(?:doktor|vrach|shifokor|admin\w*|operator)\w*\s+bilan\s+gaplash|gaplashmoqchi|"
+    r"(?:доктор|врач|шифокор|админ\w*|оператор)\w*\s+билан\s+гаплаш|гаплашмоқчи|"
+    r"поговорить|связаться",
+    re.IGNORECASE,
+)
+# "O'ylab ko'raman", "qimmat ekan": not yet -- the number is asked, once.
+_HESITATE = re.compile(
+    r"o['‘ʻ’`]?ylab|keyinroq|keyin\s+(?:yozaman|o['‘ʻ’`]?zim|bog['‘ʻ’`]?lanaman)|qimmat|"
+    r"hozircha|pulim\s+yo['‘ʻ’`]?q|maslahatlash|ўйлаб|кейинроқ|қиммат|ҳозирча|"
+    r"подумаю|дорого|позже|пока\s+не",
     re.IGNORECASE,
 )
 _PAID = re.compile(
@@ -672,7 +688,7 @@ def plan_intake(
     said["ask_phone"] += _said(flow, "ask_phone_again", since)
     said["online_choice"] += _said(flow, "choice_again", since) + _said(flow, "visit_choice", since)
     said["offer_slots"] += _said(flow, "slot_taken", since) + _said(flow, "offer_evening", since)
-    if said["paid_confirm"]:
+    if said["paid_confirm"] or _said(flow, "hesitate_thanks", since):
         return None
     corrected = said["confirm"] and phone_check.read(message) is not None
     # The evening card sent for an evening wish hands the conversation to the
@@ -852,10 +868,30 @@ def plan_intake(
             return str(texts["visit_choice"])
         return str(texts["online_choice"])
 
+    def phone_given() -> bool:
+        return any(
+            (f := phone_check.read(t)) is not None
+            and f.kind in (phone_check.UZ, phone_check.FOREIGN)
+            for t in patient_since
+        )
+
+    def wants_person() -> bool:
+        """Asked for the doctor, the administrator or a number: their own number
+        is taken after the complaint, and passed on."""
+        return bool(_said(flow, "contact_answer", since)) or any(
+            (_WANTS_PERSON.search(t) or _CONTACT.search(t)) and phone_check.read(t) is None
+            for t in patient_since
+        )
+
+    def next_after_complaint(place: str | None, abroad: bool = False) -> str:
+        if wants_person() and not phone_given():
+            return str(texts["contact_phone"])
+        return choice(place, abroad)
+
     def after_place(place: str, abroad: bool = False) -> Plan:
         if not complaint_known():
             return Plan(reply=texts["ask_topic"])
-        return Plan(reply=choice(place, abroad))
+        return Plan(reply=next_after_complaint(place, abroad))
 
     def in_person() -> bool:
         """Did the patient choose to come to the clinic?"""
@@ -882,7 +918,9 @@ def plan_intake(
                     if known_place()
                     else texts["ask_place_named"].format(name=named)
                 )
-            if _CONTACT.search(message) and phone_check.read(message) is None:
+            if (_CONTACT.search(message) or _WANTS_PERSON.search(message)) and phone_check.read(
+                message
+            ) is None:
                 body = f"{texts['contact_answer']} {body}"
             elif question and not asks_price and not u.greeting_only:
                 return Plan(prefix=lead, then=body, instruction=INSTRUCTION)
@@ -897,7 +935,7 @@ def plan_intake(
         place = known_place()
         if named and place:
             # "Salom men Bobur, Rossiyadaman, ereksiya muammosi": straight to the choice.
-            step = f"{texts['handles']} {choice(place)}"
+            step = f"{texts['handles']} {next_after_complaint(place)}"
         elif named:
             step = f"{texts['handles']} {texts['ask_place_named'].format(name=named)}"
         else:
@@ -923,6 +961,59 @@ def plan_intake(
             return Plan(reply=texts["no_slots"])
         text = texts["offer_slots"].format(slots=_slot_words(texts, free, now))
         return Plan(reply=f"{lead} {text}" if lead else text)
+
+    def bad_number(found: phone_check.Phone) -> Plan:
+        key = {
+            phone_check.SHORT: "phone_short",
+            phone_check.LONG: "phone_long",
+            phone_check.BAD_CODE: "phone_bad_code",
+        }[found.kind]
+        return Plan(reply=texts[key].format(shown=found.shown))
+
+    if (
+        pending in ("ask_name", "ask_place", "ask_topic")
+        and (_CONTACT.search(message) or _WANTS_PERSON.search(message))
+        and phone_check.read(message) is None
+        and said[pending] < 3
+    ):
+        # "Doktor raqamini bering" again: the same answer, the same step -- no
+        # number, and not the model's own wording of the question twice over.
+        return Plan(reply=f"{texts['contact_answer']} {texts[pending]}")
+
+    # --- asked for the doctor: their number after the complaint, passed on ---
+    if pending == "contact_phone":
+        found = phone_check.read(message)
+        place = answer_after("ask_place", "ask_place_named") or known_place()
+        if found is not None and found.kind in (phone_check.UZ, phone_check.FOREIGN):
+            thanks = texts["contact_thanks"].format(name_part=name_part())
+            note = f"DOKTOR BILAN GAPLASHMOQCHI -- {reason}"
+            marker = f"[[CALLBACK:{found.shown}|{note}|{texts['any_time']}]]"
+            return Plan(reply=f"{thanks} {marker} {bubbles.MARKER} {choice(place)}")
+        if found is not None:
+            return bad_number(found)
+        if not question:
+            # No number: on to the consultation all the same.
+            return Plan(reply=choice(place))
+
+    # --- not yet: the number, once, so the administrator can ring ---
+    if pending == "hesitate_ask":
+        found = phone_check.read(message)
+        if found is not None and found.kind in (phone_check.UZ, phone_check.FOREIGN):
+            thanks = texts["hesitate_thanks"].format(name_part=name_part())
+            note = f"IKKILANDI, qayta qo'ng'iroq -- {reason}"
+            return Plan(reply=f"{thanks} [[CALLBACK:{found.shown}|{note}|{texts['any_time']}]]")
+        if found is not None:
+            return bad_number(found)
+        return None
+    hesitant = (u.refuses or _HESITATE.search(message)) and not _PAID.search(message)
+    if (
+        pending in ("online_choice", "offer_slots", "book_ok")
+        and hesitant
+        and not phone_given()
+        and phone_check.read(message) is None
+        and parse_time(message) is None
+    ):
+        return Plan(reply=texts["hesitate_ask"])
 
     # --- the booking: a time, the price, half of it, the card ---
     if pending == "book_ok":
@@ -1020,8 +1111,10 @@ def plan_intake(
         return offer_slots()
 
     if pending == "ask_topic" and not question and not u.refuses:
-        place = answer_after("ask_place", "ask_place_named")
-        return Plan(reply=f"{texts['handles']} {choice(place)}", card_topic=card_topic)
+        place = answer_after("ask_place", "ask_place_named") or known_place()
+        return Plan(
+            reply=f"{texts['handles']} {next_after_complaint(place)}", card_topic=card_topic
+        )
     if pending == "ask_name" and not u.name and named_complaint(message) and not question:
         # "Prostatit" in answer to "Ismingiz nima?": the complaint came late.
         return Plan(reply=f"{texts['handles']} {texts['ask_name']}")
@@ -1109,7 +1202,7 @@ def plan_intake(
         if said[pending] < 2:
             again = texts["ask_phone_again"] if pending == "ask_phone" else texts[pending]
         else:
-            if pending in ("ask_phone", "ask_topic"):
+            if pending in ("ask_phone", "ask_topic", "contact_phone", "hesitate_ask"):
                 return None
             again = {
                 "ask_name": texts["ask_place"],

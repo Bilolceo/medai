@@ -47,7 +47,11 @@
       "visit_choice": "Klinikaga kelib qabulga yozilasizmi yoki doktor bilan onlayn videoqo'ng'iroqda konsultatsiya olasizmi?",
       "mode_online": "onlayn konsultatsiyaga",
       "mode_visit": "klinikaga qabulga",
-      "paid_ask": "Chek rasmini va telefon raqamingizni shu yerga yuboring, administratorimiz tekshirib tasdiqlaydi."
+      "paid_ask": "Chek rasmini va telefon raqamingizni shu yerga yuboring, administratorimiz tekshirib tasdiqlaydi.",
+      "contact_phone": "Telefon raqamingizni yozing, ma'lumotlaringizni doktorga uzataman.",
+      "contact_thanks": "Rahmat{name_part}, ma'lumotlaringizni doktorga uzatdim.",
+      "hesitate_ask": "Mayli. Telefon raqamingizni qoldiring, administratorimiz bog'lanib savollaringizga javob beradi.",
+      "hesitate_thanks": "Rahmat{name_part}. Administratorimiz ish vaqtida, <<ONLINE_START>> dan <<ONLINE_END>> gacha shu raqamga bog'lanadi."
     },
     "uz-cyrl": {
       "greet_back": "Ва алайкум ассалом.",
@@ -93,7 +97,11 @@
       "visit_choice": "Клиникага келиб қабулга ёзиласизми ёки доктор билан онлайн видеоқўнғироқда консультация оласизми?",
       "mode_online": "онлайн консультацияга",
       "mode_visit": "клиникага қабулга",
-      "paid_ask": "Чек расмини ва телефон рақамингизни шу ерга юборинг, администраторимиз текшириб тасдиқлайди."
+      "paid_ask": "Чек расмини ва телефон рақамингизни шу ерга юборинг, администраторимиз текшириб тасдиқлайди.",
+      "contact_phone": "Телефон рақамингизни ёзинг, маълумотларингизни докторга узатаман.",
+      "contact_thanks": "Раҳмат{name_part}, маълумотларингизни докторга узатдим.",
+      "hesitate_ask": "Майли. Телефон рақамингизни қолдиринг, администраторимиз боғланиб саволларингизга жавоб беради.",
+      "hesitate_thanks": "Раҳмат{name_part}. Администраторимиз иш вақтида, <<ONLINE_START>> дан <<ONLINE_END>> гача шу рақамга боғланади."
     },
     "ru": {
       "greet_back": "Здравствуйте.",
@@ -139,7 +147,11 @@
       "visit_choice": "Записать вас на приём в клинику или на онлайн-консультацию с доктором по видеозвонку?",
       "mode_online": "на онлайн-консультацию",
       "mode_visit": "на приём в клинику",
-      "paid_ask": "Отправьте сюда фото чека и номер телефона, администратор проверит и подтвердит запись."
+      "paid_ask": "Отправьте сюда фото чека и номер телефона, администратор проверит и подтвердит запись.",
+      "contact_phone": "Напишите ваш номер телефона, я передам ваши данные доктору.",
+      "contact_thanks": "Спасибо{name_part}, ваши данные я передала доктору.",
+      "hesitate_ask": "Хорошо. Оставьте номер телефона, администратор свяжется и ответит на ваши вопросы.",
+      "hesitate_thanks": "Спасибо{name_part}. Администратор свяжется с вами в рабочее время, с <<ONLINE_START>> до <<ONLINE_END>>."
     }
   },
   "prices": {

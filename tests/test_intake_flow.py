@@ -128,9 +128,10 @@ def test_a_price_question_without_a_complaint_asks_the_complaint_in_its_turn() -
     assert replies[3] == f"{HANDLES} {VISIT}"
 
 
-def test_a_no_is_left_to_the_model() -> None:
-    replies = _talk(["Prostatit bor", "Akmal", "Samarqand", "Yo'q, kerak emas"])
-    assert replies[3] == "<model>"
+def test_a_no_at_the_choice_asks_for_the_number_then_is_left_to_the_model() -> None:
+    replies = _talk(["Prostatit bor", "Akmal", "Samarqand", "Yo'q, kerak emas", "yo'q"])
+    assert replies[3].startswith("Mayli. Telefon raqamingizni qoldiring")
+    assert replies[4] == "<model>"
 
 
 def test_low_desire_alone_still_takes_the_online_flow() -> None:
@@ -507,3 +508,64 @@ def test_a_foreign_number_at_payment_is_marked_for_telegram() -> None:
         ["Prostatit bor", "Bilol", "Germaniya", "ha", "ertaga 10:00", "+49 151 2345 6789"]
     )
     assert "ONLAYN (chet el raqami: Telegram/WhatsApp)" in replies[5]
+
+
+# --- asked for the doctor: name, place, complaint, then their number ---
+
+
+def test_wanting_the_doctor_takes_the_number_after_the_complaint_and_passes_it_on() -> None:
+    replies = _talk(
+        [
+            "Doktor bilan gaplashmoqchiman",
+            "Akmal",
+            "Toshkent",
+            "prostatit bor",
+            "+998 90 123 45 67",
+        ]
+    )
+    assert bubbles.parts(replies[0])[-1] == (
+        f"Doktor bilan konsultatsiyaga shu yerning o'zida yozib qo'yaman. {NAME}"
+    )
+    assert replies[3] == (
+        f"{HANDLES} Telefon raqamingizni yozing, ma'lumotlaringizni doktorga uzataman."
+    )
+    thanks, step = bubbles.parts(replies[4])
+    assert thanks.startswith("Rahmat, Akmal, ma'lumotlaringizni doktorga uzatdim.")
+    assert "[[CALLBACK:+998 90 123 45 67|DOKTOR BILAN GAPLASHMOQCHI -- prostatit bor|" in thanks
+    assert step == VISIT
+
+
+def test_wanting_the_doctor_without_a_number_still_gets_the_consultation() -> None:
+    replies = _talk(
+        ["Doktor raqamini bering", "Akmal", "Samarqand", "prostatit", "raqam bermayman"]
+    )
+    assert replies[3].endswith("ma'lumotlaringizni doktorga uzataman.")
+    assert replies[4] == ONLINE
+
+
+def test_a_hesitant_patient_is_asked_for_the_number_once() -> None:
+    replies = _book(
+        ["Prostatit bor", "Sardor", "Samarqand", "o'ylab ko'raman", "+998 90 123 45 67", "rahmat"]
+    )
+    assert replies[3].startswith("Mayli. Telefon raqamingizni qoldiring")
+    assert replies[4].startswith("Rahmat, Sardor. Administratorimiz ish vaqtida")
+    assert (
+        "[[CALLBACK:+998 90 123 45 67|IKKILANDI, qayta qo'ng'iroq -- Prostatit bor|" in replies[4]
+    )
+    assert replies[5] == "<model>"
+
+
+def test_too_dear_after_the_card_asks_for_the_number() -> None:
+    replies = _book(["Prostatit bor", "Sardor", "Samarqand", "ha", "ertaga 10:00", "qimmat ekan"])
+    assert replies[5].startswith("Mayli. Telefon raqamingizni qoldiring")
+
+
+def test_a_hesitant_no_without_a_number_is_left_to_the_model() -> None:
+    replies = _book(["Prostatit bor", "Sardor", "Samarqand", "hozircha kerak emas", "yo'q"])
+    assert replies[3].startswith("Mayli. Telefon raqamingizni qoldiring")
+    assert replies[4] == "<model>"
+
+
+def test_asking_for_the_number_again_gets_the_same_answer_and_step() -> None:
+    replies = _talk(["Doktor bilan qanday bog'lansam bo'ladi?", "Doktor raqamini bering"])
+    assert replies[1] == f"Doktor bilan konsultatsiyaga shu yerning o'zida yozib qo'yaman. {NAME}"
