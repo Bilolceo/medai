@@ -576,3 +576,93 @@ def test_a_gynaecological_question_is_answered_without_promising_a_gynaecologist
     last = bubbles.parts(replies[0])[-1]
     assert last.startswith("Bu ginekologik masala, uni ginekolog ko'radi.")
     assert "yozib" not in last
+
+
+# --- from the med.uz.ai chat of 2026-11-07 ---
+
+
+def test_a_name_sent_with_other_messages_at_once_is_taken() -> None:
+    replies = _talk(["Ассалом алейкум", "Сардор\nОперация нархини кўрмоқчиман\nВодянка"], "uz-cyrl")
+    assert replies[1] == "Сардор, қаердансиз: Тошкентданмисиз ёки вилоятданми?"
+
+
+def test_hydrocele_is_a_complaint() -> None:
+    replies = _talk(["Salom", "Sardor", "Samarqand", "Moyakda og'riq, vodyanka menimcha"])
+    assert replies[3] == f"{HANDLES} {ONLINE}"
+
+
+def test_the_price_asked_again_after_the_card_is_said_in_words() -> None:
+    history = [
+        {"role": "user", "content": "Prostatit bor"},
+        {
+            "role": "assistant",
+            "content": f"{HANDLES} {NAME}\n\n📎 Kunduzgi konsultatsiya: narx va tartib",
+        },
+        {"role": "user", "content": "Sardor"},
+        {"role": "assistant", "content": place("Sardor")},
+        {"role": "user", "content": "Samarqand"},
+        {"role": "assistant", "content": ONLINE},
+    ]
+    plan = scripted_flow.plan(
+        FLOWS, script="uz-latn", user_message="Puli necha pul?", history=history, now=NOW
+    )
+    assert plan is not None and plan.reply is not None
+    assert plan.reply.startswith(
+        "Konsultatsiya narxi 330 000 so'm -- onlayn ham, klinikada ham bir xil. "
+        "Yozilish uchun 50% -- 165 000 so'm oldindan to'lanadi."
+    )
+    assert plan.reply.endswith("Onlayn konsultatsiyaga yozib qo'yaymi yoki klinikaga kelasizmi?")
+
+
+def test_a_named_day_gets_that_days_times() -> None:
+    replies = _book(["Prostatit bor", "Sardor", "Samarqand", "ha", "Chorshanbada-chi?"])
+    assert replies[4] == "Ertaga 10:00 va 11:30 da bo'sh vaqtlar bor. Qaysi biri sizga qulay?"
+
+
+def test_a_day_with_no_room_says_so_and_offers_the_free_ones() -> None:
+    replies = _book(["Prostatit bor", "Sardor", "Samarqand", "ha", "payshanbada bo'ladimi?"])
+    assert replies[4].startswith("Payshanba bo'sh vaqt qolmagan. Bugun 14:00 va 15:30 da")
+
+
+def test_a_spaced_hour_is_read_as_the_hour() -> None:
+    assert scripted_flow.parse_time("15 00га?") == scripted_flow.time(15, 0)
+    assert scripted_flow.parse_time("+998 90 123 45 67, ertaga 10 da") == scripted_flow.time(10, 0)
+
+
+def test_online_misspelt_is_online() -> None:
+    replies = _book(["Prostatit bor", "Sardor", "Samarqand", "онлаен"])
+    assert replies[3].startswith("Bugun 14:00 va 15:30 da")
+
+
+def test_at_work_then_is_not_a_no() -> None:
+    replies = _book(["Prostatit bor", "Sardor", "Samarqand", "ha", "Men ishda bo'laman unda"])
+    assert not replies[4].startswith("Mayli. Telefon raqamingizni qoldiring")
+
+
+def test_a_day_after_the_number_was_asked_goes_back_to_the_times() -> None:
+    replies = _book(
+        ["Prostatit bor", "Sardor", "Samarqand", "o'ylab ko'raman", "chorshanbada-chi?"]
+    )
+    assert replies[4] == "Ertaga 10:00 va 11:30 da bo'sh vaqtlar bor. Qaysi biri sizga qulay?"
+
+
+def test_a_time_with_a_question_mark_is_still_a_time() -> None:
+    replies = _book(["Prostatit bor", "Sardor", "Samarqand", "ha", "ertaga 10:00 ga?"])
+    assert bubbles.parts(replies[4])[0].startswith("Yaxshi, ertaga 10:00 ga onlayn")
+
+
+def test_later_is_not_the_evening() -> None:
+    from app.services import promo_images
+
+    assert not promo_images._EVENING.search("Кечроқ йўқми?")
+    assert not promo_images._EVENING.search("kechroq bo'ladimi")
+
+
+def test_another_day_after_the_card_offers_that_days_times_and_books_again() -> None:
+    replies = _book(
+        ["Prostatit bor", "Sardor", "Samarqand", "ha", "bugun 14:00", "chorshanbada-chi?", "11:30"]
+    )
+    assert replies[5] == "Ertaga 10:00 va 11:30 da bo'sh vaqtlar bor. Qaysi biri sizga qulay?"
+    assert bubbles.parts(replies[6])[0] == (
+        "Yaxshi, ertaga 11:30 ga onlayn konsultatsiyaga yozib qo'yishim mumkin."
+    )

@@ -246,13 +246,14 @@ def _build_system_prompt(
 
 
 async def _online_slots(session: AsyncSession, now_local: datetime) -> list[datetime]:
-    """Free consultation times today (from an hour on) and on the next working
-    day, from the clinic's own appointment book -- what the online booking
+    """Free consultation times from an hour on, for the coming week, from the
+    clinic's own appointment book -- what the online booking
     offers. Local time."""
     from app.services.booking import free_slots
 
     repo = AppointmentRepository(session)
-    found = await free_slots(repo, datetime.now(UTC), horizon_days=2)
+    # A week ahead: "seshanbada-chi?" must find Tuesday (live chat, 2026-11-07).
+    found = await free_slots(repo, datetime.now(UTC), horizon_days=7)
     soonest = now_local + timedelta(hours=1)
     local = [slot.astimezone(CLINIC_TIMEZONE) for slot in found]
     return [slot for slot in local if slot >= soonest]

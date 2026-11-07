@@ -62,6 +62,8 @@ _ASKS_PRICE = re.compile(
     re.IGNORECASE,
 )
 _CLOCK = re.compile(r"\b(\d{1,2})\s*[:.]\s*(\d{2})\b")
+# "15 00 ga": the colon left out (live chat, 2026-11-07).
+_CLOCK_SPACED = re.compile(r"(?<!\d)([01]?\d|2[0-3])\s(00|15|30|45)(?!\d)")
 _HOUR = re.compile(
     r"(?:soat|соат|в|к|at)\s*(\d{1,2})\b|\b(\d{1,2})\s*(?:da|ga|lar|ларда|да|га|час|ч\b)",
     re.IGNORECASE,
@@ -151,7 +153,8 @@ def _cap(text: str) -> str:
 
 def parse_time(message: str) -> time | None:
     """The hour the patient named: "10:00", "soat 2 da" (14:00), "в 12"."""
-    match = _CLOCK.search(message)
+    message = _PHONE_DIGITS.sub(" ", message)
+    match = _CLOCK.search(message) or _CLOCK_SPACED.search(message)
     if match:
         hour, minute = int(match.group(1)), int(match.group(2))
     else:
@@ -174,7 +177,7 @@ def _within(flow: Mapping[str, Any], at: time, prefix: str = "online") -> bool:
     return time.fromisoformat(start) <= at < time.fromisoformat(end)
 
 
-_EVENING_WORD = re.compile(r"kech|кеч|вечер", re.IGNORECASE)
+_EVENING_WORD = re.compile(r"kech(?!ro)|кеч(?!ро)|вечер", re.IGNORECASE)
 
 
 def plan_libido(
@@ -305,6 +308,7 @@ def drop_questions(reply: str) -> str:
 _COMPLAINT = re.compile(
     r"erek|erect|potens|tez\s*bo['‘ʻ’`]?shan|tez\s*tugat|erta\s*tugat|og['‘ʻ’`]?ri|siydik|siyish|siya\s*olma|\bqon\b|"
     r"moyak|tuxum|prostat|varikot|bepusht|farzand|buyrak|achish|shish|sunnat|"
+    r"vodyanka|gidrotsel|gidrosel|водянк|гидроцел|гидросел|"
     r"yuqumli|infeksiya|tahlil|spermogramma|gormon|testosteron|"
     r"muammo|kasal|shikoyat|davola|qabul|yozil|ko['‘ʻ’`]?rik|konsultatsiya|"
     r"эрек|потенц|оғри|сийдик|мояк|простат|варикоц|фарзанд|буйрак|гормон|"
@@ -355,7 +359,7 @@ _INTAKE_STEPS = (
     "paid_confirm",
 )
 _WANTS_ONLINE = re.compile(
-    r"onlayn|online|онлайн|yozil|yozing|yozib|ёзил|ёзинг|запиш|\bha\b|\bxa\b|\bҳа\b|\bха\b|\bда\b|"
+    r"onla[iy]?e?n|online|онла[йи]?е?н|yozil|yozing|yozib|ёзил|ёзинг|запиш|\bha\b|\bxa\b|\bҳа\b|\bха\b|\bда\b|"
     r"mayli|xo['‘ʻ’`]?p|майли|хўп|хорошо|давайте",
     re.IGNORECASE,
 )
@@ -498,9 +502,12 @@ class _Understood:
 
 def _understand(message: str, reading: Any, *, asked_name: bool) -> _Understood:
     if reading is None:
-        word = message.split()[0].strip(".,!") if message.split() else ""
+        # Several messages at once ("Сардор / Операция нархи / Водянка"):
+        # the name is the first of them.
+        first_line = message.strip().splitlines()[0] if message.strip() else ""
+        word = first_line.split()[0].strip(".,!") if first_line.split() else ""
         name = None
-        if asked_name and len(message.split()) <= 2 and _NAME_WORD.match(word):
+        if asked_name and len(first_line.split()) <= 2 and _NAME_WORD.match(word):
             name = _cap(word)
         return _Understood(
             complaint=bool(_COMPLAINT.search(message)),
@@ -522,6 +529,12 @@ def _understand(message: str, reading: Any, *, asked_name: bool) -> _Understood:
     name = reading.name
     if name and (_ABROAD.search(name) or _COMPLAINT.search(name)):
         name = None
+    lines = message.strip().splitlines()
+    if name is None and asked_name and len(lines) > 1:
+        # Several messages at once, the name first: "Сардор / Операция нархи / Водянка".
+        first = lines[0].split()
+        if len(first) == 1 and _NAME_WORD.match(first[0]) and not _COMPLAINT.search(first[0]):
+            name = _cap(first[0])
     when = reading.time or None
     if when and _PHONE_DIGITS.search(when):
         when = _when(when)
@@ -593,6 +606,34 @@ def _slot_words(texts: Mapping[str, str], slots: Sequence[datetime], now: dateti
             parts.append(f"{word} {clock} {texts['at']}")
     text = ", ".join(parts)
     return text[:1].upper() + text[1:]
+
+
+_DAY_NAMES = (
+    (0, r"du?shanba|душанба|понедельн"),
+    (1, r"se[yi]?shanba|сей?шанба|вторник"),
+    (2, r"chorshanba|чоршанба|сред[ауы]"),
+    (3, r"payshanba|пайшанба|четверг"),
+    (4, r"\bjuma|жума|пятниц"),
+    (5, r"(?<![a-zа-яёўқғҳ'])shanba|(?<![a-zа-яёўқғҳ])шанба|суббот"),
+    (6, r"yakshanba|якшанба|воскресен"),
+)
+_LATER = re.compile(r"kechroq|kechro|keyinroq|кечроқ|кечро|кейинроқ|позже|попозже", re.IGNORECASE)
+_DAY_AFTER = re.compile(r"indin|индин|послезавтра", re.IGNORECASE)
+
+
+def _named_day(message: str, now: datetime) -> Any:
+    """The day the patient named without an hour: "seshanbada-chi?", "ertaga"."""
+    for weekday, pattern in _DAY_NAMES:
+        if re.search(pattern, message, re.IGNORECASE):
+            ahead = (weekday - now.weekday()) % 7 or 7
+            return now.date() + timedelta(days=ahead)
+    if _DAY_AFTER.search(message):
+        return now.date() + timedelta(days=2)
+    if _TOMORROW.search(message):
+        return now.date() + timedelta(days=1)
+    if _TODAY.search(message):
+        return now.date()
+    return None
 
 
 def _chosen_slot(
@@ -838,6 +879,13 @@ def plan_intake(
     # The first turn of the sequence.
     done = [key for key in _INTAKE_STEPS if said[key]]
     pending = done[-1] if done else None
+    if (
+        pending == "book_ok"
+        and since
+        and any(_said(flow, key, since[-1:]) for key in ("offer_slots", "slot_taken", "day_full"))
+    ):
+        # Times offered again after a booking line: choosing among them again.
+        pending = "offer_slots"
 
     def named_complaint(text: str) -> bool:
         if sport_words.search(text) or promo_images.OPERATION_NAMES.search(text):
@@ -986,6 +1034,23 @@ def plan_intake(
         free = list(slots or [])
         if not free:
             return Plan(reply=texts["no_slots"])
+        day = _named_day(message, now)
+        if day is not None:
+            # "Seshanbada-chi?": that day's times, or none that day.
+            on_day = [s for s in free if s.date() == day]
+            if not on_day:
+                text = texts["day_full"].format(
+                    day=_label(texts, day, now),
+                    slots=_slot_words(texts, free, now),
+                )
+                return Plan(reply=text[:1].upper() + text[1:])
+            free = on_day
+        if _LATER.search(message):
+            # "Kechroqi yo'qmi?": the latest times of the days on offer.
+            by_day: dict[Any, list[datetime]] = {}
+            for slot in free:
+                by_day.setdefault(slot.date(), []).append(slot)
+            free = [t for times in by_day.values() for t in times[-3:]]
         text = texts["offer_slots"].format(slots=_slot_words(texts, free, now))
         return Plan(reply=f"{lead} {text}" if lead else text)
 
@@ -1023,6 +1088,25 @@ def plan_intake(
             return Plan(reply=choice(place))
 
     # --- not yet: the number, once, so the administrator can ring ---
+    if (
+        pending == "book_ok"
+        and phone_check.read(message) is None
+        and not _PAID.search(message)
+        and (
+            parse_time(message) is not None
+            or _named_day(message, now) is not None
+            or _LATER.search(message)
+        )
+    ):
+        # "Seshanbada-chi?" after the card: another time, booked the same way.
+        pending = "offer_slots"
+    if pending == "hesitate_ask" and (
+        parse_time(message) is not None
+        or _named_day(message, now) is not None
+        or _LATER.search(message)
+    ):
+        # Not a no after all: a day or an hour -- back to the times.
+        pending = "offer_slots"
     if pending == "hesitate_ask":
         found = phone_check.read(message)
         if found is not None and found.kind in (phone_check.UZ, phone_check.FOREIGN):
@@ -1032,7 +1116,9 @@ def plan_intake(
         if found is not None:
             return bad_number(found)
         return None
-    hesitant = (u.refuses or _HESITATE.search(message)) and not _PAID.search(message)
+    hesitant = (
+        _HESITATE.search(message) or (u.refuses and _REFUSE.search(message))
+    ) and not _PAID.search(message)
     if (
         pending in ("online_choice", "offer_slots", "book_ok")
         and hesitant
@@ -1083,7 +1169,18 @@ def plan_intake(
     ):
         # "Qo'ng'iroq qilinglar": the call, as the patient asks.
         return Plan(reply=texts["ask_phone"])
-    if pending in ("offer_slots", "online_choice") and not question:
+    if (
+        pending in ("offer_slots", "online_choice")
+        and parse_time(message) is None
+        and (_named_day(message, now) is not None or _LATER.search(message))
+        and not _WANTS_CALL.search(message)
+    ):
+        # "Seshanbada-chi?", "kechroq yo'qmi?": the free times that answer it.
+        return offer_slots()
+    if pending in ("offer_slots", "online_choice") and (
+        not question or (parse_time(message) is not None and not asks_price)
+    ):
+        # "15:00 ga?" is a time, question mark or not.
         at = parse_time(message)
         if (
             at is not None
@@ -1165,9 +1262,24 @@ def plan_intake(
         step_plan = after_place(message, abroad=u.abroad)
         return Plan(reply=step_plan.reply, cards=True)
     asks_about_operation = question and re.search(r"operats|amaliyot|операц|амалиёт", message, re.I)
+    card_sent = any("📎" in turn for turn in own)
+    if asks_price and not asks_about_operation and card_sent and complaint_known():
+        # The card went already; asked again ("Пули нечпул?"), the price is
+        # said in words -- never the step's question alone (live chat, 2026-11-07).
+        price, prepay = price_of("evening" if sport else "uro")
+        key = "price_answer_evening" if sport else "price_answer"
+        again = {
+            "online_choice": texts["choice_again"],
+            "offer_slots": texts["choice_again"],
+            "ask_place": texts["ask_place"],
+            "ask_name": texts["ask_name"],
+        }.get(pending or "", "")
+        return Plan(reply=f"{texts[key].format(price=price, prepay=prepay)} {again}".strip())
     if asks_price and not asks_about_operation:
         again = {
-            "ask_name": texts["ask_name"],
+            "ask_name": (
+                texts["ask_place_named"].format(name=u.name) if u.name else texts["ask_name"]
+            ),
             "ask_place": texts["ask_place"],
             "ask_topic": texts["ask_topic"],
             "online_choice": texts["choice_again"],

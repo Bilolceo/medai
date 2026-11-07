@@ -25,8 +25,9 @@ from app.services import price_guard
 MARKER = re.compile(r"\[\[\s*IMAGE\s*:\s*(?P<url>[^|\]\s]+)\s*(?:\|\s*(?P<title>[^\]]*))?\]\]")
 
 _EVENING = re.compile(
-    r"kech|kechqurun|kechki|ishdan\s*keyin|tunda|\b(19|20|21)[:.]?\d{0,2}\b|"
-    r"кеч|кечқурун|кечки|ишдан\s*кейин|вечер|после\s*работы|ночью",
+    # "kechroq" is later in the day, not the evening.
+    r"kech(?!ro)|kechqurun|kechki|ishdan\s*keyin|tunda|\b(19|20|21)[:.]?\d{0,2}\b|"
+    r"кеч(?!ро)|кечқурун|кечки|ишдан\s*кейин|вечер|после\s*работы|ночью",
     re.IGNORECASE,
 )
 _UROLOGY = re.compile(

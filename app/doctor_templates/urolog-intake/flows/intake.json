@@ -52,7 +52,10 @@
       "contact_thanks": "Rahmat{name_part}, ma'lumotlaringizni doktorga uzatdim.",
       "hesitate_ask": "Mayli. Telefon raqamingizni qoldiring, administratorimiz bog'lanib savollaringizga javob beradi.",
       "hesitate_thanks": "Rahmat{name_part}. Administratorimiz ish vaqtida, <<ONLINE_START>> dan <<ONLINE_END>> gacha shu raqamga bog'lanadi.",
-      "gynaecology": "Bu ginekologik masala, uni ginekolog ko'radi. Bu sahifa <<DOCTOR_SHORT>>niki -- u urolog-androlog, erkaklar salomatligi bilan shug'ullanadi."
+      "gynaecology": "Bu ginekologik masala, uni ginekolog ko'radi. Bu sahifa <<DOCTOR_SHORT>>niki -- u urolog-androlog, erkaklar salomatligi bilan shug'ullanadi.",
+      "day_full": "{day} bo'sh vaqt qolmagan. {slots} bo'sh vaqtlar bor. Qaysi biri sizga qulay?",
+      "price_answer": "Konsultatsiya narxi {price} -- onlayn ham, klinikada ham bir xil. Yozilish uchun 50% -- {prepay} oldindan to'lanadi.",
+      "price_answer_evening": "Kechki onlayn konsultatsiya narxi {price}. Yozilish uchun 50% -- {prepay} oldindan to'lanadi."
     },
     "uz-cyrl": {
       "greet_back": "Ва алайкум ассалом.",
@@ -103,7 +106,10 @@
       "contact_thanks": "Раҳмат{name_part}, маълумотларингизни докторга узатдим.",
       "hesitate_ask": "Майли. Телефон рақамингизни қолдиринг, администраторимиз боғланиб саволларингизга жавоб беради.",
       "hesitate_thanks": "Раҳмат{name_part}. Администраторимиз иш вақтида, <<ONLINE_START>> дан <<ONLINE_END>> гача шу рақамга боғланади.",
-      "gynaecology": "Бу гинекологик масала, уни гинеколог кўради. Бу саҳифа <<DOCTOR_SHORT_CYR>>ники -- у уролог-андролог, эркаклар саломатлиги билан шуғулланади."
+      "gynaecology": "Бу гинекологик масала, уни гинеколог кўради. Бу саҳифа <<DOCTOR_SHORT_CYR>>ники -- у уролог-андролог, эркаклар саломатлиги билан шуғулланади.",
+      "day_full": "{day} бўш вақт қолмаган. {slots} бўш вақтлар бор. Қайси бири сизга қулай?",
+      "price_answer": "Консультация нархи {price} -- онлайн ҳам, клиникада ҳам бир хил. Ёзилиш учун 50% -- {prepay} олдиндан тўланади.",
+      "price_answer_evening": "Кечки онлайн консультация нархи {price}. Ёзилиш учун 50% -- {prepay} олдиндан тўланади."
     },
     "ru": {
       "greet_back": "Здравствуйте.",
@@ -154,7 +160,10 @@
       "contact_thanks": "Спасибо{name_part}, ваши данные я передала доктору.",
       "hesitate_ask": "Хорошо. Оставьте номер телефона, администратор свяжется и ответит на ваши вопросы.",
       "hesitate_thanks": "Спасибо{name_part}. Администратор свяжется с вами в рабочее время, с <<ONLINE_START>> до <<ONLINE_END>>.",
-      "gynaecology": "Это гинекологический вопрос, его смотрит гинеколог. Это страница <<DOCTOR_RU_GEN>> — он уролог-андролог, занимается мужским здоровьем."
+      "gynaecology": "Это гинекологический вопрос, его смотрит гинеколог. Это страница <<DOCTOR_RU_GEN>> — он уролог-андролог, занимается мужским здоровьем.",
+      "day_full": "{day} свободного времени нет. Свободно: {slots}. Какое время вам удобно?",
+      "price_answer": "Консультация стоит {price} -- онлайн и в клинике одинаково. Для записи вносится предоплата 50% -- {prepay}.",
+      "price_answer_evening": "Вечерняя онлайн-консультация стоит {price}. Для записи вносится предоплата 50% -- {prepay}."
     }
   },
   "prices": {
