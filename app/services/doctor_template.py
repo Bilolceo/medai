@@ -94,6 +94,10 @@ def _derived(facts: dict[str, str]) -> dict[str, str]:
             out[f"{key}_RU"] = re.sub(r"(?i)so['‘ʻ’`]?m", "сум", facts[key])
     if "CARD_NAME" in facts:
         out["CARD_NAME_CYR"] = to_cyrillic(facts["CARD_NAME"])
+    if "ADDRESS" in facts:
+        # Brand names stay as written: given by the clinic, or derived.
+        out["ADDRESS_CYR"] = facts.get("ADDRESS_CYR") or to_cyrillic(facts["ADDRESS"])
+        out["ADDRESS_RU"] = facts.get("ADDRESS_RU") or out["ADDRESS_CYR"]
     for key, prefix in (("ONLINE_HOURS", "ONLINE"), ("EVENING_HOURS", "EVENING")):
         if key in facts:
             times = re.findall(r"\d{1,2}:\d{2}", facts[key])
@@ -161,6 +165,43 @@ def _wanted(item: Mapping[str, Any], facts: Mapping[str, str]) -> bool:
     return all(key in facts for key in item.get("needs", [])) and not any(
         key in facts for key in item.get("unless", [])
     )
+
+
+# key, card title, name in Uzbek, name in Russian.
+_OPERATION_PRICES = (
+    (
+        "VARIKOSELE",
+        "Varikosele operatsiyasi: narx va paket",
+        "Varikotsele operatsiyasi (Marmar usuli)",
+        "Операция при варикоцеле (по Мармару)",
+    ),
+    ("SKROTOPLASTIKA", "Skrotoplastika: narx va paket", "Skrotoplastika", "Скротопластика"),
+    (
+        "LIGAMENTOTOMIYA",
+        "Ligamentotomiya: narx va paket",
+        "Ligamentotomiya (kattalashtirish operatsiyasi)",
+        "Лигаментотомия (операция увеличения)",
+    ),
+    (
+        "KOMPLEKS",
+        "Kompleks operatsiya: narx va paket",
+        "Kompleks operatsiya (uchta amaliyot)",
+        "Комплексная операция (три вмешательства)",
+    ),
+    (
+        "FALLOPROTEZ",
+        "Falloprotez: narx va paket",
+        "Falloprotez (bir komponentli protez)",
+        "Фаллопротез (однокомпонентный)",
+    ),
+    ("MICRO_TESE", "Micro-TESE: narx va paket", "Micro-TESE", "Micro-TESE"),
+    (
+        "DENERVATSIYA",
+        "Selektiv denervatsiya: narx va paket",
+        "Selektiv denervatsiya",
+        "Селективная денервация",
+    ),
+)
 
 
 def build_settings(template: str, doctor: Mapping[str, Any]) -> dict[str, Any]:
@@ -258,6 +299,19 @@ def build_settings(template: str, doctor: Mapping[str, Any]) -> dict[str, Any]:
     ]
     if cards:
         settings["promo_images"] = cards
+    # The operations' prices in words, for a patient asking again after the card.
+    operation_prices: dict[str, dict[str, str]] = {}
+    for key, title, name_uz, name_ru in _OPERATION_PRICES:
+        price = facts.get(f"OP_PRICE_{key}")
+        if not price or f"PROMO_OP_{key}_URL" not in facts:
+            continue
+        line = f"{name_uz} narxi {price}, barcha xarajatlar narx ichida."
+        price_ru = re.sub(r"(?i)so['‘ʻ’`]?m", "сум", price)
+        operation_prices[title] = {
+            "uz-latn": line,
+            "uz-cyrl": to_cyrillic(line),
+            "ru": f"{name_ru}: {price_ru}, все расходы включены.",
+        }
     # A scripted flow: lines the clinic wants said word for word and in
     # order, run by app.services.scripted_flow instead of the model.
     flows: dict[str, Any] = {}
@@ -266,6 +320,8 @@ def build_settings(template: str, doctor: Mapping[str, Any]) -> dict[str, Any]:
             raw = _fill((root / item["file"]).read_text(), facts, item["file"])
             flow = json.loads(raw)
             flows[flow["name"]] = flow
+    if operation_prices and "intake" in flows:
+        flows["intake"]["operation_prices"] = operation_prices
     if flows:
         settings["scripted_flows"] = flows
         # The single flow the first release read, kept so a deployment that

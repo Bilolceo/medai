@@ -199,3 +199,9 @@ def test_an_old_name_question_in_the_same_chat_does_not_skip_the_first_step() ->
     )
     assert plan is not None and plan.reply is not None
     assert bubbles.parts(plan.reply)[-1] == "Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?"
+
+
+def test_a_sentence_the_model_said_is_not_repeated_in_the_step() -> None:
+    step = "Ha, doktor shu bilan shug'ullanadi. Ismingiz nima?"
+    answer = "Ha, doktor shu bilan shug'ullanadi. Davolashni doktor ko'rikda belgilaydi."
+    assert scripted_flow.drop_repeats(step, answer) == "Ismingiz nima?"

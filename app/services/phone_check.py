@@ -46,9 +46,13 @@ def _uz_shown(nine: str) -> str:
     return f"+998 {nine[:2]} {nine[2:5]} {nine[5:7]} {nine[7:]}"
 
 
+# "12.12.1979", "05/03/90": a date of birth, not a number.
+_DATE = re.compile(r"\b\d{1,2}[./-]\d{1,2}[./-](?:19|20)?\d{2}\b")
+
+
 def read(text: str) -> Phone | None:
     """The number in this message and what it is, or None if there is none."""
-    match = _RUN.search(text)
+    match = _RUN.search(_DATE.sub(" ", text))
     if match is None:
         return None
     raw = match.group(0)

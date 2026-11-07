@@ -261,14 +261,14 @@ OPERATIONS: dict[str, tuple[re.Pattern[str], bool]] = {
     ),
     "op:ligamentotomiya": (
         re.compile(
-            r"ligamentotom|лигаментотом|kattalashtir|uzaytir|катталаштир|узайтир|увелич|удлин",
+            r"ligamentotom|лигаментотом|katt?alasht|uzaytir|кат+алашт|узайтир|увелич|удлин",
             re.IGNORECASE,
         ),
         False,
     ),
     "op:kompleks": (
         re.compile(
-            r"kompleks\s*operats|комплекс\w*\s*операц|kattalashtir|uzaytir|катталаштир|"
+            r"kompleks\s*operats|комплекс\w*\s*операц|katt?alasht|uzaytir|кат+алашт|"
             r"узайтир|увелич|удлин",
             re.IGNORECASE,
         ),
@@ -283,6 +283,11 @@ OPERATIONS: dict[str, tuple[re.Pattern[str], bool]] = {
 }
 OPERATION_NAMES = re.compile(
     "|".join(pattern.pattern for pattern, _ in OPERATIONS.values()), re.IGNORECASE
+)
+# The model's own way of saying it: "...doktor ko'rikda aniqlanadi".
+_DOCTOR_DECIDES = re.compile(
+    r"ko['‘ʻ’`]?rikda\s+aniqla|кўрикда\s+аниқла|определит\s+на\s+консультации",
+    re.IGNORECASE,
 )
 _OPERATION_NOTE = {
     "uz-latn": "Operatsiya kerakligi va usulini doktor ko'rikda aniqlaydi.",
@@ -323,7 +328,11 @@ def attach_operations(
     if not cards:
         return reply
     note = _OPERATION_NOTE.get(script, _OPERATION_NOTE["uz-latn"])
-    said = any(_norm(note) in _norm(turn) for turn in own_turns) or _norm(note) in _norm(reply)
+    said = (
+        any(_norm(note) in _norm(turn) for turn in own_turns)
+        or _norm(note) in _norm(reply)
+        or bool(_DOCTOR_DECIDES.search(reply))
+    )
     text, existing = reply, ""
     first = MARKER.search(text)
     if first:

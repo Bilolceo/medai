@@ -55,7 +55,9 @@
       "gynaecology": "Bu ginekologik masala, uni ginekolog ko'radi. Bu sahifa <<DOCTOR_SHORT>>niki -- u urolog-androlog, erkaklar salomatligi bilan shug'ullanadi.",
       "day_full": "{day} bo'sh vaqt qolmagan. {slots} bo'sh vaqtlar bor. Qaysi biri sizga qulay?",
       "price_answer": "Konsultatsiya narxi {price} -- onlayn ham, klinikada ham bir xil. Yozilish uchun 50% -- {prepay} oldindan to'lanadi.",
-      "price_answer_evening": "Kechki onlayn konsultatsiya narxi {price}. Yozilish uchun 50% -- {prepay} oldindan to'lanadi."
+      "price_answer_evening": "Kechki onlayn konsultatsiya narxi {price}. Yozilish uchun 50% -- {prepay} oldindan to'lanadi.",
+      "op_first_consult": "Operatsiya kerakligi va usulini doktor ko'rikda aniqlaydi -- avval konsultatsiya, <<ONLINE_PRICE>>.",
+      "address": "Manzil: <<ADDRESS>>."
     },
     "uz-cyrl": {
       "greet_back": "Ва алайкум ассалом.",
@@ -109,7 +111,9 @@
       "gynaecology": "Бу гинекологик масала, уни гинеколог кўради. Бу саҳифа <<DOCTOR_SHORT_CYR>>ники -- у уролог-андролог, эркаклар саломатлиги билан шуғулланади.",
       "day_full": "{day} бўш вақт қолмаган. {slots} бўш вақтлар бор. Қайси бири сизга қулай?",
       "price_answer": "Консультация нархи {price} -- онлайн ҳам, клиникада ҳам бир хил. Ёзилиш учун 50% -- {prepay} олдиндан тўланади.",
-      "price_answer_evening": "Кечки онлайн консультация нархи {price}. Ёзилиш учун 50% -- {prepay} олдиндан тўланади."
+      "price_answer_evening": "Кечки онлайн консультация нархи {price}. Ёзилиш учун 50% -- {prepay} олдиндан тўланади.",
+      "op_first_consult": "Операция кераклиги ва усулини доктор кўрикда аниқлайди -- аввал консультация, <<ONLINE_PRICE_CYR>>.",
+      "address": "Манзил: <<ADDRESS_CYR>>."
     },
     "ru": {
       "greet_back": "Здравствуйте.",
@@ -163,7 +167,9 @@
       "gynaecology": "Это гинекологический вопрос, его смотрит гинеколог. Это страница <<DOCTOR_RU_GEN>> — он уролог-андролог, занимается мужским здоровьем.",
       "day_full": "{day} свободного времени нет. Свободно: {slots}. Какое время вам удобно?",
       "price_answer": "Консультация стоит {price} -- онлайн и в клинике одинаково. Для записи вносится предоплата 50% -- {prepay}.",
-      "price_answer_evening": "Вечерняя онлайн-консультация стоит {price}. Для записи вносится предоплата 50% -- {prepay}."
+      "price_answer_evening": "Вечерняя онлайн-консультация стоит {price}. Для записи вносится предоплата 50% -- {prepay}.",
+      "op_first_consult": "Нужна ли операция и какая, доктор определит на консультации -- сначала консультация, <<ONLINE_PRICE_RU>>.",
+      "address": "Адрес: <<ADDRESS_RU>>."
     }
   },
   "prices": {

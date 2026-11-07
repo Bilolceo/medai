@@ -23,7 +23,7 @@ A clinic without a ``scripted_flow`` setting is untouched.
 
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, time, timedelta
 from typing import Any
 
@@ -390,6 +390,12 @@ _GYNAECOLOGY = re.compile(
     r"месячн|беременн|матк|яичник|гинеколог",
     re.IGNORECASE,
 )
+# "Manzil qayerda?": asked with other things, it is answered with them.
+_ASKS_ADDRESS = re.compile(
+    r"manzil|adres|qayerda\s+joylash|klinika\s+qayerda|qayerdasiz|манзил|адрес|"
+    r"қаерда\s+жойлаш|каерда\s+жойлаш|клиника\s+(?:қаерда|каерда|где)|где\s+находит",
+    re.IGNORECASE,
+)
 # "Dollar kursi qancha?": a price, but not ours.
 _NOT_OUR_PRICE = re.compile(r"dollar|kurs|valyuta|ob-?havo|доллар|курс|валют|погод", re.IGNORECASE)
 # "Klinikaga kelaman": a visit in person, not online.
@@ -507,7 +513,12 @@ def _understand(message: str, reading: Any, *, asked_name: bool) -> _Understood:
         first_line = message.strip().splitlines()[0] if message.strip() else ""
         word = first_line.split()[0].strip(".,!") if first_line.split() else ""
         name = None
-        if asked_name and len(first_line.split()) <= 2 and _NAME_WORD.match(word):
+        if (
+            asked_name
+            and len(first_line.split()) <= 2
+            and _NAME_WORD.match(word)
+            and not _GREETING.search(word)
+        ):
             name = _cap(word)
         return _Understood(
             complaint=bool(_COMPLAINT.search(message)),
@@ -1014,8 +1025,7 @@ def plan_intake(
             step = f"{texts['handles']} {texts['ask_place_named'].format(name=named)}"
         else:
             step = f"{texts['handles']} {texts['ask_name']}"
-        operation = bool(promo_images.OPERATION_NAMES.search(message))
-        if question and not asks_price and not (named and place) and not operation:
+        if question and not asks_price and not (named and place):
             return Plan(prefix=lead, then=step, instruction=INSTRUCTION)
         body = f"{lead} {bubbles.MARKER} {step}" if lead else step
         return Plan(reply=body, cards=asks_price, card_topic=card_topic)
@@ -1263,6 +1273,27 @@ def plan_intake(
         return Plan(reply=step_plan.reply, cards=True)
     asks_about_operation = question and re.search(r"operats|amaliyot|операц|амалиёт", message, re.I)
     card_sent = any("📎" in turn for turn in own)
+    op_cards = [
+        line.split("📎", 1)[1].strip()
+        for turn in own
+        for line in turn.splitlines()
+        if "📎" in line and "paket" in line
+    ]
+    op_prices = flow.get("operation_prices") or {}
+    if asks_price and op_cards and not asks_about_operation:
+        # "1- komponentli protez narxi?" again: the operation's price, in words.
+        lines = [
+            op_prices[t].get(script) or op_prices[t]["uz-latn"] for t in op_cards if t in op_prices
+        ]
+        if lines:
+            again = {
+                "online_choice": texts["choice_again"],
+                "offer_slots": texts["choice_again"],
+                "ask_place": texts["ask_place"],
+                "ask_name": texts["ask_name"],
+            }.get(pending or "", "")
+            body = " ".join(lines) + " " + texts["op_first_consult"]
+            return Plan(reply=f"{body} {again}".strip())
     if asks_price and not asks_about_operation and card_sent and complaint_known():
         # The card went already; asked again ("Пули нечпул?"), the price is
         # said in words -- never the step's question alone (live chat, 2026-11-07).
@@ -1350,6 +1381,9 @@ def plan_intake(
             }[pending]
         return Plan(then=again, instruction=INSTRUCTION)
 
+    if pending == "ask_name" and u.greeting_only and (not u.name or _GREETING.search(u.name)):
+        # "Ассаламу алейкум" after "Ismingiz nima?": not a name.
+        return Plan(reply=texts["ask_name"])
     if pending == "ask_name":
         place = known_place()
         if place:
@@ -1380,6 +1414,16 @@ def plan_intake(
     return None
 
 
+def drop_repeats(step: str, answer: str) -> str:
+    """The step's line without a sentence the model's answer already said
+    ("Ha, doktor shu bilan shug'ullanadi." twice, live replay 2026-11-07)."""
+    said = {_norm(x).strip(" .!?") for x in re.findall(r"[^.!?]+[.!?]?", answer)}
+    kept = [
+        x.strip() for x in re.findall(r"[^.!?]+[.!?]?", step) if _norm(x).strip(" .!?") not in said
+    ]
+    return " ".join(kept) or step
+
+
 def plan(
     flows: Mapping[str, Any] | None,
     *,
@@ -1407,7 +1451,7 @@ def plan(
             return plan_libido(
                 libido, script=script, user_message=user_message, history=history, now=now
             )
-    return plan_intake(
+    result = plan_intake(
         flows.get("intake"),
         script=script,
         user_message=user_message,
@@ -1416,3 +1460,30 @@ def plan(
         reading=reading,
         slots=slots,
     )
+    return _with_address(result, flows.get("intake"), script, user_message, history)
+
+
+def _with_address(
+    result: Plan | None,
+    flow: Mapping[str, Any] | None,
+    script: str,
+    user_message: str,
+    history: Sequence[Mapping[str, Any]] | None,
+) -> Plan | None:
+    """A scripted reply to a message that also asked the address, with the
+    address in it -- the Instagram buttons send "narxi?", "manzil qayerda?"
+    and "qanday bog'lanaman?" together (real chats, 2026-11-06)."""
+    if result is None or result.reply is None or not flow:
+        return result
+    if not _ASKS_ADDRESS.search(user_message):
+        return result
+    texts = flow["texts"].get(script) or flow["texts"]["uz-latn"]
+    line = texts.get("address")
+    if not line or _norm(line)[:30] in _norm(result.reply):
+        return result
+    own = [t["content"] for t in history or [] if t.get("role") == "assistant"]
+    if any(_norm(line)[:30] in _norm(t) for t in own[-2:]):
+        return result
+    parts = result.reply.split(bubbles.MARKER)
+    parts[-1] = f" {line} {parts[-1].strip()}" if len(parts) > 1 else f"{line} {parts[-1].strip()}"
+    return replace(result, reply=bubbles.MARKER.join(parts).strip())

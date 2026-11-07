@@ -14,6 +14,7 @@ fall back to their patterns, as before.
 import json
 import logging
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -31,6 +32,11 @@ administrator in Uzbekistan, and say what is in it. Patients write Uzbek \
 "ishvoht" is "working hours", "toshkendaman" is "I am from Tashkent". \
 You are given the administrator's last message, so a bare "Akmal" after \
 "Ismingiz nima?" is a name and "Buxoro" after "Qayerdansiz?" is a place.
+
+You may also be given a few earlier turns: use them only to understand \
+what the current message refers to ("o'sha operatsiya", a bare "15:00", "ha"). \
+Every value below describes the patient's CURRENT message only -- a name, \
+number or complaint said earlier is not repeated here.
 
 Answer with JSON only, exactly these keys:
 {
@@ -135,9 +141,20 @@ def parse(payload: str) -> Reading | None:
     )
 
 
-async def read(provider: LLMProvider, message: str, last_bot_message: str | None) -> Reading | None:
-    """What the message says, or None when the model could not be asked."""
-    shown = (
+async def read(
+    provider: LLMProvider,
+    message: str,
+    last_bot_message: str | None,
+    *,
+    earlier: Sequence[str] = (),
+) -> Reading | None:
+    """What the message says, or None when the model could not be asked.
+    ``earlier`` -- a few turns before the administrator's last message, for
+    context only."""
+    shown = ""
+    if earlier:
+        shown = "Earlier in the conversation (context only):\n" + "\n".join(earlier) + "\n\n"
+    shown += (
         f"Administrator's last message: {last_bot_message or '(none -- first message)'}\n"
         f"Patient's message: {message}"
     )

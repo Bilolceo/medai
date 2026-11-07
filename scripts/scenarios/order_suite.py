@@ -391,7 +391,7 @@ ONLINE = re.compile(
 CARD = re.compile(r"9860 1501")
 HALF = re.compile(r"50%|50 foiz|ярм|yarm|половин")
 DAY_PRICE = re.compile(r"330 000")
-OK_SUMS = re.compile(r"330 000|165 000|990 000|495 000")
+OK_SUMS = re.compile(r"330 000|165 000|990 000|495 000|\d{1,2} \d00 000 000|\d{1,2} 000 000")
 PASS_ON = re.compile(r"(?i)doktorga uzataman|докторга узатаман|передам ваши данные доктору")
 SUMS = re.compile(r"\b\d{2,3}\s?000\b")
 

@@ -18,7 +18,9 @@ OPS = {
         "DENERVATSIYA",
     )
 }
-CARDS = build_settings("urolog-intake", {**FACTS, **OPS})["promo_images"]
+PRICES = {f"OP_PRICE_{k.split('_', 2)[2].rsplit('_URL', 1)[0]}": "9 000 000 so'm" for k in OPS}
+SETTINGS = build_settings("urolog-intake", {**FACTS, **OPS, **PRICES})
+CARDS = SETTINGS["promo_images"]
 
 
 def _asked(message: str, own: list[str] | None = None) -> list[str]:
@@ -75,3 +77,33 @@ def test_an_operation_named_is_a_complaint_for_the_flow() -> None:
     assert plan is not None
     text = plan.reply or plan.then or ""
     assert "Ha, doktor shu bilan shug'ullanadi." in text
+
+
+def test_the_operation_price_asked_again_is_said_in_words() -> None:
+    flows = SETTINGS["scripted_flows"]
+    history = [
+        {"role": "user", "content": "1- komponentli protez narxi ?"},
+        {
+            "role": "assistant",
+            "content": "Ha, doktor shu bilan shug'ullanadi. Ismingiz nima, sizga qanday "
+            "murojaat qilsam bo'ladi?\n\n📎 Falloprotez: narx va paket",
+        },
+    ]
+    plan = scripted_flow.plan(
+        flows,
+        script="uz-latn",
+        user_message="1- komponentli protez narxi ?",
+        history=history,
+        now=NOW,
+    )
+    assert plan is not None and plan.reply is not None
+    assert plan.reply.startswith(
+        "Falloprotez (bir komponentli protez) narxi 9 000 000 so'm, barcha xarajatlar narx ichida."
+    )
+
+
+def test_kazakh_spelling_of_enlargement_brings_the_cards() -> None:
+    assert _asked("Жыныси оладны каталаштырыш оператсиасы неш пул болады") == [
+        "op:ligamentotomiya",
+        "op:kompleks",
+    ]

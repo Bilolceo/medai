@@ -438,7 +438,15 @@ async def generate_answer(
         last_own = next(
             (t["content"] for t in reversed(history or []) if t.get("role") == "assistant"), None
         )
-        reading = await message_reader.read(get_reader_llm_provider(), user_message, last_own)
+        # The few turns before, so "o'sha operatsiya" or a bare "15:00" reads
+        # in its context; the facts are still taken from the current message.
+        earlier = [
+            f"{'Patient' if t.get('role') == 'user' else 'Administrator'}: {t['content'][:300]}"
+            for t in (history or [])[-5:-1]
+        ]
+        reading = await message_reader.read(
+            get_reader_llm_provider(), user_message, last_own, earlier=earlier
+        )
     scripted = scripted_flow.plan(
         flows,
         script=script,
@@ -547,7 +555,9 @@ async def generate_answer(
             logger.info("booking_offer_removed", extra={"reply": reply[:300]})
         reply = stripped
     if scripted is not None and scripted.then:
-        reply = f"{scripted_flow.drop_questions(reply)} {bubbles.MARKER} {scripted.then}"
+        answer = scripted_flow.drop_questions(reply)
+        step = scripted_flow.drop_repeats(scripted.then, answer)
+        reply = f"{answer} {bubbles.MARKER} {step}"
     if scripted is not None and scripted.prefix:
         reply = f"{scripted.prefix} {bubbles.MARKER} {reply}"
     # The clinic's price card, when the patient asked the price (see

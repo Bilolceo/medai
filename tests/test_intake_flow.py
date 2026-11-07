@@ -666,3 +666,23 @@ def test_another_day_after_the_card_offers_that_days_times_and_books_again() -> 
     assert bubbles.parts(replies[6])[0] == (
         "Yaxshi, ertaga 11:30 ga onlayn konsultatsiyaga yozib qo'yishim mumkin."
     )
+
+
+# --- from the real chats of 2026-11-05..07 ---
+
+
+def test_the_address_asked_with_the_price_is_answered_too() -> None:
+    replies = _talk(["1- komponentli protez narxi ?\nManzil qayerda ?"])
+    assert "Manzil: CityMed klinikasi" in bubbles.parts(replies[0])[-1]
+
+
+def test_a_date_of_birth_is_not_a_phone_number() -> None:
+    from app.services import phone_check
+
+    assert phone_check.read("Исмим Тохир 12.12.1979 йилман") is None
+    assert phone_check.read("raqamim 90 123 45 67") is not None
+
+
+def test_a_greeting_for_the_name_asks_the_name_again() -> None:
+    replies = _talk(["Siz bn qanday bogʻlansam boladi", "Ассаламу алейкум"])
+    assert replies[1] == NAME
