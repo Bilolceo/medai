@@ -1345,7 +1345,9 @@ def plan_intake(
         step_plan = after_place(message, abroad=u.abroad)
         return Plan(reply=step_plan.reply, cards=True)
     asks_about_operation = question and re.search(r"operats|amaliyot|операц|амалиёт", message, re.I)
-    card_sent = any("📎" in turn for turn in own)
+    card_sent = any(
+        "📎" in line and "paket" not in line for turn in own for line in turn.splitlines()
+    )
     op_cards = [
         line.split("📎", 1)[1].strip()
         for turn in own
@@ -1555,7 +1557,46 @@ def plan(
         reading=reading,
         slots=slots,
     )
+    result = _price_in_words(result, flows.get("intake"), script, user_message, history)
     return _with_address(result, flows.get("intake"), script, user_message, history)
+
+
+def _price_in_words(
+    result: Plan | None,
+    flow: Mapping[str, Any] | None,
+    script: str,
+    user_message: str,
+    history: Sequence[Mapping[str, Any]] | None,
+) -> Plan | None:
+    """With no consultation price card (Dr Sultonbek took his two away,
+    2026-11-07), the price asked for is said in words, with the 50% ahead,
+    before the step's question -- the operation cards still go."""
+    if result is None or not result.cards or result.reply is None or not flow:
+        return result
+    if flow.get("price_cards", True):
+        return result
+    texts = flow["texts"].get(script) or flow["texts"]["uz-latn"]
+    patient = [t["content"] for t in history or [] if t.get("role") == "user"]
+    sport_words = re.compile(flow.get("sport") or r"(?!x)x", re.IGNORECASE)
+    evening = any(
+        sport_words.search(t) or promo_images.wants_evening(t) for t in (*patient, user_message)
+    )
+    entry = (flow.get("prices") or {}).get("evening" if evening else "uro") or {}
+    suffix = {"uz-cyrl": "_cyr", "ru": "_ru"}.get(script, "")
+    price, prepay = entry.get("price" + suffix, ""), entry.get("prepay" + suffix, "")
+    if not price:
+        return Plan(reply=result.reply, card_topic=result.card_topic)
+    line = texts["price_answer_evening" if evening else "price_answer"].format(
+        price=price, prepay=prepay
+    )
+    parts = result.reply.split(bubbles.MARKER)
+    sentences = [x.strip() for x in re.findall(r"[^.!?]+[.!?]?", parts[-1]) if x.strip()]
+    if len(sentences) > 1:
+        last = " ".join([*sentences[:-1], line, sentences[-1]])
+    else:
+        last = f"{line} {' '.join(sentences)}".strip()
+    parts[-1] = (" " if len(parts) > 1 else "") + last
+    return Plan(reply=bubbles.MARKER.join(parts).strip(), card_topic=result.card_topic)
 
 
 def _with_address(

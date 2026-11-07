@@ -216,7 +216,8 @@
         "ONLINE_PRICE"
       ],
       "unless": [
-        "PROMO_DAY_URL"
+        "PROMO_DAY_URL",
+        "EVENING_PRICE"
       ]
     },
     {
@@ -245,6 +246,19 @@
     },
     {
       "file": "rules/services_not_listed.txt"
+    },
+    {
+      "file": "rules/prices_in_words.txt",
+      "needs": [
+        "ONLINE_PRICE",
+        "ONLINE_PREPAY",
+        "EVENING_PRICE",
+        "EVENING_PREPAY",
+        "EVENING_HOURS"
+      ],
+      "unless": [
+        "PROMO_DAY_URL"
+      ]
     },
     {
       "file": "rules/price_cards.txt",

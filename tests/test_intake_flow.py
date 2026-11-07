@@ -122,16 +122,29 @@ def test_a_question_without_a_complaint_is_answered_then_the_name() -> None:
     assert bubbles.parts(replies[0])[-2:] == ["<model>", NAME]
 
 
-def test_a_price_question_is_scripted_with_room_for_the_card() -> None:
+PRICE_DAY = (
+    "Konsultatsiya narxi 330 000 so'm -- onlayn ham, klinikada ham bir xil. "
+    "Yozilish uchun 50% -- 165 000 so'm oldindan to'lanadi."
+)
+
+
+def test_a_price_question_is_answered_in_words_without_a_consultation_card() -> None:
+    # Dr Sultonbek took the two consultation cards away (2026-11-07).
     plan = scripted_flow.plan(
         FLOWS, script="uz-latn", user_message="Prostatit bor, narxi qancha?", history=[], now=NOW
     )
-    assert plan is not None and plan.cards
+    assert plan is not None and plan.reply is not None and not plan.cards
+    assert bubbles.parts(plan.reply)[-1] == f"{HANDLES} {PRICE_DAY} {NAME}"
+
+
+def test_the_evening_price_in_words_for_sport() -> None:
+    replies = _talk(["Steroid kursidan keyin gormonlarim buzildi", "Narxi qancha?"])
+    assert "Kechki onlayn konsultatsiya narxi 990 000 so'm" in replies[1]
 
 
 def test_a_price_question_without_a_complaint_asks_the_complaint_in_its_turn() -> None:
     replies = _talk(["Qabul narxi qancha?", "Jasur", "Toshkent", "Prostatit"])
-    assert bubbles.parts(replies[0])[-1] == NAME
+    assert bubbles.parts(replies[0])[-1] == f"{PRICE_DAY} {NAME}"
     assert replies[1] == place("Jasur")
     assert replies[2] == TOPIC
     assert replies[3] == f"{HANDLES} {VISIT}"

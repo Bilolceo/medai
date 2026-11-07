@@ -320,6 +320,9 @@ def build_settings(template: str, doctor: Mapping[str, Any]) -> dict[str, Any]:
             raw = _fill((root / item["file"]).read_text(), facts, item["file"])
             flow = json.loads(raw)
             flows[flow["name"]] = flow
+    if "intake" in flows:
+        # Without the consultation price card the flow says the price in words.
+        flows["intake"]["price_cards"] = "PROMO_DAY_URL" in facts
     if operation_prices and "intake" in flows:
         flows["intake"]["operation_prices"] = operation_prices
     if flows:
