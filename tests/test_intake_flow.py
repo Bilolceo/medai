@@ -686,3 +686,57 @@ def test_a_date_of_birth_is_not_a_phone_number() -> None:
 def test_a_greeting_for_the_name_asks_the_name_again() -> None:
     replies = _talk(["Siz bn qanday bogʻlansam boladi", "Ассаламу алейкум"])
     assert replies[1] == NAME
+
+
+def test_a_weekday_with_an_hour_books_that_day() -> None:
+    # NOW is Tuesday 3 November: Wednesday is tomorrow, with 11:30 free.
+    replies = _book(["Prostatit bor", "Sardor", "Samarqand", "ha", "chorshanba 11:30 ga"])
+    assert bubbles.parts(replies[4])[0] == (
+        "Yaxshi, ertaga 11:30 ga onlayn konsultatsiyaga yozib qo'yishim mumkin."
+    )
+
+
+def test_a_weekday_evening_takes_that_day() -> None:
+    replies = _book(["Prostatit bor", "Sardor", "Samarqand", "ha", "juma 20:00"])
+    assert bubbles.parts(replies[4])[0] == (
+        "Yaxshi, juma 20:00 ga onlayn konsultatsiyaga yozib qo'yishim mumkin."
+    )
+
+
+def test_a_sunday_offer_is_read_as_sunday() -> None:
+    history = [
+        {"role": "user", "content": "Prostatit bor"},
+        {"role": "assistant", "content": f"{HANDLES} {NAME}"},
+        {"role": "user", "content": "Sardor"},
+        {"role": "assistant", "content": place("Sardor")},
+        {"role": "user", "content": "Samarqand"},
+        {"role": "assistant", "content": ONLINE},
+        {"role": "user", "content": "ha"},
+        {
+            "role": "assistant",
+            "content": "Yaxshi, yakshanba 15:00 ga onlayn konsultatsiyaga yozib qo'yishim mumkin.",
+        },
+    ]
+    plan = scripted_flow.plan(
+        FLOWS, script="uz-latn", user_message="+998 90 123 45 67", history=history, now=NOW
+    )
+    assert plan is not None and plan.reply is not None
+    assert "yakshanba 15:00 ga yozilasiz" in plan.reply
+
+
+def test_the_sequence_is_finished_after_the_payment_is_confirmed() -> None:
+    replies = _book(
+        ["Prostatit bor", "Sardor", "Samarqand", "ha", "ertaga 10:00", "+998 90 123 45 67"]
+    )
+    history = []
+    for message, reply in zip(
+        ["Prostatit bor", "Sardor", "Samarqand", "ha", "ertaga 10:00", "+998 90 123 45 67"],
+        replies,
+        strict=True,
+    ):
+        history += [
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": bubbles.flatten(reply)},
+        ]
+    assert scripted_flow.finished(FLOWS, history)
+    assert not scripted_flow.finished(FLOWS, history[:4])

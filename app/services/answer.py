@@ -10,6 +10,7 @@ edit: the markers the rest of the system reads ([[BOOK:...]], [[CALLBACK:...]],
 and the appointment book they refer to.
 """
 
+import asyncio
 import logging
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime, timedelta
@@ -434,7 +435,10 @@ async def generate_answer(
     # provider (the tests) gets the patterns, and its scripted replies are
     # not spent on reading.
     reading = None
-    if flows and llm_provider is None:
+    done = scripted_flow.finished(flows, history)
+    wants_slots = bool(flows and flows.get("intake")) and not done
+    slots_job = asyncio.ensure_future(_online_slots(session, now_local)) if wants_slots else None
+    if flows and llm_provider is None and not done:
         last_own = next(
             (t["content"] for t in reversed(history or []) if t.get("role") == "assistant"), None
         )
@@ -454,7 +458,7 @@ async def generate_answer(
         history=history,
         now=now_local,
         reading=reading,
-        slots=await _online_slots(session, now_local) if flows and flows.get("intake") else None,
+        slots=await slots_job if slots_job is not None else None,
     )
     if scripted is not None and scripted.reply is not None:
         reply = scripted.reply

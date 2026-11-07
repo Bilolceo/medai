@@ -87,7 +87,14 @@ def one_of_ours(echo: str | None, recorded: str | None) -> bool:
     back as a piece of it, not the whole."""
     if same_message(echo, recorded):
         return True
-    return any(same_message(echo, part) for part in (recorded or "").split("\n\n") if part.strip())
+    # A bubble may itself hold a blank line, so a bubble is any run of
+    # consecutive pieces, not only a single one (code review, 2026-11-07).
+    pieces = [part for part in (recorded or "").split("\n\n") if part.strip()]
+    return any(
+        same_message(echo, "\n\n".join(pieces[start:end]))
+        for start in range(len(pieces))
+        for end in range(start + 1, len(pieces) + 1)
+    )
 
 
 async def flag(session: AsyncSession, conversation_id: uuid.UUID) -> None:

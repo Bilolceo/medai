@@ -26,7 +26,11 @@ MARKER = re.compile(r"\[\[\s*IMAGE\s*:\s*(?P<url>[^|\]\s]+)\s*(?:\|\s*(?P<title>
 
 _EVENING = re.compile(
     # "kechroq" is later in the day, not the evening.
-    r"kech(?!ro)|kechqurun|kechki|ishdan\s*keyin|tunda|\b(19|20|21)[:.]?\d{0,2}\b|"
+    # An evening hour only as a time -- "19:00", "soat 20", "21 da" -- not an
+    # age ("20 yoshdaman") or the Beeline code in a number ("+998 20 ...").
+    r"kech(?!ro)|kechqurun|kechki|ishdan\s*keyin|tunda|"
+    r"\b(?:19|20|21)[:.]\d{2}\b|(?:soat|соат|в|at)\s*(?:19|20|21)\b|"
+    r"\b(?:19|20|21)\s*(?:da|ga|lar|да|га|час)\b|"
     r"кеч(?!ро)|кечқурун|кечки|ишдан\s*кейин|вечер|после\s*работы|ночью",
     re.IGNORECASE,
 )
@@ -143,6 +147,7 @@ _EVENING_CAPTIONS = {
     ),
 }
 _SENTENCE = re.compile(r"[^.!?]+[.!?]?")
+_MACHINE = re.compile(r"\[\[\s*(?:CALLBACK|BOOK|DOCTOR)[^\]]*\]\]")
 
 
 def _norm(text: str) -> str:
@@ -160,8 +165,12 @@ def attach(
     or -- under the evening card -- that promises a call after hours."""
     evening = image.get("topic") == "evening"
     if evening:
+        # The words are the caption's (no call promised after hours), but the
+        # markers the rest of the system reads -- a call-back, a booking, a
+        # hand-over -- stay with it.
         text = _EVENING_CAPTIONS.get(script, _EVENING_CAPTIONS["uz-latn"])
-        return f"{text} [[IMAGE:{image['url']}|{image.get('title', '')}]]"
+        kept = " ".join(_MACHINE.findall(reply))
+        return f"{text} {kept} [[IMAGE:{image['url']}|{image.get('title', '')}]]".replace("  ", " ")
     caption = _CAPTIONS.get(script, _CAPTIONS["uz-latn"])
     text = _PRICE_BY_PHONE.sub(" ", reply)
     if own_turns:
@@ -201,14 +210,13 @@ _SPORT = re.compile(
 
 
 def attach_scripted(
-    reply: str, image: Mapping[str, Any], script: str = "uz-latn", *, keep_text: bool = False
+    reply: str, image: Mapping[str, Any], script: str = "uz-latn", *, keep_text: bool = True
 ) -> str:
     """A scripted reply with the card: the caption goes before the step's own
-    question, in the last message, so the question stays the last word.
-    ``keep_text`` keeps the step's words under the evening card too -- the
-    card sent with a steroid or sport complaint, not an evening wish."""
-    if image.get("topic") == "evening" and not keep_text:
-        return attach(reply, image, script)
+    question, in the last message, so the question stays the last word. The
+    step's words always stay, under the evening card too (code review,
+    2026-11-07); ``keep_text`` is accepted for old callers and ignored."""
+    del keep_text
     captions = _EVENING_SHORT if image.get("topic") == "evening" else _CAPTIONS
     caption = captions.get(script, captions["uz-latn"])
     parts = reply.split("|||")

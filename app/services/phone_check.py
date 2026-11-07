@@ -52,10 +52,43 @@ _DATE = re.compile(r"\b\d{1,2}[./-]\d{1,2}[./-](?:19|20)?\d{2}\b")
 
 def read(text: str) -> Phone | None:
     """The number in this message and what it is, or None if there is none."""
-    match = _RUN.search(_DATE.sub(" ", text))
-    if match is None:
-        return None
-    raw = match.group(0)
+    clean = _DATE.sub(" ", text)
+    for match in _RUN.finditer(clean):
+        raw = match.group(0)
+        if _amount(raw, clean[match.end() :]):
+            # "990 000 to'ladim": a sum, not a number.
+            continue
+        found = _classify(raw)
+        if found is not None and found.kind in (UZ, FOREIGN):
+            return found
+        # "90 123 45 67 15 da": the hour typed after the number joined the
+        # run; the longest leading part that is a whole number is the number.
+        groups = re.findall(r"\+?\d+", raw)
+        for end in range(len(groups) - 1, 0, -1):
+            head = _classify(" ".join(groups[:end]))
+            if head is not None and head.kind == UZ:
+                return head
+        if found is not None:
+            return found
+    return None
+
+
+# A sum: groups of three after the first, the last "000" -- "990 000",
+# "1 500 000" -- or followed by the word for money.
+_MONEY_AFTER = re.compile(
+    r"^\s*(?:so['‘ʻ’`]?m|sum|сўм|сум|ming|минг|тысяч|\$|dollar)", re.IGNORECASE
+)
+
+
+def _amount(raw: str, after: str) -> bool:
+    groups = re.findall(r"\d+", raw)
+    if raw.startswith("+") or len(groups) < 2:
+        return False
+    threes = all(len(g) == 3 for g in groups[1:]) and len(groups[0]) <= 3
+    return (threes and groups[-1] == "000") or bool(_MONEY_AFTER.match(after))
+
+
+def _classify(raw: str) -> Phone | None:
     plus = raw.startswith("+") or raw.startswith("00")
     digits = re.sub(r"\D", "", raw)
     if raw.startswith("00"):

@@ -225,6 +225,83 @@ async def test_send_reply_sends_the_price_card_after_the_words(
     assert pictures == ["https://x/day.jpg"]
 
 
+async def test_a_failure_after_the_first_bubble_does_not_resend_it(
+    db_session: AsyncSession,
+    seed: Seed,
+    as_tenant: Callable[[UUID], AbstractContextManager[None]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bubble one went out, bubble two keeps failing: the job must not fail
+    and be retried whole, or the patient gets bubble one twice."""
+    import app.channels.base as base
+    import app.services.delivery as delivery
+
+    monkeypatch.setattr(base, "_ADAPTERS", dict(base._ADAPTERS))
+    monkeypatch.setattr(delivery, "PAUSE_BETWEEN_MESSAGES_SECONDS", 0)
+    adapter = RecordingAdapter()
+    sent: list[str] = []
+
+    async def send_text(**kwargs: Any) -> None:
+        if sent:
+            raise RuntimeError("platform down")
+        sent.append(kwargs["text"])
+
+    monkeypatch.setattr(adapter, "send_text", send_text)
+    register_adapter(adapter)
+
+    with as_tenant(seed.tenant_a.id):
+        channel = await ChannelRepository(db_session).create(
+            type="telegram",
+            credentials=encrypt("tg-bot-token"),
+            external_id=f"tg-{seed.tenant_a.id}",
+        )
+        delivered_over = await send_reply(
+            db_session,
+            channel_id=channel.id,
+            recipient_external_id="chat-42",
+            text="Birinchi. ||| Ikkinchi?",
+            last_user_message_at=datetime.now(UTC),
+        )
+
+    assert sent == ["Birinchi."]
+    assert delivered_over == "telegram"
+
+
+async def test_a_failure_on_the_first_bubble_fails_the_job(
+    db_session: AsyncSession,
+    seed: Seed,
+    as_tenant: Callable[[UUID], AbstractContextManager[None]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.channels.base as base
+    import app.services.delivery as delivery
+
+    monkeypatch.setattr(base, "_ADAPTERS", dict(base._ADAPTERS))
+    monkeypatch.setattr(delivery, "PAUSE_BETWEEN_MESSAGES_SECONDS", 0)
+    adapter = RecordingAdapter()
+
+    async def send_text(**kwargs: Any) -> None:
+        raise RuntimeError("platform down")
+
+    monkeypatch.setattr(adapter, "send_text", send_text)
+    register_adapter(adapter)
+
+    with as_tenant(seed.tenant_a.id):
+        channel = await ChannelRepository(db_session).create(
+            type="telegram",
+            credentials=encrypt("tg-bot-token"),
+            external_id=f"tg-{seed.tenant_a.id}",
+        )
+        with pytest.raises(RuntimeError):
+            await send_reply(
+                db_session,
+                channel_id=channel.id,
+                recipient_external_id="chat-42",
+                text="Birinchi. ||| Ikkinchi?",
+                last_user_message_at=datetime.now(UTC),
+            )
+
+
 async def test_send_reply_returns_none_when_the_platform_blocks_it(
     db_session: AsyncSession,
     seed: Seed,

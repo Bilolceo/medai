@@ -650,13 +650,10 @@ def _named_day(message: str, now: datetime) -> Any:
 def _chosen_slot(
     message: str, at: time, slots: Sequence[datetime], now: datetime
 ) -> datetime | None:
-    """The free slot the patient named, on the day they said or the soonest."""
-    if _TODAY.search(message):
-        days = [now.date()]
-    elif _TOMORROW.search(message):
-        days = [now.date() + timedelta(days=1)]
-    else:
-        days = sorted({s.date() for s in slots})
+    """The free slot the patient named, on the day they said ("bugun",
+    "ertaga", "seshanba") or else the soonest."""
+    named = _named_day(message, now)
+    days = [named] if named is not None else sorted({s.date() for s in slots})
     for day in days:
         for slot in slots:
             if slot.date() == day and slot.time() == at:
@@ -1156,6 +1153,8 @@ def plan_intake(
         clock = re.search(r"\b(\d{1,2}:\d{2})\b", offer)
         names = [texts["today"], texts["tomorrow"], *_WEEKDAYS["uz-latn"], *_WEEKDAYS["uz-cyrl"]]
         names += _WEEKDAYS["ru"]
+        # Longest first: "yakshanba" and "dushanba" before the "shanba" inside them.
+        names = sorted(names, key=len, reverse=True)
         day = next(
             (n for n in names if re.search(re.escape(n), offer, re.IGNORECASE)), texts["tomorrow"]
         )
@@ -1204,9 +1203,7 @@ def plan_intake(
             if sport and not _within(flow, at, "evening"):
                 return Plan(reply=texts["offer_evening"])
             if _within(flow, at, "evening"):
-                evening_day = (
-                    now.date() if _TODAY.search(message) else now.date() + timedelta(days=1)
-                )
+                evening_day = _named_day(message, now) or now.date() + timedelta(days=1)
                 day = _label(texts, evening_day, now)
                 mode = texts["mode_online"]
                 price, prepay = price_of("evening")
@@ -1412,6 +1409,17 @@ def plan_intake(
             return None
         return Plan(reply=texts["ask_phone_again"])
     return None
+
+
+def finished(flows: Mapping[str, Any] | None, history: Sequence[Mapping[str, Any]] | None) -> bool:
+    """Has the intake sequence ended in this conversation -- the call
+    confirmed, the payment confirmed, the hesitant patient's number taken?
+    Then nothing scripted is coming, and the message need not be read for it."""
+    intake = (flows or {}).get("intake")
+    if not intake:
+        return False
+    own = [t["content"] for t in history or [] if t.get("role") == "assistant"]
+    return any(_said(intake, key, own) for key in ("confirm", "paid_confirm", "hesitate_thanks"))
 
 
 def drop_repeats(step: str, answer: str) -> str:

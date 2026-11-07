@@ -22,3 +22,12 @@ def test_the_break_splits_the_reply_in_order_and_drops_empty_parts() -> None:
 def test_the_transcript_keeps_one_row_with_a_blank_line_at_the_break() -> None:
     reply = "Assalomu alaykum. Men administratorman.|||Ismingiz nima?"
     assert bubbles.flatten(reply) == "Assalomu alaykum. Men administratorman.\n\nIsmingiz nima?"
+
+
+def test_a_bubble_with_a_blank_line_is_recognised_as_ours() -> None:
+    from app.services import handoff
+
+    stored = bubbles.flatten("Salom ||| Para A.\n\nPara B?")
+    assert handoff.one_of_ours("Para A.\n\nPara B?", stored)
+    assert handoff.one_of_ours("Salom", stored)
+    assert not handoff.one_of_ours("Boshqa gap", stored)

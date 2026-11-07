@@ -34,6 +34,33 @@ logger = logging.getLogger(__name__)
 PAUSE_BETWEEN_MESSAGES_SECONDS = 0.8
 
 
+async def _send_one(
+    adapter: ChannelAdapter,
+    credentials: Any,
+    recipient_external_id: str,
+    kind: str,
+    value: str,
+    context: Mapping[str, Any],
+) -> None:
+    if kind == "text":
+        await adapter.send_text(
+            credentials=credentials,
+            recipient_external_id=recipient_external_id,
+            text=value,
+            reply_context=context,
+        )
+        return
+    # After the words, as an administrator sends the card under her line.
+    sent = await adapter.send_image(
+        credentials=credentials,
+        recipient_external_id=recipient_external_id,
+        image_url=value,
+        reply_context=context,
+    )
+    if not sent:
+        logger.warning("reply_picture_not_supported")
+
+
 async def send_reply(
     session: AsyncSession,
     *,
@@ -101,28 +128,37 @@ async def send_reply(
     # platform from reordering two sends that leave in the same instant.
     text, pictures = promo_images.split(text)
     messages = bubbles.parts(text) if text else []
-    for index, message in enumerate(messages):
-        if index:
+    # The channel's own platform id rides along with whatever the caller
+    # gave: a platform that must name the sender finds it here.
+    context = {**(reply_context or {}), CHANNEL_EXTERNAL_ID: channel.external_id}
+    sends: list[tuple[str, str]] = [("text", m) for m in messages] + [
+        ("image", u) for u in pictures
+    ]
+    for done, (kind, value) in enumerate(sends):
+        if done:
             await asyncio.sleep(PAUSE_BETWEEN_MESSAGES_SECONDS)
-        await resolved_adapter.send_text(
-            credentials=credentials,
-            recipient_external_id=recipient_external_id,
-            text=message,
-            # The channel's own platform id rides along with whatever the
-            # caller gave: a platform that must name the sender finds it here.
-            reply_context={**(reply_context or {}), CHANNEL_EXTERNAL_ID: channel.external_id},
-        )
-    for url in pictures:
-        # After the words, as an administrator sends the card under her line.
-        await asyncio.sleep(PAUSE_BETWEEN_MESSAGES_SECONDS)
-        sent = await resolved_adapter.send_image(
-            credentials=credentials,
-            recipient_external_id=recipient_external_id,
-            image_url=url,
-            reply_context={**(reply_context or {}), CHANNEL_EXTERNAL_ID: channel.external_id},
-        )
-        if not sent:
-            logger.warning("reply_picture_not_supported", extra={"channel_type": channel.type})
+        try:
+            await _send_one(
+                resolved_adapter, credentials, recipient_external_id, kind, value, context
+            )
+        except Exception:
+            if not done:
+                # Nothing went out yet: failing the job lets it be retried whole.
+                raise
+            # Part of the reply is with the patient already: a retry of the
+            # whole job would send that part again. Try this piece once more,
+            # then stop and say so, rather than repeat ourselves.
+            await asyncio.sleep(PAUSE_BETWEEN_MESSAGES_SECONDS)
+            try:
+                await _send_one(
+                    resolved_adapter, credentials, recipient_external_id, kind, value, context
+                )
+            except Exception:
+                logger.exception(
+                    "reply_partially_sent",
+                    extra={"channel_type": channel.type, "sent": done, "of": len(sends)},
+                )
+                return channel.type
     logger.info(
         "reply_sent",
         extra={

@@ -83,9 +83,9 @@ _RECEIPT_WINDOW = timedelta(days=3)
 
 
 async def awaiting_payment(session: AsyncSession, conversation_id: uuid.UUID) -> str | None:
-    """The clinic's message that gave the card, if the patient was given one
-    in the last three days and nothing else from the clinic has come since --
-    a photo now is the receipt. None otherwise."""
+    """The clinic's message that gave the card, if it is among the clinic's
+    last three messages of the past three days and no receipt has been
+    acknowledged since -- a photo now is the receipt. None otherwise."""
     from sqlalchemy import select
 
     from app.models.message import Message
@@ -107,8 +107,15 @@ async def awaiting_payment(session: AsyncSession, conversation_id: uuid.UUID) ->
         .scalars()
         .all()
     )
+    acknowledgements = {" ".join(t.split())[:20] for t in RECEIPT_ACKNOWLEDGEMENTS.values()}
     for content in last:
-        if content and _CARD.search(content):
+        if not content:
+            continue
+        if " ".join(content.split())[:20] in acknowledgements:
+            # The receipt came already, after the card: a photo now is
+            # something else -- an analysis, a result -- not a second receipt.
+            return None
+        if _CARD.search(content):
             return content
     return None
 

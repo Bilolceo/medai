@@ -32,3 +32,21 @@ def test_numbers_as_people_type_them(typed: str, kind: str, shown: str) -> None:
 
 def test_no_number_is_none() -> None:
     assert phone_check.read("ertaga 10 da qo'ng'iroq qiling") is None
+
+
+def test_a_sum_is_not_a_number() -> None:
+    assert phone_check.read("990 000 to'ladim") is None
+    assert phone_check.read("1 500 000 so'm qimmat") is None
+    assert phone_check.read("165000 сўм ўтказдим") is None
+
+
+def test_an_hour_after_the_number_does_not_hide_it() -> None:
+    found = phone_check.read("90 123 45 67 15 da")
+    assert found is not None and found.shown == "+998 90 123 45 67"
+    found = phone_check.read("901234567 10 da qiling")
+    assert found is not None and found.shown == "+998 90 123 45 67"
+
+
+def test_a_number_after_a_sum_is_found() -> None:
+    found = phone_check.read("165 000 to'ladim, raqamim +998 93 345 67 89")
+    assert found is not None and found.shown == "+998 93 345 67 89"

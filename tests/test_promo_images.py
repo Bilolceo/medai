@@ -155,3 +155,17 @@ def test_the_evening_card_with_a_complaint_keeps_the_question() -> None:
 
 def test_a_steroid_price_question_gets_the_evening_card() -> None:
     assert _pick("Steroid kursidan keyin tekshirmoqchiman, qancha turadi?") == "evening"
+
+
+def test_an_age_or_a_beeline_number_is_not_the_evening() -> None:
+    assert not promo_images._EVENING.search("20 yoshdaman")
+    assert not promo_images._EVENING.search("+998 20 123 45 67")
+    assert promo_images._EVENING.search("soat 20 da")
+    assert promo_images._EVENING.search("19:30 ga")
+
+
+def test_the_evening_card_keeps_the_call_back_marker() -> None:
+    reply = "Mayli. [[CALLBACK:+998 90 123 45 67|prostatit|kechqurun]]"
+    out = promo_images.attach(reply, CARDS[1])
+    assert "[[CALLBACK:+998 90 123 45 67|prostatit|kechqurun]]" in out
+    assert out.startswith("Ish vaqtidan keyin doktor bilan faqat onlayn")
