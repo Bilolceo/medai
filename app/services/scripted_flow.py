@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from typing import Any
 
-from app.services import bubbles, phone_check
+from app.services import bubbles, phone_check, promo_images
 
 # A complaint about desire, in any of the three alphabets, with a word that
 # says it is low or gone -- "qabulga yozilish xohishim bor" is not one.
@@ -303,7 +303,7 @@ def drop_questions(reply: str) -> str:
 # --- the ordinary sequence: any complaint, or a wish to be seen ----------------
 
 _COMPLAINT = re.compile(
-    r"erek|erect|potens|tez\s*bo['‘ʻ’`]?shan|og['‘ʻ’`]?ri|siydik|siyish|siya\s*olma|\bqon\b|"
+    r"erek|erect|potens|tez\s*bo['‘ʻ’`]?shan|tez\s*tugat|erta\s*tugat|og['‘ʻ’`]?ri|siydik|siyish|siya\s*olma|\bqon\b|"
     r"moyak|tuxum|prostat|varikot|bepusht|farzand|buyrak|achish|shish|sunnat|"
     r"yuqumli|infeksiya|tahlil|spermogramma|gormon|testosteron|"
     r"muammo|kasal|shikoyat|davola|qabul|yozil|ko['‘ʻ’`]?rik|konsultatsiya|"
@@ -379,6 +379,11 @@ _REGIONS = re.compile(
 _WOMAN = re.compile(
     r"ayolman|xotin\s*kishiman|hayz|homilador|bachadon|tuxumdon|аёлман|ҳайз|ҳомиладор|"
     r"я\s+женщина|месячн|беременн|матк|яичник",
+    re.IGNORECASE,
+)
+_GYNAECOLOGY = re.compile(
+    r"hayz|homilador|bachadon|tuxumdon|ginekolog|ҳайз|ҳомиладор|бачадон|гинеколог|"
+    r"месячн|беременн|матк|яичник|гинеколог",
     re.IGNORECASE,
 )
 # "Dollar kursi qancha?": a price, but not ours.
@@ -646,6 +651,23 @@ def plan_intake(
         return " ".join(parts) or None
 
     last_own = own[-1] if own else ""
+    if _GYNAECOLOGY.search(message) and texts.get("gynaecology"):
+        # Not the doctor's field, and no gynaecologist is promised here.
+        gyn_lead = " ".join(
+            filter(
+                None,
+                (
+                    (
+                        (texts["greet_back"] if _GREETING.search(message) else texts["greet"])
+                        if not own
+                        else None
+                    ),
+                    texts["intro"] if not introduced else None,
+                ),
+            )
+        )
+        body = texts["gynaecology"]
+        return Plan(reply=f"{gyn_lead} {bubbles.MARKER} {body}" if gyn_lead else body)
     if _WOMAN.search(message):
         return None
     u = _understand(message, reading, asked_name=bool(_said(flow, "ask_name", [last_own])))
@@ -818,10 +840,14 @@ def plan_intake(
     pending = done[-1] if done else None
 
     def named_complaint(text: str) -> bool:
-        if sport_words.search(text):
+        if sport_words.search(text) or promo_images.OPERATION_NAMES.search(text):
             return True
-        if reading is not None and text == message:
-            return reading.complaint_kind in ("urology", "libido_only", "sport")
+        if (
+            reading is not None
+            and text == message
+            and reading.complaint_kind in ("urology", "libido_only", "sport")
+        ):
+            return True
         return bool(_COMPLAINT.search(_JUST_A_VISIT.sub(" ", text)))
 
     def answer_after(*keys: str) -> str | None:
@@ -940,7 +966,8 @@ def plan_intake(
             step = f"{texts['handles']} {texts['ask_place_named'].format(name=named)}"
         else:
             step = f"{texts['handles']} {texts['ask_name']}"
-        if question and not asks_price and not (named and place):
+        operation = bool(promo_images.OPERATION_NAMES.search(message))
+        if question and not asks_price and not (named and place) and not operation:
             return Plan(prefix=lead, then=step, instruction=INSTRUCTION)
         body = f"{lead} {bubbles.MARKER} {step}" if lead else step
         return Plan(reply=body, cards=asks_price, card_topic=card_topic)
@@ -1137,7 +1164,8 @@ def plan_intake(
         # "Toshkentdanman, narxi qancha?": the place is answered; the card goes.
         step_plan = after_place(message, abroad=u.abroad)
         return Plan(reply=step_plan.reply, cards=True)
-    if asks_price:
+    asks_about_operation = question and re.search(r"operats|amaliyot|операц|амалиёт", message, re.I)
+    if asks_price and not asks_about_operation:
         again = {
             "ask_name": texts["ask_name"],
             "ask_place": texts["ask_place"],

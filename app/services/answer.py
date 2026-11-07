@@ -11,7 +11,7 @@ and the appointment book they refer to.
 """
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -469,6 +469,7 @@ async def generate_answer(
             )
             if card is not None:
                 reply = promo_images.attach_scripted(reply, card, script)
+        reply = _with_operation_cards(reply, stored, user_message, history, script)
         logger.info("scripted_flow_reply", extra={"reply": reply[:200]})
         return reply
     if scripted is not None and scripted.instruction:
@@ -561,7 +562,28 @@ async def generate_answer(
     if card is not None:
         logger.info("promo_image_attached", extra={"title": card.get("title")})
         reply = promo_images.attach(reply, card, script, own_turns)
-    return reply
+    return _with_operation_cards(
+        reply, tenant.settings if tenant is not None else {}, user_message, history, script
+    )
+
+
+def _with_operation_cards(
+    reply: str,
+    settings: Mapping[str, Any],
+    user_message: str,
+    history: Sequence[ChatMessage] | None,
+    script: str,
+) -> str:
+    """The operation package cards the patient asked for by name, under the
+    reply (app.services.promo_images.operations_asked)."""
+    own = [str(t["content"]) for t in history or [] if t.get("role") == "assistant"]
+    cards = promo_images.operations_asked(
+        settings.get("promo_images"), user_message=user_message, own_turns=own
+    )
+    if not cards:
+        return reply
+    logger.info("operation_cards_attached", extra={"titles": [c.get("title") for c in cards]})
+    return promo_images.attach_operations(reply, cards, script, own)
 
 
 _PRICE_CORRECTION = """

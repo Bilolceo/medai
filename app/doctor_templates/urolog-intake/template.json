@@ -27,7 +27,14 @@
     "EVENING_PREPAY",
     "EVENING_HOURS",
     "PROMO_DAY_URL",
-    "PROMO_EVENING_URL"
+    "PROMO_EVENING_URL",
+    "PROMO_OP_VARIKOSELE_URL",
+    "PROMO_OP_SKROTOPLASTIKA_URL",
+    "PROMO_OP_LIGAMENTOTOMIYA_URL",
+    "PROMO_OP_KOMPLEKS_URL",
+    "PROMO_OP_FALLOPROTEZ_URL",
+    "PROMO_OP_MICRO_TESE_URL",
+    "PROMO_OP_DENERVATSIYA_URL"
   ],
   "prompt": "prompt.txt",
   "examples": [
@@ -163,6 +170,12 @@
         "EVENING_HOURS",
         "PROMO_EVENING_URL"
       ]
+    },
+    {
+      "file": "examples/operation_asked.txt",
+      "needs": [
+        "PROMO_OP_VARIKOSELE_URL"
+      ]
     }
   ],
   "rules": [
@@ -229,6 +242,12 @@
       "needs": [
         "PROMO_DAY_URL",
         "EVENING_HOURS"
+      ]
+    },
+    {
+      "file": "rules/operations.txt",
+      "needs": [
+        "PROMO_OP_VARIKOSELE_URL"
       ]
     }
   ],

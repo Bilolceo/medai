@@ -494,8 +494,8 @@ def test_a_number_alone_first_asks_the_name() -> None:
     assert bubbles.parts(replies[0])[-1] == NAME
 
 
-def test_a_gynaecological_question_is_the_models() -> None:
-    assert _talk(["Men ayolman, hayz ko'rmayapman"]) == ["<model>"]
+def test_a_woman_without_a_gynaecological_word_is_the_models() -> None:
+    assert _talk(["Men ayolman, erim haqida so'ramoqchiman"]) == ["<model>"]
 
 
 def test_paid_without_a_number_asks_for_the_receipt_and_the_number() -> None:
@@ -569,3 +569,10 @@ def test_a_hesitant_no_without_a_number_is_left_to_the_model() -> None:
 def test_asking_for_the_number_again_gets_the_same_answer_and_step() -> None:
     replies = _talk(["Doktor bilan qanday bog'lansam bo'ladi?", "Doktor raqamini bering"])
     assert replies[1] == f"Doktor bilan konsultatsiyaga shu yerning o'zida yozib qo'yaman. {NAME}"
+
+
+def test_a_gynaecological_question_is_answered_without_promising_a_gynaecologist() -> None:
+    replies = _talk(["Hayzim kechikyapti"])
+    last = bubbles.parts(replies[0])[-1]
+    assert last.startswith("Bu ginekologik masala, uni ginekolog ko'radi.")
+    assert "yozib" not in last

@@ -235,3 +235,107 @@ def for_topic(
     if any(already in turn for turn in own_turns):
         return None
     return image
+
+
+# --- the operation cards: sent only when the patient names the operation ---
+#
+# Dr Sultonbek's package cards (varicocele, scrotoplasty, ligamentotomy, the
+# combined operation, penile prosthesis, micro-TESE, selective denervation).
+# A complaint alone never brings one: "tez tugataman" is not a request for a
+# denervation, and a card for an operation nobody asked about reads as the
+# bot recommending surgery. Whether an operation is needed, and which, the
+# doctor decides at the consultation -- said once, under the card.
+
+_OPERATION_WORD = re.compile(
+    r"operats|operasi|amaliyot|jarroh|marmar|операц|амалиёт|жарроҳ|хирург|"
+    r"narx|qancha|нарх|қанча|цен|стоим|сколько",
+    re.IGNORECASE,
+)
+# topic -> (what the patient wrote, does it need an operation or price word with it)
+OPERATIONS: dict[str, tuple[re.Pattern[str], bool]] = {
+    "op:varikosele": (re.compile(r"varik[oa]t?s?[eia]l|варикоц|варикос", re.IGNORECASE), True),
+    "op:skrotoplastika": (
+        re.compile(r"skrotoplast|скротопласт|moyak\s*xaltasi\w*\s*plast", re.IGNORECASE),
+        False,
+    ),
+    "op:ligamentotomiya": (
+        re.compile(
+            r"ligamentotom|лигаментотом|kattalashtir|uzaytir|катталаштир|узайтир|увелич|удлин",
+            re.IGNORECASE,
+        ),
+        False,
+    ),
+    "op:kompleks": (
+        re.compile(
+            r"kompleks\s*operats|комплекс\w*\s*операц|kattalashtir|uzaytir|катталаштир|"
+            r"узайтир|увелич|удлин",
+            re.IGNORECASE,
+        ),
+        False,
+    ),
+    "op:falloprotez": (re.compile(r"fall?oprotez|protez|фаллопротез|протез", re.IGNORECASE), False),
+    "op:micro-tese": (
+        re.compile(r"m[ia]kro\W?tese|\btese\b|микро\W?тезе|\bтезе\b", re.IGNORECASE),
+        False,
+    ),
+    "op:denervatsiya": (re.compile(r"denervats|денервац", re.IGNORECASE), False),
+}
+OPERATION_NAMES = re.compile(
+    "|".join(pattern.pattern for pattern, _ in OPERATIONS.values()), re.IGNORECASE
+)
+_OPERATION_NOTE = {
+    "uz-latn": "Operatsiya kerakligi va usulini doktor ko'rikda aniqlaydi.",
+    "uz-cyrl": "Операция кераклиги ва усулини доктор кўрикда аниқлайди.",
+    "ru": "Нужна ли операция и какая, доктор определит на консультации.",
+}
+
+
+def operations_asked(
+    images: Sequence[Mapping[str, Any]] | None, *, user_message: str, own_turns: Sequence[str]
+) -> list[Mapping[str, Any]]:
+    """The operation cards this message asks for, not sent before."""
+    found = []
+    for image in images or []:
+        topic = str(image.get("topic", ""))
+        rule = OPERATIONS.get(topic)
+        if rule is None:
+            continue
+        pattern, needs_word = rule
+        if not pattern.search(user_message):
+            continue
+        if needs_word and not _OPERATION_WORD.search(user_message):
+            continue
+        if any(sent_line(str(image.get("title", ""))) in turn for turn in own_turns):
+            continue
+        found.append(image)
+    return found
+
+
+def attach_operations(
+    reply: str,
+    cards: Sequence[Mapping[str, Any]],
+    script: str = "uz-latn",
+    own_turns: Sequence[str] = (),
+) -> str:
+    """The reply with the operation cards under it, and -- once a
+    conversation -- that the doctor decides at the consultation."""
+    if not cards:
+        return reply
+    note = _OPERATION_NOTE.get(script, _OPERATION_NOTE["uz-latn"])
+    said = any(_norm(note) in _norm(turn) for turn in own_turns) or _norm(note) in _norm(reply)
+    text, existing = reply, ""
+    first = MARKER.search(text)
+    if first:
+        text, existing = text[: first.start()].rstrip(), " " + text[first.start() :].strip()
+    if not said:
+        # Before the last message's own question, so the question stays last.
+        parts = text.split("|||")
+        sentences = [x.strip() for x in _SENTENCE.findall(parts[-1]) if x.strip()]
+        if len(sentences) > 1:
+            last = " ".join([*sentences[:-1], note, sentences[-1]])
+        else:
+            last = f"{note} {' '.join(sentences)}".strip()
+        parts[-1] = (" " if len(parts) > 1 else "") + last
+        text = "|||".join(parts)
+    markers = " ".join(f"[[IMAGE:{c['url']}|{c.get('title', '')}]]" for c in cards)
+    return f"{text}{existing} {markers}".strip()

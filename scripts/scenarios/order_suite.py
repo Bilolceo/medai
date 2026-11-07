@@ -325,6 +325,38 @@ S: list[tuple[str, set[str], list[str]]] = [
         {"abroad"},
         ["Здравствуйте, простатит", "Руслан", "Москва", "я подумаю", "+998 99 111 22 33"],
     ),
+    # --- operations: the card only when named; never recommended ---
+    (
+        "O01 varicocele op price",
+        {"region", "op"},
+        ["Varikotsele operatsiyasi qancha turadi?", "Akmal", "Samarqand", "ha"],
+    ),
+    (
+        "O02 enlargement",
+        {"tashkent", "op"},
+        ["Olatni kattalashtirish narxi qancha?", "Bobur", "Toshkent"],
+    ),
+    (
+        "O03 prosthesis russian",
+        {"abroad", "op"},
+        ["Сколько стоит фаллопротез?", "Руслан", "Москва"],
+    ),
+    ("O04 complaint only", {"tashkent", "noop"}, ["Tez tugatib qo'yaman", "Aziz", "Toshkent"]),
+    (
+        "O05 azoospermia",
+        {"region", "noop"},
+        ["Spermogrammada spermatozoid chiqmadi, farzand bo'lmayapti", "Sardor", "Buxoro"],
+    ),
+    (
+        "O06 op prepay",
+        {"region", "op"},
+        [
+            "Falloprotez qo'yasizlarmi?",
+            "Jasur",
+            "Andijon",
+            "operatsiyaga oldindan to'lov qilamanmi?",
+        ],
+    ),
     ("L01 libido abroad", {"nobook"}, ["Jinsiy xohishim yo'q", "Farrux", "Rossiya", "35"]),
 ]
 
@@ -375,6 +407,10 @@ def check(tags: set[str], replies: list[str]) -> list[str]:
                 flags.append(f"t{i+1}:ODD_SUM:{m.group(0)}")
         if "<<ERROR" in r:
             flags.append(f"t{i+1}:ERROR")
+    if "op" in tags and "sultonbek-op-" not in joined:
+        flags.append("OPERATION_CARD_MISSING")
+    if "noop" in tags and "sultonbek-op-" in joined:
+        flags.append("OPERATION_CARD_UNASKED")
     if "person" in tags and not PASS_ON.search(joined):
         flags.append("PERSON_NUMBER_NOT_ASKED")
     for key, rx in (("name", ASK_NAME), ("place", ASK_PLACE), ("topic", ASK_TOPIC)):

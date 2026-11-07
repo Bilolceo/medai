@@ -237,6 +237,22 @@ def build_settings(template: str, doctor: Mapping[str, Any]) -> dict[str, Any]:
         for key, topic, title in (
             ("PROMO_DAY_URL", "day", "Kunduzgi konsultatsiya: narx va tartib"),
             ("PROMO_EVENING_URL", "evening", "Kechki onlayn konsultatsiya: narx va tartib"),
+            # Operation packages: sent only when the patient names the operation.
+            ("PROMO_OP_VARIKOSELE_URL", "op:varikosele", "Varikosele operatsiyasi: narx va paket"),
+            ("PROMO_OP_SKROTOPLASTIKA_URL", "op:skrotoplastika", "Skrotoplastika: narx va paket"),
+            (
+                "PROMO_OP_LIGAMENTOTOMIYA_URL",
+                "op:ligamentotomiya",
+                "Ligamentotomiya: narx va paket",
+            ),
+            ("PROMO_OP_KOMPLEKS_URL", "op:kompleks", "Kompleks operatsiya: narx va paket"),
+            ("PROMO_OP_FALLOPROTEZ_URL", "op:falloprotez", "Falloprotez: narx va paket"),
+            ("PROMO_OP_MICRO_TESE_URL", "op:micro-tese", "Micro-TESE: narx va paket"),
+            (
+                "PROMO_OP_DENERVATSIYA_URL",
+                "op:denervatsiya",
+                "Selektiv denervatsiya: narx va paket",
+            ),
         )
         if key in facts
     ]
