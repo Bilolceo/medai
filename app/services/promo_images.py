@@ -260,6 +260,8 @@ _OPERATION_WORD = re.compile(
     r"narx|qancha|нарх|қанча|цен|стоим|сколько",
     re.IGNORECASE,
 )
+_OPERATION_ONLY = re.compile(r"operats|operasi|amaliyot|операц|амалиёт", re.IGNORECASE)
+_PRICE_WORD = re.compile(r"narx|qancha|нарх|қанча|цен|стоим|сколько|почём", re.IGNORECASE)
 # topic -> (what the patient wrote, does it need an operation or price word with it)
 OPERATIONS: dict[str, tuple[re.Pattern[str], bool]] = {
     "op:varikosele": (re.compile(r"varik[oa]t?s?[eia]l|варикоц|варикос", re.IGNORECASE), True),
@@ -307,7 +309,15 @@ _OPERATION_NOTE = {
 def operations_asked(
     images: Sequence[Mapping[str, Any]] | None, *, user_message: str, own_turns: Sequence[str]
 ) -> list[Mapping[str, Any]]:
-    """The operation cards this message asks for, not sent before."""
+    """The operation cards this message asks for, not sent before -- by name,
+    or all of them for "operatsiya narxlari qancha?" naming none."""
+    general = bool(_OPERATION_ONLY.search(user_message)) and bool(_PRICE_WORD.search(user_message))
+    named = [
+        image
+        for image in images or []
+        if (rule := OPERATIONS.get(str(image.get("topic", "")))) is not None
+        and rule[0].search(user_message)
+    ]
     found = []
     for image in images or []:
         topic = str(image.get("topic", ""))
@@ -315,7 +325,7 @@ def operations_asked(
         if rule is None:
             continue
         pattern, needs_word = rule
-        if not pattern.search(user_message):
+        if not pattern.search(user_message) and not (general and not named):
             continue
         if needs_word and not _OPERATION_WORD.search(user_message):
             continue

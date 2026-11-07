@@ -1,4 +1,6 @@
-Doktor bilan qanday bog'lanish mumkin, desa -- raqam berilmaydi, shu yerda yoziladi
+Raqam so'radi -- avval kim bilan gaplashmoqchi ekani so'raladi, raqam berilmaydi
 
-Bemor: Doktor bilan qanday bog'lansam bo'ladi?
-Admin: Doktor bilan konsultatsiyaga shu yerning o'zida yozib qo'yaman. Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?
+Bemor: Raqamingizni bering
+Admin: Siz doktor bilan gaplashmoqchimisiz yoki administrator bilanmi?
+Bemor: Doktor bilan
+Admin: Doktor bilan muloqot qilish uchun konsultatsiyaga yozilish kerak, konsultatsiya uchun 50% oldindan to'lov qilinadi. Shu yerning o'zida yozib qo'yaman. Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?

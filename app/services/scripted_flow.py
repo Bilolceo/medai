@@ -345,6 +345,7 @@ _JUST_A_VISIT = re.compile(
     re.IGNORECASE,
 )
 _INTAKE_STEPS = (
+    "who_choice",
     "ask_name",
     "ask_place",
     "ask_topic",
@@ -353,6 +354,7 @@ _INTAKE_STEPS = (
     "offer_slots",
     "book_ok",
     "hesitate_ask",
+    "admin_busy",
     "ask_phone",
     "ask_time",
     "confirm",
@@ -418,6 +420,29 @@ _WANTS_PERSON = re.compile(
     r"поговорить|связаться",
     re.IGNORECASE,
 )
+# Who the patient asking for a number wants: the administrator or the doctor.
+_ASKS_ADMIN = re.compile(r"admin|operator|админ|оператор", re.IGNORECASE)
+_ASKS_DOCTOR = re.compile(
+    r"doktor|doxtir|vrach|shifokor|sultonbek|доктор|врач|шифокор|султонбек", re.IGNORECASE
+)
+# "Karta raqami": the payment, not a contact.
+_CARD_NUMBER = re.compile(r"karta|карт", re.IGNORECASE)
+
+
+def contact_wish(text: str) -> str | None:
+    """Asked for a number or a person: "admin", "doctor", or "ask" (which one
+    is not said); None for anything else."""
+    if phone_check.read(text) is not None or _CARD_NUMBER.search(text):
+        return None
+    if not (_CONTACT.search(text) or _WANTS_PERSON.search(text)):
+        return None
+    if _ASKS_ADMIN.search(text):
+        return "admin"
+    if _ASKS_DOCTOR.search(text):
+        return "doctor"
+    return "ask"
+
+
 # "O'ylab ko'raman", "qimmat ekan": not yet -- the number is asked, once.
 _HESITATE = re.compile(
     r"o['‘ʻ’`]?ylab|keyinroq|keyin\s+(?:yozaman|o['‘ʻ’`]?zim|bog['‘ʻ’`]?lanaman)|qimmat|"
@@ -746,7 +771,11 @@ def plan_intake(
         (
             max(i - 1, 0)
             for i, turn in enumerate(turns)
-            if turn.get("role") == "assistant" and _said(flow, "ask_name", [turn["content"]])
+            if turn.get("role") == "assistant"
+            and any(
+                _said(flow, key, [turn["content"]])
+                for key in ("ask_name", "who_choice", "admin_busy", "doctor_consult")
+            )
         ),
         None,
     )
@@ -780,6 +809,8 @@ def plan_intake(
         or next((t for t in patient_since if _COMPLAINT.search(t)), None)
         or patient_since[0]
     )
+    if contact_wish(complaint) and not _COMPLAINT.search(complaint):
+        complaint = ""
     reason = " ".join(complaint.split()[:12]) or texts["default_reason"]
     question = u.question
     asks_price = u.asks_price and not _NOT_OUR_PRICE.search(message)
@@ -830,7 +861,10 @@ def plan_intake(
             # A bare "16:00" reads as "16:00 da" / "в 16:00".
             when = texts.get("at_clock", "{t}").format(t=when.strip())
         text = texts["confirm"].format(name_part=name_part(), when=when, shown=phone)
-        return Plan(reply=f"{text} [[CALLBACK:{phone}|{reason} -- 50% oldindan|{when}]]")
+        note = f"{reason} -- 50% oldindan"
+        if said["admin_busy"]:
+            note = f"ADMINISTRATOR BILAN GAPLASHMOQCHI -- {reason}"
+        return Plan(reply=f"{text} [[CALLBACK:{phone}|{note}|{when}]]")
 
     def foreign(found: phone_check.Phone, said_now: str) -> Plan:
         app = u.messenger
@@ -957,18 +991,32 @@ def plan_intake(
             for t in patient_since
         )
 
-    def wants_person() -> bool:
-        """Asked for the doctor, the administrator or a number: their own number
-        is taken after the complaint, and passed on."""
-        return bool(_said(flow, "contact_answer", since)) or any(
-            (_WANTS_PERSON.search(t) or _CONTACT.search(t)) and phone_check.read(t) is None
-            for t in patient_since
-        )
-
     def next_after_complaint(place: str | None, abroad: bool = False) -> str:
-        if wants_person() and not phone_given():
-            return str(texts["contact_phone"])
+        # Asked for the doctor: talking to the doctor is the consultation
+        # (2026-11-07 tasks), booked here like any other.
         return choice(place, abroad)
+
+    def doctor_path() -> str:
+        """To talk to the doctor is to book the consultation, half paid ahead;
+        then the next of name, place, complaint."""
+        named = given_name()
+        place = known_place()
+        if not named and not said["ask_name"]:
+            step = texts["ask_name"]
+        elif not place:
+            step = texts["ask_place_named"].format(name=named) if named else texts["ask_place"]
+        elif not complaint_known():
+            step = texts["ask_topic"]
+        else:
+            step = choice(place, abroad_said())
+        return f"{texts['doctor_consult']} {step}"
+
+    def contact_reply(wish: str) -> str:
+        if wish == "admin":
+            return str(texts["admin_busy"])
+        if wish == "doctor":
+            return doctor_path()
+        return str(texts["who_choice"])
 
     def after_place(place: str, abroad: bool = False) -> Plan:
         if not complaint_known():
@@ -1000,10 +1048,9 @@ def plan_intake(
                     if known_place()
                     else texts["ask_place_named"].format(name=named)
                 )
-            if (_CONTACT.search(message) or _WANTS_PERSON.search(message)) and phone_check.read(
-                message
-            ) is None:
-                body = f"{texts['contact_answer']} {body}"
+            wish = contact_wish(message)
+            if wish:
+                body = contact_reply(wish)
             elif question and not asks_price and not u.greeting_only:
                 return Plan(prefix=lead, then=body, instruction=INSTRUCTION)
             plan_body = f"{lead} {bubbles.MARKER} {body}" if lead else body
@@ -1012,6 +1059,11 @@ def plan_intake(
         if early is not None and early.reply is not None:
             # All of it in one message: complaint, number, time.
             body = f"{texts['handles']} {early.reply}"
+            return Plan(reply=f"{lead} {bubbles.MARKER} {body}" if lead else body)
+        wish = contact_wish(message)
+        if wish:
+            # "Prostatit bor, doktor raqamini bering": who, then the sequence.
+            body = f"{texts['handles']} {contact_reply(wish)}"
             return Plan(reply=f"{lead} {bubbles.MARKER} {body}" if lead else body)
         named = given_name()
         place = known_place()
@@ -1069,15 +1121,38 @@ def plan_intake(
         }[found.kind]
         return Plan(reply=texts[key].format(shown=found.shown))
 
+    if pending == "who_choice":
+        # "Doktor bilan" / "admin bilan": the answer to who.
+        wish = contact_wish(message) or (
+            "admin"
+            if _ASKS_ADMIN.search(message)
+            else "doctor" if _ASKS_DOCTOR.search(message) else None
+        )
+        if wish in ("admin", "doctor"):
+            return Plan(reply=contact_reply(wish))
+        if phone_check.read(message) is not None:
+            # A number straight away: the administrator rings.
+            pending = "admin_busy"
+            said["admin_busy"] = 1
+        elif said["who_choice"] < 2 and not named_complaint(message):
+            return Plan(reply=texts["who_choice"])
+        else:
+            return Plan(reply=doctor_path())
+    wish = contact_wish(message)
     if (
-        pending in ("ask_name", "ask_place", "ask_topic")
-        and (_CONTACT.search(message) or _WANTS_PERSON.search(message))
-        and phone_check.read(message) is None
-        and said[pending] < 2
+        pending in ("ask_name", "ask_place", "ask_topic", "online_choice", "offer_slots")
+        and wish
+        and _said(flow, "who_choice", since) + _said(flow, "doctor_consult", since) < 3
     ):
-        # "Doktor raqamini bering" again: the same answer, the same step -- no
-        # number, and not the model's own wording of the question twice over.
-        return Plan(reply=f"{texts['contact_answer']} {texts[pending]}")
+        # "Doktor raqamini bering", "admin bilan gaplashsam": who, or that
+        # person's way -- never a number, and never taken for a name.
+        if wish == "doctor" and pending in ("ask_name", "ask_place", "ask_topic"):
+            if _said(flow, "doctor_consult", since):
+                return Plan(reply=texts[pending])
+            return Plan(reply=f"{texts['doctor_consult']} {texts[pending]}")
+        if wish == "doctor" and _said(flow, "doctor_consult", since):
+            return Plan(reply=choice(known_place(), abroad_said()))
+        return Plan(reply=contact_reply(wish))
 
     # --- asked for the doctor: their number after the complaint, passed on ---
     if pending == "contact_phone":
@@ -1254,6 +1329,7 @@ def plan_intake(
     # moves straight on to the time and the call.
     early = take_phone()
     callable_steps = (
+        "admin_busy",
         "ask_name",
         "ask_place",
         "online_choice",
@@ -1368,9 +1444,20 @@ def plan_intake(
             )
             return Plan(then=again, instruction=INSTRUCTION)
         if said[pending] < 2:
-            again = texts["ask_phone_again"] if pending == "ask_phone" else texts[pending]
+            again = (
+                texts["ask_phone_again"]
+                if pending in ("ask_phone", "admin_busy")
+                else texts[pending]
+            )
         else:
-            if pending in ("ask_phone", "ask_topic", "contact_phone", "hesitate_ask"):
+            if pending in (
+                "ask_phone",
+                "ask_topic",
+                "contact_phone",
+                "hesitate_ask",
+                "admin_busy",
+                "who_choice",
+            ):
                 return None
             again = {
                 "ask_name": texts["ask_place"],
@@ -1404,7 +1491,7 @@ def plan_intake(
             # "Prostatit bor" in answer to "qayerdansiz?": taken, the place asked again.
             return Plan(reply=f"{texts['handles']} {texts['ask_place']}", card_topic=card_topic)
         return after_place(message, abroad=abroad_said())
-    if pending == "ask_phone":
+    if pending in ("ask_phone", "admin_busy"):
         if said["ask_phone"] >= 2:
             return None
         return Plan(reply=texts["ask_phone_again"])

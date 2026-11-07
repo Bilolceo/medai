@@ -107,3 +107,12 @@ def test_kazakh_spelling_of_enlargement_brings_the_cards() -> None:
         "op:ligamentotomiya",
         "op:kompleks",
     ]
+
+
+def test_operation_prices_asked_without_a_name_bring_all_the_cards() -> None:
+    assert len(_asked("Operatsiya narxlari qancha?")) == 7
+    assert len(_asked("Операция нархи қанча?")) == 7
+    assert _asked("Operatsiya qilasizlarmi?") == []
+    assert _asked("Varikotsele operatsiyasi narxi qancha?") == ["op:varikosele"]
+    sent = [f"📎 {c['title']}" for c in CARDS if str(c.get("topic", "")).startswith("op:")]
+    assert _asked("Operatsiya narxi qancha?", [" ".join(sent)]) == []

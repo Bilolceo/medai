@@ -49,6 +49,15 @@ VISIT = (
     "Klinikaga kelib qabulga yozilasizmi yoki doktor bilan onlayn videoqo'ng'iroqda "
     "konsultatsiya olasizmi?"
 )
+WHO = "Siz doktor bilan gaplashmoqchimisiz yoki administrator bilanmi?"
+DOCTOR_CONSULT = (
+    "Doktor bilan muloqot qilish uchun konsultatsiyaga yozilish kerak, konsultatsiya uchun "
+    "50% oldindan to'lov qilinadi. Shu yerning o'zida yozib qo'yaman."
+)
+ADMIN_BUSY = (
+    "Hozir administratorlarimizda vaqt biroz tig'iz. Raqamingizni qoldiring va sizga qaysi "
+    "vaqt qulay ekanini yozing -- administratorimiz o'zi qayta bog'lanadi."
+)
 INTRO = "Va alaykum assalom. Men doktor Sultonbekning administratoriman, ismim Dildora."
 
 
@@ -70,7 +79,7 @@ def test_a_greeting_is_answered_with_the_name_question() -> None:
 def test_how_to_reach_the_doctor_is_answered_with_the_booking_not_the_numbers() -> None:
     replies = _talk(["Doktor bilan qanday bog'lansam bo'ladi?"])
     last = bubbles.parts(replies[0])[-1]
-    assert last == f"Doktor bilan konsultatsiyaga shu yerning o'zida yozib qo'yaman. {NAME}"
+    assert last == f"{DOCTOR_CONSULT} {NAME}"
     assert "+998" not in replies[0]
 
 
@@ -510,37 +519,52 @@ def test_a_foreign_number_at_payment_is_marked_for_telegram() -> None:
     assert "ONLAYN (chet el raqami: Telegram/WhatsApp)" in replies[5]
 
 
-# --- asked for the doctor: name, place, complaint, then their number ---
+# --- asked for a number: the doctor (the consultation) or the administrator ---
 
 
-def test_wanting_the_doctor_takes_the_number_after_the_complaint_and_passes_it_on() -> None:
-    replies = _talk(
-        [
-            "Doktor bilan gaplashmoqchiman",
-            "Akmal",
-            "Toshkent",
-            "prostatit bor",
-            "+998 90 123 45 67",
-        ]
-    )
-    assert bubbles.parts(replies[0])[-1] == (
-        f"Doktor bilan konsultatsiyaga shu yerning o'zida yozib qo'yaman. {NAME}"
-    )
-    assert replies[3] == (
-        f"{HANDLES} Telefon raqamingizni yozing, ma'lumotlaringizni doktorga uzataman."
-    )
-    thanks, step = bubbles.parts(replies[4])
-    assert thanks.startswith("Rahmat, Akmal, ma'lumotlaringizni doktorga uzatdim.")
-    assert "[[CALLBACK:+998 90 123 45 67|DOKTOR BILAN GAPLASHMOQCHI -- prostatit bor|" in thanks
-    assert step == VISIT
+def test_asking_for_a_number_asks_whether_the_doctor_or_the_administrator() -> None:
+    replies = _talk(["Raqamingizni bering"])
+    assert bubbles.parts(replies[0])[-1] == WHO
+    assert "+998" not in replies[0]
 
 
-def test_wanting_the_doctor_without_a_number_still_gets_the_consultation() -> None:
-    replies = _talk(
-        ["Doktor raqamini bering", "Akmal", "Samarqand", "prostatit", "raqam bermayman"]
-    )
-    assert replies[3].endswith("ma'lumotlaringizni doktorga uzataman.")
-    assert replies[4] == ONLINE
+def test_the_doctor_is_the_consultation_half_paid_ahead_then_the_sequence() -> None:
+    replies = _talk(["Raqam bering", "doktor bilan", "Akmal", "Samarqand", "prostatit bor"])
+    assert replies[1] == f"{DOCTOR_CONSULT} {NAME}"
+    assert replies[2] == place("Akmal")
+    assert replies[3] == TOPIC
+    assert replies[4] == f"{HANDLES} {ONLINE}"
+
+
+def test_wanting_the_doctor_said_outright_needs_no_question() -> None:
+    replies = _talk(["Doktor bilan gaplashmoqchiman", "Akmal", "Toshkent", "prostatit bor"])
+    assert bubbles.parts(replies[0])[-1] == f"{DOCTOR_CONSULT} {NAME}"
+    assert replies[3] == f"{HANDLES} {VISIT}"
+
+
+def test_the_administrator_is_busy_and_rings_back_at_the_patients_time() -> None:
+    replies = _talk(["Telefon raqam bering", "administrator bilan", "90 123 45 67", "ertaga 11 da"])
+    assert replies[1] == ADMIN_BUSY
+    assert replies[2] == "Qaysi vaqtda qo'ng'iroq qilsak qulay?"
+    assert replies[3].startswith("Rahmat. Operatorimiz ertaga 11 da +998 90 123 45 67")
+    assert "[[CALLBACK:+998 90 123 45 67|ADMINISTRATOR BILAN GAPLASHMOQCHI" in replies[3]
+
+
+def test_the_administrator_asked_outright_with_number_and_time() -> None:
+    replies = _talk(["Admin bilan gaplashsam bo'ladimi", "+998 90 123 45 67, soat 15 da"])
+    assert bubbles.parts(replies[0])[-1] == ADMIN_BUSY
+    assert "[[CALLBACK:+998 90 123 45 67|ADMINISTRATOR BILAN GAPLASHMOQCHI" in replies[1]
+
+
+def test_a_number_asked_mid_sequence_asks_who() -> None:
+    replies = _talk(["Prostatit bor", "Akmal", "admin raqamini bering"])
+    assert replies[2] == ADMIN_BUSY
+
+
+def test_asking_who_in_russian() -> None:
+    replies = _talk(["Дайте номер телефона", "с доктором"], "ru")
+    assert bubbles.parts(replies[0])[-1] == "Вы хотите поговорить с доктором или с администратором?"
+    assert replies[1].startswith("Чтобы поговорить с доктором, нужно записаться на консультацию")
 
 
 def test_a_hesitant_patient_is_asked_for_the_number_once() -> None:
@@ -566,9 +590,10 @@ def test_a_hesitant_no_without_a_number_is_left_to_the_model() -> None:
     assert replies[4] == "<model>"
 
 
-def test_asking_for_the_number_again_gets_the_same_answer_and_step() -> None:
+def test_asking_for_the_number_again_gets_the_same_step() -> None:
     replies = _talk(["Doktor bilan qanday bog'lansam bo'ladi?", "Doktor raqamini bering"])
-    assert replies[1] == f"Doktor bilan konsultatsiyaga shu yerning o'zida yozib qo'yaman. {NAME}"
+    assert replies[1].endswith(NAME)
+    assert "+998" not in replies[1]
 
 
 def test_a_gynaecological_question_is_answered_without_promising_a_gynaecologist() -> None:
@@ -684,7 +709,7 @@ def test_a_date_of_birth_is_not_a_phone_number() -> None:
 
 
 def test_a_greeting_for_the_name_asks_the_name_again() -> None:
-    replies = _talk(["Siz bn qanday bogʻlansam boladi", "Ассаламу алейкум"])
+    replies = _talk(["Doktor bn qanday bogʻlansam boladi", "Ассаламу алейкум"])
     assert replies[1] == NAME
 
 

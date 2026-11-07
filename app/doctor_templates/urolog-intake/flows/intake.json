@@ -57,7 +57,10 @@
       "price_answer": "Konsultatsiya narxi {price} -- onlayn ham, klinikada ham bir xil. Yozilish uchun 50% -- {prepay} oldindan to'lanadi.",
       "price_answer_evening": "Kechki onlayn konsultatsiya narxi {price}. Yozilish uchun 50% -- {prepay} oldindan to'lanadi.",
       "op_first_consult": "Operatsiya kerakligi va usulini doktor ko'rikda aniqlaydi -- avval konsultatsiya, <<ONLINE_PRICE>>.",
-      "address": "Manzil: <<ADDRESS>>."
+      "address": "Manzil: <<ADDRESS>>.",
+      "who_choice": "Siz doktor bilan gaplashmoqchimisiz yoki administrator bilanmi?",
+      "doctor_consult": "Doktor bilan muloqot qilish uchun konsultatsiyaga yozilish kerak, konsultatsiya uchun 50% oldindan to'lov qilinadi. Shu yerning o'zida yozib qo'yaman.",
+      "admin_busy": "Hozir administratorlarimizda vaqt biroz tig'iz. Raqamingizni qoldiring va sizga qaysi vaqt qulay ekanini yozing -- administratorimiz o'zi qayta bog'lanadi."
     },
     "uz-cyrl": {
       "greet_back": "Ва алайкум ассалом.",
@@ -113,7 +116,10 @@
       "price_answer": "Консультация нархи {price} -- онлайн ҳам, клиникада ҳам бир хил. Ёзилиш учун 50% -- {prepay} олдиндан тўланади.",
       "price_answer_evening": "Кечки онлайн консультация нархи {price}. Ёзилиш учун 50% -- {prepay} олдиндан тўланади.",
       "op_first_consult": "Операция кераклиги ва усулини доктор кўрикда аниқлайди -- аввал консультация, <<ONLINE_PRICE_CYR>>.",
-      "address": "Манзил: <<ADDRESS_CYR>>."
+      "address": "Манзил: <<ADDRESS_CYR>>.",
+      "who_choice": "Сиз доктор билан гаплашмоқчимисиз ёки администратор биланми?",
+      "doctor_consult": "Доктор билан мулоқот қилиш учун консультацияга ёзилиш керак, консультация учун 50% олдиндан тўлов қилинади. Шу ернинг ўзида ёзиб қўяман.",
+      "admin_busy": "Ҳозир администраторларимизда вақт бироз тиғиз. Рақамингизни қолдиринг ва сизга қайси вақт қулай эканини ёзинг -- администраторимиз ўзи қайта боғланади."
     },
     "ru": {
       "greet_back": "Здравствуйте.",
@@ -169,7 +175,10 @@
       "price_answer": "Консультация стоит {price} -- онлайн и в клинике одинаково. Для записи вносится предоплата 50% -- {prepay}.",
       "price_answer_evening": "Вечерняя онлайн-консультация стоит {price}. Для записи вносится предоплата 50% -- {prepay}.",
       "op_first_consult": "Нужна ли операция и какая, доктор определит на консультации -- сначала консультация, <<ONLINE_PRICE_RU>>.",
-      "address": "Адрес: <<ADDRESS_RU>>."
+      "address": "Адрес: <<ADDRESS_RU>>.",
+      "who_choice": "Вы хотите поговорить с доктором или с администратором?",
+      "doctor_consult": "Чтобы поговорить с доктором, нужно записаться на консультацию, за неё вносится предоплата 50%. Записать вас можно прямо здесь.",
+      "admin_busy": "Сейчас администраторы немного заняты. Оставьте ваш номер и напишите, в какое время вам удобно, -- администратор сам перезвонит вам."
     }
   },
   "prices": {
