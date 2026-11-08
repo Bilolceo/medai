@@ -778,3 +778,39 @@ def test_the_sequence_is_finished_after_the_payment_is_confirmed() -> None:
         ]
     assert scripted_flow.finished(FLOWS, history)
     assert not scripted_flow.finished(FLOWS, history[:4])
+
+
+def test_wanting_the_doctor_is_no_complaint_so_the_complaint_is_still_asked() -> None:
+    replies = _talk(["Doktor bilan gaplashmoqchiman", "Akmal", "Toshkent", "prostatit bor"])
+    assert HANDLES not in replies[0]
+    assert replies[2] == TOPIC
+    assert replies[3] == f"{HANDLES} {VISIT}"
+
+
+def test_no_number_for_the_administrator_goes_on_with_the_sequence() -> None:
+    replies = _talk(["Administrator bilan gaplashsam bo'ladimi?", "Bobur", "Samarqand", "ereksiya"])
+    assert replies[1] == place("Bobur")
+    assert replies[2] == TOPIC
+    assert replies[3] == f"{HANDLES} {ONLINE}"
+
+
+def test_a_refused_number_for_the_administrator_then_the_whole_sequence() -> None:
+    replies = _talk(
+        ["Admin bilan gaplashmoqchiman", "salom", "raqam bermayman", "Sardor", "Buxoro"]
+    )
+    assert replies[1] == "Telefon raqamingizni yozing, operatorimiz bog'lanadi."
+    assert replies[2] == NAME
+    assert replies[3] == place("Sardor")
+    assert replies[4] == TOPIC
+
+
+def test_no_number_at_the_choice_after_the_administrator_is_the_choice_still() -> None:
+    replies = _talk(
+        ["Administrator bilan gaplashsam bo'ladimi?", "Bobur", "Samarqand", "ereksiya", "ha"]
+    )
+    assert replies[4].startswith("Dushanba") or "bo'sh vaqt" in replies[4]
+
+
+def test_raqam_bermayman_is_a_no_not_a_request_for_a_number() -> None:
+    assert scripted_flow.contact_wish("raqam bermayman") is None
+    assert scripted_flow.contact_wish("raqamingizni bering") == "ask"

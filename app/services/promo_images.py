@@ -59,6 +59,8 @@ _WANTS_VISIT = re.compile(
     r"запис|приём|прием|консульт|позвон",
     re.IGNORECASE,
 )
+
+
 def wants_evening(text: str) -> bool:
     """Does the patient speak of the evening -- "kechqurun", "soat 20 da"?"""
     return bool(_EVENING.search(text))

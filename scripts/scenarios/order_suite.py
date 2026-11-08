@@ -392,7 +392,12 @@ CARD = re.compile(r"9860 1501")
 HALF = re.compile(r"50%|50 foiz|ярм|yarm|половин")
 DAY_PRICE = re.compile(r"330 000")
 OK_SUMS = re.compile(r"330 000|165 000|990 000|495 000|\d{1,2} \d00 000 000|\d{1,2} 000 000")
-PASS_ON = re.compile(r"(?i)doktorga uzataman|докторга узатаман|передам ваши данные доктору")
+# Asked for the doctor or the administrator (2026-11-08): the consultation
+# with 50% ahead, or the administrator's call-back -- never a number given.
+PASS_ON = re.compile(
+    r"(?i)konsultatsiyaga yozilish kerak|консультацияга ёзилиш керак|нужно записаться на консультацию|"
+    r"vaqt biroz tig'iz|вақт бироз тиғиз|администраторы немного заняты"
+)
 SUMS = re.compile(r"\b\d{2,3}\s?000\b")
 
 
@@ -432,7 +437,7 @@ def check(tags: set[str], replies: list[str]) -> list[str]:
     if "noop" in tags and "sultonbek-op-" in joined:
         flags.append("OPERATION_CARD_UNASKED")
     if "person" in tags and not PASS_ON.search(joined):
-        flags.append("PERSON_NUMBER_NOT_ASKED")
+        flags.append("PERSON_PATH_MISSING")
     for key, rx in (("name", ASK_NAME), ("place", ASK_PLACE), ("topic", ASK_TOPIC)):
         n = sum(1 for r in replies if rx.search(r))
         if n >= 3:

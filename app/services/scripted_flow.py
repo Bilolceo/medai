@@ -425,6 +425,10 @@ _ASKS_ADMIN = re.compile(r"admin|operator|админ|оператор", re.IGNOR
 _ASKS_DOCTOR = re.compile(
     r"doktor|doxtir|vrach|shifokor|sultonbek|доктор|врач|шифокор|султонбек", re.IGNORECASE
 )
+_NO_NUMBER = re.compile(
+    r"berma|bermay|qoldirma|yozma(?:yman|y)|kerak\s*emas|бермай|берма|қолдирма|не\s*(?:дам|хочу|буду)",
+    re.IGNORECASE,
+)
 # "Karta raqami": the payment, not a contact.
 _CARD_NUMBER = re.compile(r"karta|карт", re.IGNORECASE)
 
@@ -433,6 +437,9 @@ def contact_wish(text: str) -> str | None:
     """Asked for a number or a person: "admin", "doctor", or "ask" (which one
     is not said); None for anything else."""
     if phone_check.read(text) is not None or _CARD_NUMBER.search(text):
+        return None
+    if _NO_NUMBER.search(text):
+        # "Raqam bermayman": a no, not a request for a number.
         return None
     if not (_CONTACT.search(text) or _WANTS_PERSON.search(text)):
         return None
@@ -928,6 +935,25 @@ def plan_intake(
     ):
         # Times offered again after a booking line: choosing among them again.
         pending = "offer_slots"
+    if pending in ("admin_busy", "ask_phone") and said["admin_busy"] and since:
+        # Back in the doctor's sequence after the administrator's line: the
+        # step just asked is the one answered.
+        aliases = {
+            "ask_place": ("ask_place_named",),
+            "online_choice": ("visit_choice", "choice_again"),
+            "offer_slots": ("slot_taken", "day_full", "offer_evening"),
+        }
+        last_step = next(
+            (
+                key
+                for key in reversed(_INTAKE_STEPS)
+                if key not in ("admin_busy", "ask_phone", "who_choice")
+                and any(_said(flow, k, since[-1:]) for k in (key, *aliases.get(key, ())))
+            ),
+            None,
+        )
+        if last_step is not None:
+            pending = last_step
 
     def named_complaint(text: str) -> bool:
         if sport_words.search(text) or promo_images.OPERATION_NAMES.search(text):
@@ -999,9 +1025,13 @@ def plan_intake(
     def doctor_path() -> str:
         """To talk to the doctor is to book the consultation, half paid ahead;
         then the next of name, place, complaint."""
+        return f"{texts['doctor_consult']} {sequence_step()}"
+
+    def sequence_step() -> str:
+        """The next of name, place, complaint -- or the choice."""
         named = given_name()
         place = known_place()
-        if not named and not said["ask_name"]:
+        if not named and not said["ask_name"] and not name_part():
             step = texts["ask_name"]
         elif not place:
             step = texts["ask_place_named"].format(name=named) if named else texts["ask_place"]
@@ -1009,7 +1039,7 @@ def plan_intake(
             step = texts["ask_topic"]
         else:
             step = choice(place, abroad_said())
-        return f"{texts['doctor_consult']} {step}"
+        return str(step)
 
     def contact_reply(wish: str) -> str:
         if wish == "admin":
@@ -1063,7 +1093,11 @@ def plan_intake(
         wish = contact_wish(message)
         if wish:
             # "Prostatit bor, doktor raqamini bering": who, then the sequence.
-            body = f"{texts['handles']} {contact_reply(wish)}"
+            # "Doktor bilan gaplashmoqchiman" is no complaint, whatever the
+            # model read into it (mock run, 2026-11-08).
+            body = contact_reply(wish)
+            if _COMPLAINT.search(message) or promo_images.OPERATION_NAMES.search(message):
+                body = f"{texts['handles']} {body}"
             return Plan(reply=f"{lead} {bubbles.MARKER} {body}" if lead else body)
         named = given_name()
         place = known_place()
@@ -1138,6 +1172,29 @@ def plan_intake(
             return Plan(reply=texts["who_choice"])
         else:
             return Plan(reply=doctor_path())
+    if (
+        pending in ("admin_busy", "ask_phone")
+        and said["admin_busy"]
+        and phone_check.read(message) is None
+        and not question
+    ):
+        # No number for the administrator: asked once more, then -- or on a
+        # no, a name, or a complaint -- on with the doctor's sequence.
+        complaint_now = named_complaint(message)
+        words = message.split()
+        if (
+            len(words) == 1
+            and not complaint_now
+            and _NAME_WORD.match(words[0].strip(".,!"))
+            and not known_place()
+            and not _GREETING.search(message)
+        ):
+            # "Bobur": the name, so the place next.
+            return Plan(reply=texts["ask_place_named"].format(name=_cap(words[0].strip(".,!"))))
+        if said["ask_phone"] or u.refuses or complaint_now:
+            step = sequence_step()
+            return Plan(reply=f"{texts['handles']} {step}" if complaint_now else step)
+        return Plan(reply=texts["ask_phone_again"])
     wish = contact_wish(message)
     if (
         pending in ("ask_name", "ask_place", "ask_topic", "online_choice", "offer_slots")
@@ -1199,8 +1256,11 @@ def plan_intake(
             return bad_number(found)
         return None
     hesitant = (
-        _HESITATE.search(message) or (u.refuses and _REFUSE.search(message))
-    ) and not _PAID.search(message)
+        (_HESITATE.search(message) or (u.refuses and _REFUSE.search(message)))
+        and not _PAID.search(message)
+        # "Raqam bermayman": the number is refused, so not asked for again.
+        and not (_CONTACT.search(message) and _NO_NUMBER.search(message))
+    )
     if (
         pending in ("online_choice", "offer_slots", "book_ok")
         and hesitant
