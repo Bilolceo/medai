@@ -814,3 +814,43 @@ def test_no_number_at_the_choice_after_the_administrator_is_the_choice_still() -
 def test_raqam_bermayman_is_a_no_not_a_request_for_a_number() -> None:
     assert scripted_flow.contact_wish("raqam bermayman") is None
     assert scripted_flow.contact_wish("raqamingizni bering") == "ask"
+
+
+def test_the_choice_asked_twice_takes_the_latest_answer() -> None:
+    # Mock run 2026-11-09: the choice, a question about operation prices, the
+    # choice again with the cards, "klinikaga" -- booked online by mistake.
+    history = [
+        {"role": "user", "content": "Akmal"},
+        {"role": "assistant", "content": "Akmal, qayerdansiz: Toshkentdanmisiz yoki viloyatdanmi?"},
+        {"role": "user", "content": "Toshkent"},
+        {"role": "assistant", "content": TOPIC},
+        {"role": "user", "content": "ereksiya muammosi"},
+        {"role": "assistant", "content": f"{HANDLES} {VISIT}"},
+        {"role": "user", "content": "Operatsiya narxlari qancha?"},
+        {
+            "role": "assistant",
+            "content": "Operatsiya narxi va paketi rasmda. "
+            "Onlayn konsultatsiyaga yozib qo'yaymi yoki klinikaga kelasizmi?",
+        },
+        {"role": "user", "content": "klinikaga"},
+        {"role": "assistant", "content": "Bugun 14:00 va 15:30 da bo'sh vaqtlar bor."},
+    ]
+    plan = scripted_flow.plan(
+        FLOWS, script="uz-latn", user_message="bugun 14:00", history=history, now=NOW, slots=SLOTS
+    )
+    assert plan is not None and plan.reply is not None
+    assert "klinikaga" in plan.reply.split("|||")[0].lower()
+    assert "onlayn" not in plan.reply.split("|||")[0].lower()
+
+
+def test_a_complaint_with_a_question_is_not_asked_again() -> None:
+    replies = _talk(["Руслан", "Я в Москве", "варикоцеле, сколько стоит операция?"], "ru")
+    assert "С какой проблемой" not in replies[2]
+    assert replies[2].endswith("Записать вас на онлайн-консультацию?")
+
+
+def test_a_complaint_with_no_in_it_is_not_a_refusal() -> None:
+    replies = _talk(["Salom", "Jasur", "Rossiyadaman", "ereksiya yo'q"])
+    assert replies[3] == f"{HANDLES} {ONLINE}"
+    replies = _talk(["Salom", "Jasur", "Rossiyadaman", "prostatit", "ereksiya ham yo'q"])
+    assert replies[4] == f"{HANDLES} {ONLINE}"

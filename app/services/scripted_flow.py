@@ -967,8 +967,10 @@ def plan_intake(
         return bool(_COMPLAINT.search(_JUST_A_VISIT.sub(" ", text)))
 
     def answer_after(*keys: str) -> str | None:
-        """The patient's message right after the bot's line for one of these steps."""
-        for i, turn in enumerate(since_turns):
+        """The patient's message right after the bot's latest line for one of these
+        steps: asked twice, the second answer counts ("klinikaga" after the card)."""
+        for i in range(len(since_turns) - 1, -1, -1):
+            turn = since_turns[i]
             if turn.get("role") == "assistant" and any(
                 _said(flow, key, [turn["content"]]) for key in keys
             ):
@@ -1255,6 +1257,18 @@ def plan_intake(
         if found is not None:
             return bad_number(found)
         return None
+    if (
+        pending == "online_choice"
+        and named_complaint(message)
+        and not question
+        and not _WANTS_VISIT.search(message)
+        and not _WANTS_ONLINE.search(message)
+        and parse_time(message) is None
+        and phone_check.read(message) is None
+    ):
+        # "Ereksiya yo'q" after the offer: the complaint, not a no.
+        place = answer_after("ask_place", "ask_place_named") or known_place()
+        return Plan(reply=f"{texts['handles']} {choice(place)}", card_topic=card_topic)
     hesitant = (
         (_HESITATE.search(message) or (u.refuses and _REFUSE.search(message)))
         and not _PAID.search(message)
@@ -1376,7 +1390,8 @@ def plan_intake(
     ):
         return offer_slots()
 
-    if pending == "ask_topic" and not question and not u.refuses:
+    if pending == "ask_topic" and not question and (not u.refuses or named_complaint(message)):
+        # "Ereksiya yo'q" is the complaint, not a no.
         place = answer_after("ask_place", "ask_place_named") or known_place()
         return Plan(
             reply=f"{texts['handles']} {next_after_complaint(place)}", card_topic=card_topic
@@ -1488,6 +1503,11 @@ def plan_intake(
     if u.refuses and not question:
         # "Yo'q", "keyin o'zim yozaman": respected, by the model, once.
         return None
+    if question and pending == "ask_topic" and named_complaint(message):
+        # "Varikotsele, operatsiya qancha?": the complaint is given with the
+        # question, so the model answers and the next step follows.
+        place = answer_after("ask_place", "ask_place_named") or known_place()
+        return Plan(then=next_after_complaint(place), instruction=INSTRUCTION)
     if question:
         # The model answers; the step's question follows -- twice at most,
         # then the next step's, so a patient full of questions is not asked
