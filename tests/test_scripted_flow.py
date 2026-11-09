@@ -214,8 +214,8 @@ def test_the_name_given_with_the_complaint_is_not_asked_again() -> None:
         {"role": "user", "content": "Asalomu alekum"},
         {
             "role": "assistant",
-            "content": "Va alaykum assalom. Men doktor Sultonbekning administratoriman, ismim D.\n\n"
-            "Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?",
+            "content": "Va alaykum assalom. Men doktor Sultonbekning administratoriman, "
+            "ismim D.\n\nIsmingiz nima, sizga qanday murojaat qilsam bo'ladi?",
         },
     ]
     plan = scripted_flow.plan_libido(
