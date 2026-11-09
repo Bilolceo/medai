@@ -184,3 +184,33 @@ def test_a_complaint_in_everyday_words_brings_its_card() -> None:
 def test_everyday_words_with_no_operation_bring_none() -> None:
     for message in ("Xohishim yo'q", "Moyagim og'riyapti", "Siydik tez-tez", "Salom"):
         assert _asked(message) == [], message
+
+
+SPORT_CARDS = build_settings(
+    "urolog-intake",
+    {**FACTS, **OPS, **PRICES, "PROMO_SPORT_URL": "https://example.test/promo/sport.jpg"},
+)["promo_images"]
+
+
+def _sport(message: str, own: list[str] | None = None) -> list[str]:
+    found = promo_images.operations_asked(SPORT_CARDS, user_message=message, own_turns=own or [])
+    return [str(c["topic"]) for c in found]
+
+
+def test_steroids_and_hormones_bring_their_card_once() -> None:
+    assert _sport("Steroid ishlatganman") == ["sport"]
+    assert _sport("Gormonlarim buzildi") == ["sport"]
+    assert _sport("Testosteron past chiqdi") == ["sport"]
+    assert _sport("После курса проблемы") == ["sport"]
+    sent = [promo_images.sent_line("Anabolik steroidlar va gormonal muammolar: konsultatsiya")]
+    assert _sport("Steroid ishlatganman", sent) == []
+
+
+def test_the_steroid_card_has_no_operation_note() -> None:
+    card = [c for c in SPORT_CARDS if c["topic"] == "sport"]
+    reply = promo_images.attach_operations("Ismingiz nima?", card)
+    assert "Operatsiya" not in reply
+
+
+def test_a_dollar_course_is_not_a_steroid_course() -> None:
+    assert _sport("Dollar kursi qancha?") == []

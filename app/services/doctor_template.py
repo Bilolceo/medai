@@ -78,6 +78,31 @@ def _derived(facts: dict[str, str]) -> dict[str, str]:
     admin = to_cyrillic(facts["ADMIN_NAME"]) if "ADMIN_NAME" in facts else ""
     out["ADMIN_NAME_PART_CYR"] = f", исмим {admin}" if admin else ""
     out["ADMIN_NAME_PART_RU"] = f", меня зовут {admin}" if admin else ""
+    # Steroids and hormones: with their own price (Dr Sultonbek's card,
+    # 2026-11-09) a daytime consultation, online or in the clinic, the evening
+    # still there; without one, the evening online consultation only.
+    if "SPORT_PRICE" in facts and "SPORT_PREPAY" in facts:
+        sport = (
+            "Sport farmakologiyasi va gormonal muammolar (steroid, anabolik, testosteron, "
+            f"gormon) -- kunduzgi 2 bosqichli konsultatsiya, narxi {facts['SPORT_PRICE']}, "
+            f"50% -- {facts['SPORT_PREPAY']} oldindan; Toshkentda klinikaga yoki onlayn, "
+            "viloyat va chet elda onlayn. Bemor kechqurun xohlasa -- kechki onlayn "
+            "konsultatsiya, uning narxi alohida."
+        )
+        out["SPORT_RULE"] = sport
+        out["SPORT_RULE_SHORT"] = (
+            "sport farmakologiyasi va gormonal muammolar -- boshqa shikoyatlar kabi "
+            "(kunduzi, Toshkentda klinika yoki onlayn), narxi alohida"
+        )
+        out["SPORT_PRICE_LINE"] = (
+            f" Sport farmakologiyasi, steroid va gormonal muammolar bo'yicha kunduzgi 2 "
+            f"bosqichli konsultatsiya -- {facts['SPORT_PRICE']}, 50% -- "
+            f"{facts['SPORT_PREPAY']} oldindan."
+        )
+    else:
+        out["SPORT_RULE"] = "Sport farmakologiyasi (steroid, sport) -- faqat onlayn, kechki vaqtda."
+        out["SPORT_RULE_SHORT"] = "sport farmakologiyasi -- faqat onlayn, kechki vaqtda"
+        out["SPORT_PRICE_LINE"] = ""
     if "DOCTOR_SHORT" in facts:
         out["DOCTOR_SHORT_CYR"] = to_cyrillic(facts["DOCTOR_SHORT"])
         bare = re.sub(r"(?i)^doktor\s+", "", facts["DOCTOR_SHORT"]).strip()
@@ -88,6 +113,8 @@ def _derived(facts: dict[str, str]) -> dict[str, str]:
         "ONLINE_PREPAY",
         "EVENING_PRICE",
         "EVENING_PREPAY",
+        "SPORT_PRICE",
+        "SPORT_PREPAY",
     ):
         if key in facts:
             out[f"{key}_CYR"] = to_cyrillic(facts[key])
@@ -278,6 +305,12 @@ def build_settings(template: str, doctor: Mapping[str, Any]) -> dict[str, Any]:
         for key, topic, title in (
             ("PROMO_DAY_URL", "day", "Kunduzgi konsultatsiya: narx va tartib"),
             ("PROMO_EVENING_URL", "evening", "Kechki onlayn konsultatsiya: narx va tartib"),
+            # Steroids and hormones: sent when the patient writes about them.
+            (
+                "PROMO_SPORT_URL",
+                "sport",
+                "Anabolik steroidlar va gormonal muammolar: konsultatsiya",
+            ),
             # Operation packages: sent only when the patient names the operation.
             ("PROMO_OP_VARIKOSELE_URL", "op:varikosele", "Varikosele operatsiyasi: narx va paket"),
             ("PROMO_OP_SKROTOPLASTIKA_URL", "op:skrotoplastika", "Skrotoplastika: narx va paket"),
@@ -323,6 +356,16 @@ def build_settings(template: str, doctor: Mapping[str, Any]) -> dict[str, Any]:
     if "intake" in flows:
         # Without the consultation price card the flow says the price in words.
         flows["intake"]["price_cards"] = "PROMO_DAY_URL" in facts
+    if "intake" in flows and "SPORT_PRICE" in facts and "SPORT_PREPAY" in facts:
+        # Steroids and hormones at their own daytime price (the evening keeps its own).
+        flows["intake"].setdefault("prices", {})["sport"] = {
+            "price": facts["SPORT_PRICE"],
+            "prepay": facts["SPORT_PREPAY"],
+            "price_cyr": facts["SPORT_PRICE_CYR"],
+            "prepay_cyr": facts["SPORT_PREPAY_CYR"],
+            "price_ru": facts["SPORT_PRICE_RU"],
+            "prepay_ru": facts["SPORT_PREPAY_RU"],
+        }
     if operation_prices and "intake" in flows:
         flows["intake"]["operation_prices"] = operation_prices
     if flows:

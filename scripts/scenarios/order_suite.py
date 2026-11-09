@@ -391,7 +391,7 @@ ONLINE = re.compile(
 CARD = re.compile(r"9860 1501")
 HALF = re.compile(r"50%|50 foiz|ярм|yarm|половин")
 DAY_PRICE = re.compile(r"330 000")
-OK_SUMS = re.compile(r"330 000|165 000|990 000|495 000|\d{1,2} \d00 000 000|\d{1,2} 000 000")
+OK_SUMS = re.compile(r"330 000|165 000|990 000|495 000|500 000|250 000|\d{1,2} \d00 000 000|\d{1,2} 000 000")
 # Asked for the doctor or the administrator (2026-11-08): the consultation
 # with 50% ahead, or the administrator's call-back -- never a number given.
 PASS_ON = re.compile(
@@ -422,8 +422,7 @@ def check(tags: set[str], replies: list[str]) -> list[str]:
         flags.append("ABROAD_NO_ONLINE_OFFER")
     if "sport" in tags and DAY_PRICE.search(joined):
         flags.append("SPORT_DAY_PRICE")
-    if "sport" in tags and VISIT.search(joined):
-        flags.append("SPORT_CLINIC_CHOICE")
+    # Since 2026-11-09 steroids are seen by day too, in the clinic or online.
     for i, r in enumerate(replies):
         if CARD.search(r) and not HALF.search(r):
             flags.append(f"t{i+1}:CARD_WITHOUT_50")

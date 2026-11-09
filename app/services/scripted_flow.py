@@ -209,6 +209,18 @@ def _libido_name(message: str) -> str | None:
     return _cap(word)
 
 
+_HORMONES = r"testosteron|тестостерон|gormon|гормон"
+
+
+def _sport_words(flow: Mapping[str, Any]) -> re.Pattern[str]:
+    """Steroids and sport -- and hormones too where they share the steroid
+    consultation's own price (Dr Sultonbek's card, 2026-11-09)."""
+    words = flow.get("sport") or r"(?!x)x"
+    if "sport" in (flow.get("prices") or {}):
+        words = f"{words}|{_HORMONES}"
+    return re.compile(words, re.IGNORECASE)
+
+
 def plan_libido(
     flow: Mapping[str, Any] | None,
     *,
@@ -858,11 +870,15 @@ def plan_intake(
     reason = " ".join(complaint.split()[:12]) or texts["default_reason"]
     question = u.question
     asks_price = u.asks_price and not _NOT_OUR_PRICE.search(message)
-    sport_words = re.compile(flow.get("sport") or r"(?!x)x", re.IGNORECASE)
+    sport_words = _sport_words(flow)
     sport = (reading is not None and reading.complaint_kind == "sport") or any(
         sport_words.search(t) for t in patient_since
     )
     card_topic = "evening" if sport else "day"
+    # Steroids and hormones with their own daytime price (2026-11-09): booked like
+    # any complaint; without it, the evening online consultation only.
+    sport_day = sport and "sport" in (flow.get("prices") or {})
+    evening_only = sport and not sport_day
 
     def given_name() -> str | None:
         if u.name and reading is not None:
@@ -1040,7 +1056,7 @@ def plan_intake(
 
     def choice(place: str | None, abroad: bool = False) -> str:
         """Online or in the clinic, by where the patient is."""
-        if sport:
+        if evening_only:
             # Sport pharmacology: online only, in the evening.
             return str(texts["offer_evening"])
         place = place or ""
@@ -1105,7 +1121,7 @@ def plan_intake(
 
     def in_person() -> bool:
         """Did the patient choose to come to the clinic?"""
-        if sport:
+        if evening_only:
             return False
         chosen = answer_after("online_choice", "visit_choice", "choice_again")
         replies = [chosen] if chosen else []
@@ -1171,7 +1187,7 @@ def plan_intake(
         return entry.get("price" + suffix, ""), entry.get("prepay" + suffix, "")
 
     def offer_slots(lead: str | None = None) -> Plan:
-        if sport:
+        if evening_only:
             # Steroids and sport: the doctor sees these online, in the evening.
             return Plan(reply=texts["offer_evening"])
         free = list(slots or [])
@@ -1395,9 +1411,9 @@ def plan_intake(
         ):
             if _EVENING_WORD.search(message) and at.hour < 12:
                 at = at.replace(hour=at.hour + 12)
-            kind = "uro"
+            kind = "sport" if sport_day else "uro"
             mode = texts["mode_visit"] if in_person() else texts["mode_online"]
-            if sport and not _within(flow, at, "evening"):
+            if evening_only and not _within(flow, at, "evening"):
                 return Plan(reply=texts["offer_evening"])
             if _within(flow, at, "evening"):
                 evening_day = _named_day(message, now) or now.date() + timedelta(days=1)
@@ -1509,8 +1525,9 @@ def plan_intake(
     if asks_price and not asks_about_operation and card_sent and complaint_known():
         # The card went already; asked again ("Пули нечпул?"), the price is
         # said in words -- never the step's question alone (live chat, 2026-11-07).
-        price, prepay = price_of("evening" if sport else "uro")
-        key = "price_answer_evening" if sport else "price_answer"
+        evening = evening_only or promo_images.wants_evening(message)
+        price, prepay = price_of("evening" if evening else "sport" if sport_day else "uro")
+        key = "price_answer_evening" if evening else "price_answer"
         again = {
             "online_choice": choice_again(),
             "offer_slots": choice_again(),
@@ -1717,11 +1734,15 @@ def _price_in_words(
         return result
     texts = flow["texts"].get(script) or flow["texts"]["uz-latn"]
     patient = [t["content"] for t in history or [] if t.get("role") == "user"]
-    sport_words = re.compile(flow.get("sport") or r"(?!x)x", re.IGNORECASE)
-    evening = any(
-        sport_words.search(t) or promo_images.wants_evening(t) for t in (*patient, user_message)
+    sport_words = _sport_words(flow)
+    prices = flow.get("prices") or {}
+    sport = any(sport_words.search(t) for t in (*patient, user_message))
+    evening = any(promo_images.wants_evening(t) for t in (*patient, user_message)) or (
+        sport and "sport" not in prices
     )
-    entry = (flow.get("prices") or {}).get("evening" if evening else "uro") or {}
+    entry = prices.get("evening" if evening else "sport" if sport else "uro") or prices.get(
+        "uro", {}
+    )
     suffix = {"uz-cyrl": "_cyr", "ru": "_ru"}.get(script, "")
     price, prepay = entry.get("price" + suffix, ""), entry.get("prepay" + suffix, "")
     if not price:

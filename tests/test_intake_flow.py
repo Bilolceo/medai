@@ -887,3 +887,60 @@ def test_the_price_after_a_complaint_card_is_the_consultations() -> None:
     assert plan is not None and plan.reply is not None
     assert "30 000 000" not in plan.reply
     assert "330 000" in plan.reply
+
+
+SPORT_FACTS = {**FACTS, "SPORT_PRICE": "500 000 so'm", "SPORT_PREPAY": "250 000 so'm"}
+SPORT_FLOWS = build_settings("urolog-intake", SPORT_FACTS)["scripted_flows"]
+
+
+def _sport_book(messages: list[str]) -> list[str]:
+    history: list[dict[str, Any]] = []
+    replies: list[str] = []
+    for message in messages:
+        plan = scripted_flow.plan(
+            SPORT_FLOWS,
+            script="uz-latn",
+            user_message=message,
+            history=history,
+            now=NOW,
+            slots=SLOTS,
+        )
+        reply = plan.reply if plan and plan.reply else "<model>"
+        replies.append(reply)
+        history += [
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": bubbles.flatten(reply)},
+        ]
+    return replies
+
+
+def test_steroids_with_their_own_price_are_booked_by_day() -> None:
+    # Dr Sultonbek's card, 2026-11-09: two-stage, 500 000, by day, online or offline.
+    replies = _sport_book(
+        [
+            "Steroid ishlatganman, gormonlarim buzildi",
+            "Jasur",
+            "Toshkent",
+            "klinikaga",
+            "ertaga 10:00",
+        ]
+    )
+    assert replies[2] == VISIT
+    assert replies[3].startswith("Bugun 14:00 va 15:30 da")
+    assert "ertaga 10:00 ga klinikaga" in replies[4]
+    assert "500 000 so'm" in replies[4] and "250 000 so'm" in replies[4]
+    assert "990 000" not in replies[4]
+
+
+def test_steroids_in_the_evening_keep_the_evening_price() -> None:
+    replies = _sport_book(
+        ["Steroid kursidan keyin muammo", "Jasur", "Samarqand", "ha", "bugun 20:00"]
+    )
+    assert replies[2] == ONLINE
+    assert "990 000" in replies[4]
+
+
+def test_the_steroid_price_asked_is_said_in_words() -> None:
+    replies = _sport_book(["Testosteron ukol qilganman", "Jasur", "Samarqand", "Narxi qancha?"])
+    assert "500 000 so'm" in replies[3] and "250 000 so'm" in replies[3]
+    assert "990 000" not in replies[3]

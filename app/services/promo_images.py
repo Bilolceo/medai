@@ -253,14 +253,15 @@ def for_topic(
     return image
 
 
-# --- the operation cards: sent only when the patient names the operation ---
+# --- the operation cards: by name, by price, and by complaint ---
 #
 # Dr Sultonbek's package cards (varicocele, scrotoplasty, ligamentotomy, the
 # combined operation, penile prosthesis, micro-TESE, selective denervation).
-# A complaint alone never brings one: "tez tugataman" is not a request for a
-# denervation, and a card for an operation nobody asked about reads as the
-# bot recommending surgery. Whether an operation is needed, and which, the
-# doctor decides at the consultation -- said once, under the card.
+# Sent when the patient names the operation or asks the operations' prices,
+# and -- the owner's order, 2026-11-09 -- when the complaint is one the
+# operation treats, in the patient's own words (COMPLAINT_CARDS). Whether an
+# operation is needed, and which, the doctor decides at the consultation --
+# said once, under the card. The steroid and hormone card goes the same way.
 
 _OPERATION_WORD = re.compile(
     r"operats|operasi|amaliyot|jarroh|marmar|операц|амалиёт|жарроҳ|хирург|"
@@ -382,6 +383,14 @@ COMPLAINT_CARDS: dict[str, re.Pattern[str]] = {
         r"urug['‘ʻ’`]?\w*\s+yo['‘ʻ’`]?q|уруғ\w*\s+йўқ|не\s+можем\s+зачать|нет\s+детей",
         re.IGNORECASE,
     ),
+    # Steroids and hormones (2026-11-09): the consultation's own card.
+    "sport": re.compile(
+        r"steroid|anabol|стероид|анабол|trenbolon|nandrolon|sustanon|тренболон|нандролон|"
+        r"сустанон|testosteron|тестостерон|gormon|гормон|sport\w*\s+farm|спорт\w*\s+фарм|"
+        r"kurs\w*\s+(?:qil|ich|o['‘ʻ’`]?t|tugat)|kursdan\s+keyin|курс\w*\s+(?:қил|кил|ич|ўт)|"
+        r"курсдан\s+кейин|после\s+курса",
+        re.IGNORECASE,
+    ),
     # The scrotum: "moyak xaltasi osilgan".
     "op:skrotoplastika": re.compile(
         r"moyak\s*xalta|мояк\s*халта|мошонк|skrotum|скротум|"
@@ -457,10 +466,17 @@ def operations_asked(
     for image in images or []:
         topic = str(image.get("topic", ""))
         rule = OPERATIONS.get(topic)
+        complaint = COMPLAINT_CARDS.get(topic)
         if rule is None:
+            # A card for a complaint only (steroids and hormones), sent once.
+            if (
+                complaint is not None
+                and complaint.search(user_message)
+                and not any(sent_line(str(image.get("title", ""))) in t for t in own_turns)
+            ):
+                found.append(image)
             continue
         pattern, needs_word = rule
-        complaint = COMPLAINT_CARDS.get(topic)
         if not (complaint is not None and complaint.search(user_message)):
             if not pattern.search(user_message) and not (general and not named):
                 continue
@@ -483,7 +499,7 @@ def attach_operations(
     if not cards:
         return reply
     note = _OPERATION_NOTE.get(script, _OPERATION_NOTE["uz-latn"])
-    said = (
+    said = not any(str(c.get("topic", "")).startswith("op:") for c in cards) or (
         any(_norm(note) in _norm(turn) for turn in own_turns)
         or _norm(note) in _norm(reply)
         or bool(_DOCTOR_DECIDES.search(reply))
