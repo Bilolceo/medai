@@ -79,7 +79,11 @@ def _cyrillic_scores(lowered: str) -> tuple[int, int]:
             uzbek += 2
         elif word in _RUSSIAN_WORDS:
             russian += 2
-        elif any(letter in word for letter in _RUSSIAN_ONLY):
+        elif any(letter in word for letter in _RUSSIAN_ONLY) and not (
+            # "Яхщмсиз" (yaxshimisiz): a misspelt Uzbek word keeps its ending.
+            len(word) > 4
+            and _UZBEK_SUFFIX.search(word)
+        ):
             russian += 1
         elif len(word) > 4 and _UZBEK_SUFFIX.search(word):
             uzbek += 1

@@ -592,8 +592,13 @@ def _with_operation_cards(
     """The operation package cards the patient asked for by name, under the
     reply (app.services.promo_images.operations_asked)."""
     own = [str(t["content"]) for t in history or [] if t.get("role") == "assistant"]
+    patient = [str(t["content"]) for t in history or [] if t.get("role") == "user"]
     cards = promo_images.operations_asked(
-        settings.get("promo_images"), user_message=user_message, own_turns=own
+        settings.get("promo_images"),
+        user_message=user_message,
+        own_turns=own,
+        patient_turns=patient,
+        reply=reply,
     )
     if not cards:
         return reply

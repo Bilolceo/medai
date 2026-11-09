@@ -116,3 +116,43 @@ def test_operation_prices_asked_without_a_name_bring_all_the_cards() -> None:
     assert _asked("Varikotsele operatsiyasi narxi qancha?") == ["op:varikosele"]
     sent = [f"📎 {c['title']}" for c in CARDS if str(c.get("topic", "")).startswith("op:")]
     assert _asked("Operatsiya narxi qancha?", [" ".join(sent)]) == []
+
+
+def _cards(
+    message: str, patient: list[str] | None = None, own: list[str] | None = None, reply: str = ""
+) -> list[str]:
+    found = promo_images.operations_asked(
+        CARDS, user_message=message, own_turns=own or [], patient_turns=patient or [], reply=reply
+    )
+    return [str(c["topic"]) for c in found]
+
+
+def test_nechpul_is_a_price_question() -> None:
+    # Production chat 2026-11-09: "Операция нечпул?" sent no card.
+    assert len(_cards("Операция нечпул?")) == 7
+
+
+def test_a_misspelt_varicocele_with_nechpul_sends_its_card() -> None:
+    assert _cards("Варикацеле бор\nНечпул слада") == ["op:varikosele"]
+
+
+def test_asking_where_the_picture_is_sends_the_cards_talked_about() -> None:
+    patient = ["Варикацеле бор", "Операция нечпул?"]
+    assert _cards("Расм кани", patient=patient) == ["op:varikosele"]
+    assert len(_cards("rasm qani", patient=["Operatsiya qilish kerakmi?"])) == 7
+
+
+def test_the_patients_own_photo_sends_no_card() -> None:
+    assert _cards("rasm yubordim", patient=["Varikotsele bor"]) == []
+    assert _cards("Расм кани", patient=["Салом", "Простатит"]) == []
+
+
+def test_a_reply_that_points_at_the_picture_carries_it() -> None:
+    reply = "Операциянинг нархи ва пакети расмда, қайси операция кераклигини доктор аниқлайди."
+    assert len(_cards("Операция қанақа бўлади?", reply=reply)) == 7
+    assert _cards("Salom", reply="Rasmda qizarish ko'rinyapti.") == []
+
+
+def test_the_picture_asked_again_is_sent_again() -> None:
+    own = [promo_images.sent_line(str(c["title"])) for c in CARDS if c["topic"] == "op:varikosele"]
+    assert _cards("Расм кани", patient=["Варикацеле бор"], own=own) == ["op:varikosele"]

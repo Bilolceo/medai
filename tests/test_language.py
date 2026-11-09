@@ -128,3 +128,13 @@ def test_the_greeting_is_uzbek_however_it_is_spelled(greeting: str) -> None:
 
 def test_a_russian_greeting_is_still_russian() -> None:
     assert reply_script("Здравствуйте, сколько стоит приём?") == "ru"
+
+
+def test_a_misspelt_uzbek_word_with_a_russian_letter_stays_uzbek() -> None:
+    # Production chat 2026-11-09: "Яхщмсиз" (yaxshimisiz) turned the reply Russian.
+    history: list[ChatMessage] = [
+        {"role": "user", "content": "Ассалом алйекум"},
+        {"role": "user", "content": "Яхщмсиз"},
+        {"role": "assistant", "content": "Исмингиз нима?"},
+    ]
+    assert conversation_script(history, "Серикбай") == "uz-cyrl"

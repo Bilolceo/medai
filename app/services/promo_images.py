@@ -264,14 +264,39 @@ def for_topic(
 
 _OPERATION_WORD = re.compile(
     r"operats|operasi|amaliyot|jarroh|marmar|операц|амалиёт|жарроҳ|хирург|"
-    r"narx|qancha|нарх|қанча|цен|стоим|сколько",
+    r"narx|qancha|нарх|қанча|цен|стоим|сколько|"
+    r"nech\w{0,2}\s*pul|неч\w{0,2}\s*пул|почём|почем",
     re.IGNORECASE,
 )
 _OPERATION_ONLY = re.compile(r"operats|operasi|amaliyot|операц|амалиёт", re.IGNORECASE)
-_PRICE_WORD = re.compile(r"narx|qancha|нарх|қанча|цен|стоим|сколько|почём", re.IGNORECASE)
+# "Nechpul", "неча пул", "нечпул слада": how much, as patients write it.
+_PRICE_WORD = re.compile(
+    r"narx|qancha|нарх|қанча|цен|стоим|сколько|почём|почем|nech\w{0,2}\s*pul|неч\w{0,2}\s*пул",
+    re.IGNORECASE,
+)
+# "Rasm qani?", "расм кани", "фото скиньте": the picture itself is asked for.
+# Only with a word that asks for it: "rasm yubordim" is the patient's own photo.
+_ASKS_PICTURE = re.compile(
+    r"(?:rasm|rasim|surat|расм|расим|сурат|фото|foto|картин|kartin)\w*\W+(?:\w+\W+)?"
+    r"(?:qani|kani|қани|кани|yo['‘ʻ’`]?q|йўқ|йук|yubor(?:ing|in|sangiz)|юбор(?:инг|ин)|"
+    r"tashla(?:ng|b)|ташла(?:нг|б)|ko['‘ʻ’`]?rinma|кўринма|куринма|не\s*вид|нет|где|"
+    r"скин|отправ|покаж)"
+    r"|(?:qani|kani|қани|кани|где|скиньте|отправьте|покажите|yuboring|юборинг|tashlang)"
+    r"\W+(?:\w+\W+)?(?:rasm|rasim|surat|расм|расим|сурат|фото|foto|картин)",
+    re.IGNORECASE,
+)
+# A reply that points at the operation's picture: "...narxi va paketi rasmda".
+_SAYS_PICTURE = re.compile(
+    r"(?:narx|paket|нарх|пакет|стоимост|цен)\w*[^.!?]{0,40}"
+    r"(?:rasmda|расмда|на фото|на изображении|на картинке)",
+    re.IGNORECASE,
+)
 # topic -> (what the patient wrote, does it need an operation or price word with it)
 OPERATIONS: dict[str, tuple[re.Pattern[str], bool]] = {
-    "op:varikosele": (re.compile(r"varik[oa]t?s?[eia]l|варикоц|варикос", re.IGNORECASE), True),
+    "op:varikosele": (
+        re.compile(r"varik[oa]t?s?[eia]l|варик[оаэе]ц|варик[оа]с", re.IGNORECASE),
+        True,
+    ),
     "op:skrotoplastika": (
         re.compile(r"skrotoplast|скротопласт|moyak\s*xaltasi\w*\s*plast", re.IGNORECASE),
         False,
@@ -314,11 +339,40 @@ _OPERATION_NOTE = {
 
 
 def operations_asked(
-    images: Sequence[Mapping[str, Any]] | None, *, user_message: str, own_turns: Sequence[str]
+    images: Sequence[Mapping[str, Any]] | None,
+    *,
+    user_message: str,
+    own_turns: Sequence[str],
+    patient_turns: Sequence[str] = (),
+    reply: str = "",
 ) -> list[Mapping[str, Any]]:
     """The operation cards this message asks for, not sent before -- by name,
-    or all of them for "operatsiya narxlari qancha?" naming none."""
+    or all of them for "operatsiya narxlari qancha?" naming none. "Rasm qani?"
+    after operations were talked about, or a reply that says the price is in
+    the picture, sends the ones named so far (all of them, none named)."""
     general = bool(_OPERATION_ONLY.search(user_message)) and bool(_PRICE_WORD.search(user_message))
+    talked = [*patient_turns, user_message]
+    operations_talked = any(
+        _OPERATION_ONLY.search(t) or OPERATION_NAMES.search(t) for t in talked
+    ) or any(_SAYS_PICTURE.search(t) for t in own_turns)
+    if (_ASKS_PICTURE.search(user_message) and operations_talked) or _SAYS_PICTURE.search(reply):
+        earlier = [
+            image
+            for image in images or []
+            if (rule := OPERATIONS.get(str(image.get("topic", "")))) is not None
+            and any(rule[0].search(t) for t in talked)
+        ]
+        pool = earlier or [i for i in images or [] if str(i.get("topic", "")) in OPERATIONS]
+        unsent = [
+            image
+            for image in pool
+            if not any(sent_line(str(image.get("title", ""))) in turn for turn in own_turns)
+        ]
+        if not unsent and _ASKS_PICTURE.search(user_message):
+            # "Rasm qani?" after they went out: not seen, so sent again.
+            return earlier or pool
+        if unsent or not general:
+            return unsent
     named = [
         image
         for image in images or []
