@@ -649,7 +649,9 @@ def test_the_price_asked_again_after_the_card_is_said_in_words() -> None:
         "Konsultatsiya narxi 330 000 so'm -- onlayn ham, klinikada ham bir xil. "
         "Yozilish uchun 50% -- 165 000 so'm oldindan to'lanadi."
     )
-    assert plan.reply.endswith("Onlayn konsultatsiyaga yozib qo'yaymi yoki klinikaga kelasizmi?")
+    # Samarqand: online only, so the clinic is not offered again.
+    assert plan.reply.endswith(" Onlayn konsultatsiyaga yozib qo'yaymi?")
+    assert "klinikaga kelasizmi" not in plan.reply
 
 
 def test_a_named_day_gets_that_days_times() -> None:
@@ -854,3 +856,34 @@ def test_a_complaint_with_no_in_it_is_not_a_refusal() -> None:
     assert replies[3] == f"{HANDLES} {ONLINE}"
     replies = _talk(["Salom", "Jasur", "Rossiyadaman", "prostatit", "ereksiya ham yo'q"])
     assert replies[4] == f"{HANDLES} {ONLINE}"
+
+
+def test_abroad_in_other_words_is_never_offered_the_clinic() -> None:
+    # Production chat 2026-11-09: "Musofirlikdaman", then "Narhi qancha" was
+    # answered with "...yoki klinikaga kelasizmi?".
+    replies = _talk(
+        ["Salom", "Menda ereksiya bolmoqda", "Begzod", "Musofirlikdaman", "Narhi qancha"]
+    )
+    assert replies[3] == ONLINE
+    assert "klinikaga kelasizmi" not in replies[4].lower()
+    assert replies[4].endswith(" Onlayn konsultatsiyaga yozib qo'yaymi?")
+
+
+def test_the_price_after_a_complaint_card_is_the_consultations() -> None:
+    # Mock 2026-11-09: the prosthesis card came with "ereksiya", and "Narhi
+    # qancha" was answered with the prosthesis's 30 000 000.
+    card = "\n\n📎 Falloprotez: narx va paket"
+    history = [
+        {"role": "user", "content": "Menda ereksiya bolmoqda"},
+        {"role": "assistant", "content": f"{HANDLES} {NAME}{card}"},
+        {"role": "user", "content": "Begzod"},
+        {"role": "assistant", "content": place("Begzod")},
+        {"role": "user", "content": "Musofirlikdaman"},
+        {"role": "assistant", "content": ONLINE},
+    ]
+    plan = scripted_flow.plan(
+        FLOWS, script="uz-latn", user_message="Narhi qancha", history=history, now=NOW
+    )
+    assert plan is not None and plan.reply is not None
+    assert "30 000 000" not in plan.reply
+    assert "330 000" in plan.reply

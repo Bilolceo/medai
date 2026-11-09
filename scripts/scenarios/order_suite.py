@@ -341,10 +341,10 @@ S: list[tuple[str, set[str], list[str]]] = [
         {"abroad", "op"},
         ["Сколько стоит фаллопротез?", "Руслан", "Москва"],
     ),
-    ("O04 complaint only", {"tashkent", "noop"}, ["Tez tugatib qo'yaman", "Aziz", "Toshkent"]),
+    ("O04 complaint card", {"tashkent", "op"}, ["Tez tugatib qo'yaman", "Aziz", "Toshkent"]),
     (
         "O05 azoospermia",
-        {"region", "noop"},
+        {"region", "op"},
         ["Spermogrammada spermatozoid chiqmadi, farzand bo'lmayapti", "Sardor", "Buxoro"],
     ),
     (

@@ -45,11 +45,21 @@ def test_enlargement_brings_both_enlargement_cards() -> None:
     assert _asked("Olatni kattalashtirish narxi qancha?") == ["op:ligamentotomiya", "op:kompleks"]
 
 
-def test_a_complaint_alone_brings_no_operation_card() -> None:
-    assert _asked("Varikotsele bor") == []
-    assert _asked("Tez tugatib qo'yaman") == []
-    assert _asked("Spermogrammada spermatozoid yo'q") == []
-    assert _asked("Ereksiya yaxshi emas") == []
+def test_a_complaint_brings_the_card_of_its_operation() -> None:
+    # The owner's order, 2026-11-09: by what the patient writes about.
+    assert _asked("Varikotsele bor") == ["op:varikosele"]
+    assert _asked("Tez tugatib qo'yaman") == ["op:denervatsiya"]
+    assert _asked("Spermogrammada spermatozoid yo'q") == ["op:micro-tese"]
+    assert _asked("Ereksiya yaxshi emas") == ["op:falloprotez"]
+    assert _asked("Menda ereksiya bolmoqda") == ["op:falloprotez"]
+    assert _asked("Olatim kichik") == ["op:ligamentotomiya", "op:kompleks"]
+    assert _asked("Проблемы с потенцией") == ["op:falloprotez"]
+
+
+def test_a_complaint_with_no_operation_brings_none() -> None:
+    assert _asked("Prostatit bor") == []
+    assert _asked("Siydik tez-tez kelyapti") == []
+    assert _asked("Jinsiy xohishim yo'q") == []
 
 
 def test_each_operation_card_goes_once() -> None:

@@ -321,9 +321,9 @@ _COMPLAINT = re.compile(
 _ABROAD = re.compile(
     r"r[ao]s+i[iy]?a|russia|moskva|maskva|koreya|koriya|turkiya|turtsiya|qozog['‘ʻ’`]?iston|"
     r"kazaxstan|amerika|ameriqa|usa\b|dubay|dubai|bae\b|germaniya|polsha|angliya|yaponiya|"
-    r"chet\s*el|sankt|piter|yevropa|evropa|"
+    r"chet\s*el|sankt|piter|yevropa|evropa|musofir|uzoqda|uzoqdaman|"
     r"р[ао]сси|москв|корея|корея|турци|туркия|казахстан|қозоғистон|америк|дубай|"
-    r"германи|польш|англи|чет\s*эл|за\s*границ|питер|европ",
+    r"германи|польш|англи|чет\s*эл|за\s*границ|питер|европ|мусофир|узоқда|узокда",
     re.IGNORECASE,
 )
 _REFUSE = re.compile(
@@ -1012,6 +1012,17 @@ def plan_intake(
             return str(texts["visit_choice"])
         return str(texts["online_choice"])
 
+    def choice_again() -> str:
+        """The choice asked again: the clinic only for Tashkent."""
+        place = answer_after("ask_place", "ask_place_named") or known_place()
+        offer = choice(place)
+        if offer == texts["visit_choice"]:
+            return str(texts["choice_again"])
+        if offer == texts["online_choice"]:
+            # Only its question: "Onlayn konsultatsiyaga yozib qo'yaymi?".
+            return re.split(r"(?<=[.!?])\s+", str(offer).strip())[-1]
+        return str(offer)
+
     def phone_given() -> bool:
         return any(
             (f := phone_check.read(t)) is not None
@@ -1380,7 +1391,7 @@ def plan_intake(
         if _WANTS_VISIT.search(message) or _WANTS_ONLINE.search(message) or u.yes:
             return offer_slots()
         if said["online_choice"] < 2 and not u.refuses:
-            return Plan(reply=texts["choice_again"])
+            return Plan(reply=choice_again())
     if (
         pending == "offer_slots"
         and not question
@@ -1430,15 +1441,29 @@ def plan_intake(
         if "📎" in line and "paket" in line
     ]
     op_prices = flow.get("operation_prices") or {}
-    if asks_price and op_cards and not asks_about_operation:
+    # The operation itself asked about before -- not a card that came with a
+    # complaint (2026-11-09: "Narhi qancha" after "ereksiya" got the prosthesis).
+    operation_asked = any(
+        re.search(r"operats|operasi|amaliyot|операц|амалиёт", t, re.I)
+        or any(
+            pattern.search(t)
+            and not (
+                (complaint := promo_images.COMPLAINT_CARDS.get(topic)) is not None
+                and complaint.search(t)
+            )
+            for topic, (pattern, _) in promo_images.OPERATIONS.items()
+        )
+        for t in patient_since
+    )
+    if asks_price and op_cards and operation_asked and not asks_about_operation:
         # "1- komponentli protez narxi?" again: the operation's price, in words.
         lines = [
             op_prices[t].get(script) or op_prices[t]["uz-latn"] for t in op_cards if t in op_prices
         ]
         if lines:
             again = {
-                "online_choice": texts["choice_again"],
-                "offer_slots": texts["choice_again"],
+                "online_choice": choice_again(),
+                "offer_slots": choice_again(),
                 "ask_place": texts["ask_place"],
                 "ask_name": texts["ask_name"],
             }.get(pending or "", "")
@@ -1450,8 +1475,8 @@ def plan_intake(
         price, prepay = price_of("evening" if sport else "uro")
         key = "price_answer_evening" if sport else "price_answer"
         again = {
-            "online_choice": texts["choice_again"],
-            "offer_slots": texts["choice_again"],
+            "online_choice": choice_again(),
+            "offer_slots": choice_again(),
             "ask_place": texts["ask_place"],
             "ask_name": texts["ask_name"],
         }.get(pending or "", "")
@@ -1463,8 +1488,8 @@ def plan_intake(
             ),
             "ask_place": texts["ask_place"],
             "ask_topic": texts["ask_topic"],
-            "online_choice": texts["choice_again"],
-            "offer_slots": texts["choice_again"],
+            "online_choice": choice_again(),
+            "offer_slots": choice_again(),
             "ask_phone": texts["ask_phone_again"],
             "ask_time": texts["ask_time"],
         }.get(pending, texts["ask_phone_again"])
@@ -1515,14 +1540,12 @@ def plan_intake(
         if pending in ("online_choice", "offer_slots"):
             if said[pending] >= 2:
                 return None
+            # Outside Tashkent the clinic was never offered: online again.
+            offer = choice_again()
             again = (
-                texts["choice_again"]
-                if pending == "online_choice"
-                else (
-                    texts["offer_slots"].format(slots=_slot_words(texts, list(slots or []), now))
-                    if slots
-                    else texts["choice_again"]
-                )
+                texts["offer_slots"].format(slots=_slot_words(texts, list(slots or []), now))
+                if pending == "offer_slots" and slots
+                else offer
             )
             return Plan(then=again, instruction=INSTRUCTION)
         if said[pending] < 2:

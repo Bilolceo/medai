@@ -323,6 +323,43 @@ OPERATIONS: dict[str, tuple[re.Pattern[str], bool]] = {
     ),
     "op:denervatsiya": (re.compile(r"denervats|денервац", re.IGNORECASE), False),
 }
+# The owner's order (2026-11-09): a complaint brings the card of the
+# operation that treats it, with the note that the doctor decides at the
+# consultation. Complaints with no operation (prostatitis) bring none.
+COMPLAINT_CARDS: dict[str, re.Pattern[str]] = {
+    "op:falloprotez": re.compile(
+        r"ere[kc]t?s?i|erekts|эрекц|ерекц|импотен|potensi|potents|потенц|"
+        r"olat\w*\s+(?:turma|qotma|ko['‘ʻ’`]?tarilma)|кўтарилма|qotmay|қотмай",
+        re.IGNORECASE,
+    ),
+    "op:varikosele": re.compile(r"varik[oa]t?s?[eia]l|варик[оаэе]ц|варик[оа]с", re.IGNORECASE),
+    "op:denervatsiya": re.compile(
+        r"tez\s*tugat|erta\s*tugat|тез\s*тугат|эрта\s*тугат|tez\s*bo['‘ʻ’`]?shal|"
+        r"тез\s*бўшал|преждевремен|быстро\s*(?:конча|заканчива)|быстрое\s*семяизверж",
+        re.IGNORECASE,
+    ),
+    "op:ligamentotomiya": re.compile(
+        r"katt?alasht|uzaytir|кат+алашт|узайтир|увелич|удлин|"
+        r"(?:olat|jinsiy\s*a['‘ʻ’`]?zo|penis|олат|пенис|член)\w*\s+(?:\w+\s+)?"
+        r"(?:kichik|kalta|кичик|калта|маленьк|короток)",
+        re.IGNORECASE,
+    ),
+    "op:kompleks": re.compile(
+        r"katt?alasht|uzaytir|кат+алашт|узайтир|увелич|удлин|"
+        r"(?:olat|jinsiy\s*a['‘ʻ’`]?zo|penis|олат|пенис|член)\w*\s+(?:\w+\s+)?"
+        r"(?:kichik|kalta|кичик|калта|маленьк|короток)",
+        re.IGNORECASE,
+    ),
+    "op:micro-tese": re.compile(
+        r"azoosperm|азооспер|bepusht|бепушт|бесплод|"
+        r"farzand\w*\s+(?:bo['‘ʻ’`]?lma|yo['‘ʻ’`]?q)|фарзанд\w*\s+(?:бўлма|йўқ)|"
+        r"spermatozoid\w*\s+yo['‘ʻ’`]?q|сперматозоид\w*\s+(?:йўқ|нет)",
+        re.IGNORECASE,
+    ),
+    "op:skrotoplastika": re.compile(
+        r"moyak\s*xalta|мояк\s*халта|мошонк|skrotum|скротум", re.IGNORECASE
+    ),
+}
 OPERATION_NAMES = re.compile(
     "|".join(pattern.pattern for pattern, _ in OPERATIONS.values()), re.IGNORECASE
 )
@@ -352,15 +389,23 @@ def operations_asked(
     the picture, sends the ones named so far (all of them, none named)."""
     general = bool(_OPERATION_ONLY.search(user_message)) and bool(_PRICE_WORD.search(user_message))
     talked = [*patient_turns, user_message]
+
+    def about(topic: str, text: str) -> bool:
+        rule = OPERATIONS.get(topic)
+        complaint = COMPLAINT_CARDS.get(topic)
+        return bool(rule and rule[0].search(text)) or bool(complaint and complaint.search(text))
+
     operations_talked = any(
-        _OPERATION_ONLY.search(t) or OPERATION_NAMES.search(t) for t in talked
+        _OPERATION_ONLY.search(t)
+        or OPERATION_NAMES.search(t)
+        or any(c.search(t) for c in COMPLAINT_CARDS.values())
+        for t in talked
     ) or any(_SAYS_PICTURE.search(t) for t in own_turns)
     if (_ASKS_PICTURE.search(user_message) and operations_talked) or _SAYS_PICTURE.search(reply):
         earlier = [
             image
             for image in images or []
-            if (rule := OPERATIONS.get(str(image.get("topic", "")))) is not None
-            and any(rule[0].search(t) for t in talked)
+            if any(about(str(image.get("topic", "")), t) for t in talked)
         ]
         pool = earlier or [i for i in images or [] if str(i.get("topic", "")) in OPERATIONS]
         unsent = [
@@ -386,10 +431,12 @@ def operations_asked(
         if rule is None:
             continue
         pattern, needs_word = rule
-        if not pattern.search(user_message) and not (general and not named):
-            continue
-        if needs_word and not _OPERATION_WORD.search(user_message):
-            continue
+        complaint = COMPLAINT_CARDS.get(topic)
+        if not (complaint is not None and complaint.search(user_message)):
+            if not pattern.search(user_message) and not (general and not named):
+                continue
+            if needs_word and not _OPERATION_WORD.search(user_message):
+                continue
         if any(sent_line(str(image.get("title", ""))) in turn for turn in own_turns):
             continue
         found.append(image)
