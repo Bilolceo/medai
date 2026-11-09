@@ -180,6 +180,35 @@ def _within(flow: Mapping[str, Any], at: time, prefix: str = "online") -> bool:
 _EVENING_WORD = re.compile(r"kech(?!ro)|кеч(?!ро)|вечер", re.IGNORECASE)
 
 
+_TASHKENT = re.compile(r"to[sš]h?kent|tashkent|тошкент|ташкент|toshken|тошкен", re.IGNORECASE)
+# Words that open a sentence and are no name: "Men", "Menda", "Salom".
+_NOT_NAMES = re.compile(
+    r"^(?:men|menda|mening|menga|meni|bizda|biz|salom|assalom\w*|asalom\w*|ha|xa|yo['‘ʻ’`]?q|"
+    r"doktor|aka|uka|bro|xohish\w*|hohish\w*|ok|rahmat|мен|менда|менинг|салом|ассалом\w*|"
+    r"ҳа|ха|йўқ|доктор|ака|ука|хоҳиш\w*|хохиш\w*|я|у|меня|здравствуйте|привет|да|нет)$",
+    re.IGNORECASE,
+)
+
+
+def _libido_name(message: str) -> str | None:
+    """The name a message opens with: "Sardor", "Sardor menda xohish yo'q"."""
+    words = message.split()
+    word = words[0].strip(".,!?") if words else ""
+    if not _NAME_WORD.match(word) or _NOT_NAMES.match(word):
+        return None
+    if len(words) > 2 and not (
+        words[0].endswith(",")
+        or re.match(r"(?:men|menda|mening|menga|мен|менда|менинг|менга|я|у)$", words[1], re.I)
+    ):
+        # "Bilmayman nima qilishni": a sentence, not a name and a sentence.
+        return None
+    if _DESIRE.search(word) or _ABROAD.search(word) or _REGIONS.search(word):
+        return None
+    if _TASHKENT.search(word):
+        return None
+    return _cap(word)
+
+
 def plan_libido(
     flow: Mapping[str, Any] | None,
     *,
@@ -238,7 +267,12 @@ def plan_libido(
         parts = [" ".join(opening)] if opening else []
         if _ASKS_PRICE.search(message):
             parts.append(texts["price_early"])
-        parts.append(texts["ask_name"])
+        named = _libido_name(message)
+        if named and own and _said(flow, "ask_name", own[-1:]):
+            # "Sardor, menda xohish yo'q" to "Ismingiz nima?": the name is given.
+            parts.append(fill("ask_place_named", name=named))
+        else:
+            parts.append(texts["ask_name"])
         return Plan(reply=bubbles.MARKER.join(f" {p} " for p in parts).strip())
 
     question = _is_question(message)
@@ -283,9 +317,12 @@ def plan_libido(
         return Plan(then=fill(_PENDING_QUESTION[pending]), instruction=INSTRUCTION)
 
     if pending == "ask_name":
-        word = message.split()[0].strip(".,!") if message else ""
-        if len(message.split()) <= 2 and _NAME_WORD.match(word):
-            return Plan(reply=fill("ask_place_named", name=_cap(word)))
+        if _ABROAD.search(message) or _REGIONS.search(message) or _TASHKENT.search(message):
+            # "Toshkenda" is the place, never a name.
+            return Plan(reply=fill("ask_age"))
+        named = _libido_name(message)
+        if named:
+            return Plan(reply=fill("ask_place_named", name=named))
         return Plan(reply=fill("ask_place"))
     if pending == "ask_place":
         return Plan(reply=fill("ask_age"))

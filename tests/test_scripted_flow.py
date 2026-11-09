@@ -205,3 +205,36 @@ def test_a_sentence_the_model_said_is_not_repeated_in_the_step() -> None:
     step = "Ha, doktor shu bilan shug'ullanadi. Ismingiz nima?"
     answer = "Ha, doktor shu bilan shug'ullanadi. Davolashni doktor ko'rikda belgilaydi."
     assert scripted_flow.drop_repeats(step, answer) == "Ismingiz nima?"
+
+
+def test_the_name_given_with_the_complaint_is_not_asked_again() -> None:
+    # Production chat 2026-11-09: "Sardor menda hohish yoq bolmoqda" to
+    # "Ismingiz nima?" got the name question again; "Toshkenda" became the name.
+    history = [
+        {"role": "user", "content": "Asalomu alekum"},
+        {
+            "role": "assistant",
+            "content": "Va alaykum assalom. Men doktor Sultonbekning administratoriman, ismim D.\n\n"
+            "Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?",
+        },
+    ]
+    plan = scripted_flow.plan_libido(
+        FLOW,
+        script="uz-latn",
+        user_message="Sardor menda hohish yoq bolmoqda",
+        history=history,
+        now=TUESDAY,
+    )
+    assert plan is not None and plan.reply is not None
+    assert plan.reply.startswith("Sardor, qayerdansiz")
+
+
+def test_a_place_to_the_name_question_is_not_a_name() -> None:
+    replies = _talk(["Xohishim yo'q", "Toshkenda"])
+    assert "Toshkenda," not in replies[1]
+    assert "yosh" in replies[1].lower()
+
+
+def test_a_sentence_is_not_a_name() -> None:
+    replies = _talk(["Xohishim yo'q", "Bilmayman nima qilishni endi"])
+    assert "Bilmayman," not in replies[1]

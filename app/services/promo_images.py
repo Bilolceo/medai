@@ -327,37 +327,66 @@ OPERATIONS: dict[str, tuple[re.Pattern[str], bool]] = {
 # operation that treats it, with the note that the doctor decides at the
 # consultation. Complaints with no operation (prostatitis) bring none.
 COMPLAINT_CARDS: dict[str, re.Pattern[str]] = {
+    # Weak erection, in the doctor's words and the patients' own:
+    # "kuchim yo'q", "turmayapti", "qotmayapti", "не стоит".
     "op:falloprotez": re.compile(
         r"ere[kc]t?s?i|erekts|эрекц|ерекц|импотен|potensi|potents|потенц|"
-        r"olat\w*\s+(?:turma|qotma|ko['‘ʻ’`]?tarilma)|кўтарилма|qotmay|қотмай",
+        r"kuch(?:im|i|imiz)?\s+(?:yo['‘ʻ’`]?q|kam|pas|zaif|qolma|ketgan)|"
+        r"куч(?:им|и)?\s+(?:йўқ|йук|кам|пас|заиф|қолма|колма)|"
+        r"erkaklik\s+(?:kuch|quvvat|zaif)|эркаклик\s+(?:куч|қувват|заиф)|"
+        r"jinsiy\s+(?:zaif|kuchsiz)|жинсий\s+(?:заиф|кучсиз)|"
+        r"turma(?:yapti|yabdi|ydi|di|yotgan|yapdi)|турма(?:япти|ябди|йди|ди)|"
+        r"qotma(?:yapti|ydi|di|yapdi)|қотма(?:япти|йди|ди)|котмаяпти|"
+        r"ko['‘ʻ’`]?tarilma|кўтарилма|кутарилма|"
+        r"qattiq\s+bo['‘ʻ’`]?lma|қаттиқ\s+бўлма|yumshab\s+qol|юмшаб\s+қол|"
+        r"не\s+стоит|слабая\s+потенц|слабо\s+стоит|плохо\s+стоит",
         re.IGNORECASE,
     ),
-    "op:varikosele": re.compile(r"varik[oa]t?s?[eia]l|варик[оаэе]ц|варик[оа]с", re.IGNORECASE),
+    # Varicocele: "moyakda tomir", "tomirlar kengaygan".
+    "op:varikosele": re.compile(
+        r"varik[oa]t?s?[eia]l|варик[оаэе]ц|варик[оа]с|"
+        r"moya[kg]\w*\s+(?:\w+\s+)?(?:tomir|vena)|моя[кг]\w*\s+(?:\w+\s+)?(?:томир|вена)|"
+        r"tomir\w*\s+(?:\w+\s+)?kengay|томир\w*\s+(?:\w+\s+)?кенгай|"
+        r"расширен\w*\s+вен|вен\w*\s+яичк",
+        re.IGNORECASE,
+    ),
+    # Premature ejaculation: "tez tugatib qo'yaman", "tez ketib qolaman".
     "op:denervatsiya": re.compile(
-        r"tez\s*tugat|erta\s*tugat|тез\s*тугат|эрта\s*тугат|tez\s*bo['‘ʻ’`]?shal|"
-        r"тез\s*бўшал|преждевремен|быстро\s*(?:конча|заканчива)|быстрое\s*семяизверж",
+        r"tez\s*tugat|erta\s*tugat|тез\s*тугат|эрта\s*тугат|"
+        r"tez\s*bo['‘ʻ’`]?shal|тез\s*бўшал|tez\s*(?:ketib|chiqib|to['‘ʻ’`]?kil)|"
+        r"тез\s*(?:кетиб|чиқиб|чикиб|тўкил)|uzoq\s+(?:chiday|bardosh\s+bera)\s*olma|"
+        r"узоқ\s+чидай\s*олма|преждевремен|быстро\s*(?:конча|заканчива)|"
+        r"быстрое\s*семяизверж",
         re.IGNORECASE,
     ),
+    # Size: "kichkina", "kalta", "kattalashtirmoqchiman".
     "op:ligamentotomiya": re.compile(
         r"katt?alasht|uzaytir|кат+алашт|узайтир|увелич|удлин|"
-        r"(?:olat|jinsiy\s*a['‘ʻ’`]?zo|penis|олат|пенис|член)\w*\s+(?:\w+\s+)?"
-        r"(?:kichik|kalta|кичик|калта|маленьк|короток)",
+        r"(?:olat|jinsiy\s*a['‘ʻ’`]?zo|penis|олат|пенис|член|razmer|размер)\w*\s+(?:\w+\s+)?"
+        r"(?:kich|kalta|кич|калта|маленьк|короток|мал)",
         re.IGNORECASE,
     ),
     "op:kompleks": re.compile(
         r"katt?alasht|uzaytir|кат+алашт|узайтир|увелич|удлин|"
-        r"(?:olat|jinsiy\s*a['‘ʻ’`]?zo|penis|олат|пенис|член)\w*\s+(?:\w+\s+)?"
-        r"(?:kichik|kalta|кичик|калта|маленьк|короток)",
+        r"(?:olat|jinsiy\s*a['‘ʻ’`]?zo|penis|олат|пенис|член|razmer|размер)\w*\s+(?:\w+\s+)?"
+        r"(?:kich|kalta|кич|калта|маленьк|короток|мал)",
         re.IGNORECASE,
     ),
+    # No children: "farzand bo'lmayapti", "bola yo'q", "уруғ йўқ".
     "op:micro-tese": re.compile(
         r"azoosperm|азооспер|bepusht|бепушт|бесплод|"
-        r"farzand\w*\s+(?:bo['‘ʻ’`]?lma|yo['‘ʻ’`]?q)|фарзанд\w*\s+(?:бўлма|йўқ)|"
-        r"spermatozoid\w*\s+yo['‘ʻ’`]?q|сперматозоид\w*\s+(?:йўқ|нет)",
+        r"(?:farzand|bola)\w*\s+(?:\w+\s+)?(?:bo['‘ʻ’`]?lma|yo['‘ʻ’`]?q|ko['‘ʻ’`]?rma)|"
+        r"(?:фарзанд|бола)\w*\s+(?:\w+\s+)?(?:бўлма|булма|йўқ|йук|кўрма)|"
+        r"spermatozoid\w*\s+(?:\w+\s+)?(?:yo['‘ʻ’`]?q|chiqma)|"
+        r"сперматозоид\w*\s+(?:\w+\s+)?(?:йўқ|нет|чиқма)|"
+        r"urug['‘ʻ’`]?\w*\s+yo['‘ʻ’`]?q|уруғ\w*\s+йўқ|не\s+можем\s+зачать|нет\s+детей",
         re.IGNORECASE,
     ),
+    # The scrotum: "moyak xaltasi osilgan".
     "op:skrotoplastika": re.compile(
-        r"moyak\s*xalta|мояк\s*халта|мошонк|skrotum|скротум", re.IGNORECASE
+        r"moyak\s*xalta|мояк\s*халта|мошонк|skrotum|скротум|"
+        r"moya[kg]\w*\s+(?:\w+\s+)?osil|моя[кг]\w*\s+(?:\w+\s+)?осил",
+        re.IGNORECASE,
     ),
 }
 OPERATION_NAMES = re.compile(

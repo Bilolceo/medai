@@ -166,3 +166,21 @@ def test_a_reply_that_points_at_the_picture_carries_it() -> None:
 def test_the_picture_asked_again_is_sent_again() -> None:
     own = [promo_images.sent_line(str(c["title"])) for c in CARDS if c["topic"] == "op:varikosele"]
     assert _cards("Расм кани", patient=["Варикацеле бор"], own=own) == ["op:varikosele"]
+
+
+def test_a_complaint_in_everyday_words_brings_its_card() -> None:
+    # The owner, 2026-11-09: patients do not write the medical term.
+    assert _asked("Kuchim yo'q") == ["op:falloprotez"]
+    assert _asked("Olatim turmayapti") == ["op:falloprotez"]
+    assert _asked("Кучим йўқ, турмаяпти") == ["op:falloprotez"]
+    assert _asked("Не стоит") == ["op:falloprotez"]
+    assert _asked("Moyagimda tomir bor") == ["op:varikosele"]
+    assert _asked("Tez ketib qolaman") == ["op:denervatsiya"]
+    assert _asked("Olatim kichkina") == ["op:ligamentotomiya", "op:kompleks"]
+    assert _asked("Farzand bo'lmayapti") == ["op:micro-tese"]
+    assert _asked("Moyagim osilib qolgan") == ["op:skrotoplastika"]
+
+
+def test_everyday_words_with_no_operation_bring_none() -> None:
+    for message in ("Xohishim yo'q", "Moyagim og'riyapti", "Siydik tez-tez", "Salom"):
+        assert _asked(message) == [], message
