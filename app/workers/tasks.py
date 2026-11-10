@@ -76,6 +76,7 @@ from app.services.conversation import (
     record_outbound_message,
     register_inbound_message,
     reply_context_for,
+    with_unanswered,
 )
 from app.services.conversation_signals import find_phone_number
 from app.services.debounce import (
@@ -267,6 +268,7 @@ async def process_inbound_message(
                 session, channel_id=uuid.UUID(channel_id), user_id=conversation_row.user_id
             ):
                 return
+            message_text = await with_unanswered(session, conversation_uuid, message_text)
             history = await context_for_reply(session, conversation_uuid)
             conversation = await session.get(Conversation, conversation_uuid)
             channel = await session.get(Channel, uuid.UUID(channel_id))

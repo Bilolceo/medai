@@ -20,6 +20,7 @@ from app.services.conversation import (
     recent_history,
     record_outbound_message,
     register_inbound_message,
+    with_unanswered,
 )
 from tests.conftest import Seed
 
@@ -393,3 +394,30 @@ async def test_hours_since_last_contact_ignores_the_trailing_batch_being_answere
         )
 
     assert gap == pytest.approx(48, abs=0.1)
+
+
+async def test_unanswered_messages_before_the_batch_are_read_with_it(
+    db_session: AsyncSession, seed: Seed, as_tenant: Callable[[UUID], AbstractContextManager[None]]
+) -> None:
+    """Live chat 2026-11-09: "Акмал", then "Денервация нечпул" before any
+    reply -- the first job superseded, the second must read both."""
+    with as_tenant(seed.tenant_a.id):
+        repo = MessageRepository(db_session)
+        await repo.create(
+            conversation_id=seed.a.conversation.id,
+            sender=MessageSender.BOT,
+            content="Исмингиз нима?",
+            channel="instagram",
+        )
+        for bubble in ("Акмал", "Денервация нечпул"):
+            await repo.create(
+                conversation_id=seed.a.conversation.id,
+                sender=MessageSender.PATIENT,
+                content=bubble,
+                channel="instagram",
+            )
+        joined = await with_unanswered(db_session, seed.a.conversation.id, "Денервация нечпул")
+        same = await with_unanswered(db_session, seed.a.conversation.id, "Акмал\nДенервация нечпул")
+
+    assert joined == "Акмал\nДенервация нечпул"
+    assert same == "Акмал\nДенервация нечпул"

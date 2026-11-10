@@ -18,7 +18,7 @@ the reply-window check had no real timestamp to measure against.
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy.exc import IntegrityError
@@ -299,6 +299,46 @@ async def context_for_reply(
     while turns and turns[-1]["role"] == "user":
         turns.pop()
     return turns
+
+
+UNANSWERED_WINDOW = timedelta(minutes=15)
+
+
+async def with_unanswered(
+    session: AsyncSession,
+    conversation_id: uuid.UUID,
+    message_text: str,
+    *,
+    limit: int = DEFAULT_HISTORY_LIMIT,
+) -> str:
+    """``message_text`` with the patient's earlier unanswered messages in
+    front of it.
+
+    "Акмал", then "Денервация нечпул?" before any reply (live, 2026-11-09):
+    the first job was superseded, and the second answered its own batch
+    alone -- context_for_reply had dropped the name with the rest of the
+    tail, so the name was asked again. The trailing patient turns that are
+    not already part of this batch, written within a quarter of an hour of
+    it and after the clinic's last word, are read together with it."""
+    messages = await MessageRepository(session).list_recent(conversation_id, limit)
+    trailing: list[Message] = []
+    for row in reversed(messages):
+        if row.sender != MessageSender.PATIENT:
+            break
+        trailing.insert(0, row)
+    if not trailing or len(trailing) == len(messages):
+        # Nothing of the clinic's yet: the opening messages are the debounce's
+        # business, there is no superseded reply to make good.
+        return message_text
+    newest = trailing[-1].created_at
+    earlier = [
+        row.content
+        for row in trailing
+        if row.content
+        and row.content not in message_text
+        and newest - row.created_at <= UNANSWERED_WINDOW
+    ]
+    return "\n".join([*earlier, message_text]) if earlier else message_text
 
 
 async def hours_since_last_contact(

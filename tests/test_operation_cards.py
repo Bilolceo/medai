@@ -234,6 +234,22 @@ def test_operation_price_after_one_operation_sends_only_that_card() -> None:
     assert _cards("Операция нечпул", patient=["Варикоцеле бор"]) == ["op:varikosele"]
     others = _cards("Boshqa operatsiyalar narxi qancha?", patient=["Varikotsele bor"], own=sent)
     assert len(others) == 6
+    # The complaint and the question in one message: that card alone.
+    assert _cards("Moyagimda tomir bor, operatsiya narxi qancha?") == ["op:varikosele"]
+
+
+def test_a_lab_result_about_sperm_is_a_complaint_not_an_operation_asked() -> None:
+    flows = SETTINGS["scripted_flows"]
+    ask = "Ha, doktor shu bilan shug'ullanadi. Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?"
+    history = [
+        {"role": "user", "content": "Tahlilda urug' topilmadi"},
+        {"role": "assistant", "content": f"{ask}\n\n📎 Micro-TESE: narx va paket"},
+    ]
+    plan = scripted_flow.plan(
+        flows, script="uz-latn", user_message="Narxi qancha?", history=history, now=NOW
+    )
+    assert plan is not None and plan.reply is not None
+    assert "9 000 000" not in plan.reply
 
 
 def test_the_price_in_words_is_of_the_operation_talked_about_last() -> None:

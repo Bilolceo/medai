@@ -170,13 +170,6 @@ def parse_time(message: str) -> time | None:
     return time(hour, minute)
 
 
-def _about_card(topic: str, text: str) -> bool:
-    """Does ``text`` name the operation of this card, or its complaint?"""
-    rule = promo_images.OPERATIONS.get(topic)
-    complaint = promo_images.COMPLAINT_CARDS.get(topic)
-    return bool(rule and rule[0].search(text)) or bool(complaint and complaint.search(text))
-
-
 _BARE_HOUR = re.compile(r"^\s*(?:soat|соат)?\s*(\d{1,2})\s*[.!]?\s*$", re.IGNORECASE)
 
 
@@ -197,11 +190,16 @@ def _within(flow: Mapping[str, Any], at: time, prefix: str = "online") -> bool:
     return time.fromisoformat(start) <= at < time.fromisoformat(end)
 
 
-_EVENING_WORD = re.compile(r"kech(?!ro)|кеч(?!ро)|вечер", re.IGNORECASE)
-# "Kecha yozgan edim": yesterday, in the past -- not the evening.
+# The evening asked for by itself -- not "kechirasiz" or "kechikdim".
+_EVENING_ASK = re.compile(
+    r"kechqurun|kechki|kechga|kechasi|\bkecha?\b|кечқурун|кечки|кечга|кечаси|\bкеча?\b|вечер",
+    re.IGNORECASE,
+)
+# "Kecha yozgan edim": yesterday, in the past -- not the evening. Only the
+# past tense: "bo'ladi" is the present.
 _PAST = re.compile(
-    r"\w+(?:gan|gandim|dim|dik|ding|di)\b|\bedi\w*|\w+(?:ган|гандим|дим|дик|динг|ди)\b|"
-    r"\bэди\w*|вчера",
+    r"\w+(?:gan|gandim|ganman|dim|dik|ding|dingiz)\b|\bedi\w*|kechagi|"
+    r"\w+(?:ган|гандим|ганман|дим|дик|динг|дингиз)\b|\bэди\w*|кечаги|вчера",
     re.IGNORECASE,
 )
 
@@ -328,7 +326,7 @@ def plan_libido(
             if question:
                 return Plan(then=fill("ask_time"), instruction=INSTRUCTION)
             return Plan(reply=fill("time_example"))
-        if _EVENING_WORD.search(message) and at.hour < 12:
+        if _EVENING_ASK.search(message) and at.hour < 12:
             # "kechki 8" is eight in the evening.
             at = at.replace(hour=at.hour + 12)
         clock = f"{at:%H:%M}"
@@ -949,7 +947,7 @@ def plan_intake(
         at = parse_time(when)
         # "16:00" is inside "09:00 dan 16:00 gacha" for a call.
         callable_at = at is None or _within(flow, at) or f"{at:%H:%M}" == flow.get("online_end")
-        if not callable_at or _EVENING_WORD.search(when):
+        if not callable_at or _EVENING_ASK.search(when):
             return Plan(reply=texts["operator_hours"])
         if re.fullmatch(r"\d{1,2}(?:[:.]\d{2})?", when.strip()):
             # A bare "16:00" reads as "16:00 da" / "в 16:00".
@@ -1430,7 +1428,7 @@ def plan_intake(
         and "evening_ok" in texts
         and not evening_only
         and parse_time(message) is None
-        and _EVENING_WORD.search(message)
+        and _EVENING_ASK.search(message)
         and not _PAST.search(message)
     ):
         # "Kecha qilib bera oladilarmi?" -- the evening, not yesterday
@@ -1447,14 +1445,14 @@ def plan_intake(
     if pending in ("offer_slots", "online_choice") and (
         not question or (parse_time(message) is not None and not asks_price)
     ):
-        # "15:00 ga?" is a time, question mark or not.
-        at = parse_time(message)
+        # "15:00 ga?" is a time, question mark or not; "15" to the times offered too.
+        at = parse_time(message) or (_bare_hour(message) if pending == "offer_slots" else None)
         if (
             at is not None
             and pending == "offer_slots"
             or (at is not None and pending == "online_choice" and not _WANTS_CALL.search(message))
         ):
-            if _EVENING_WORD.search(message) and at.hour < 12:
+            if _EVENING_ASK.search(message) and at.hour < 12:
                 at = at.replace(hour=at.hour + 12)
             kind = "sport" if sport_day else "uro"
             mode = texts["mode_visit"] if in_person() else texts["mode_online"]
@@ -1556,9 +1554,12 @@ def plan_intake(
     if asks_price and op_cards and operation_asked and not asks_about_operation:
         # "1- komponentli protez narxi?" again: the operation's price, in words.
         titles = [t for t in op_cards if t in op_prices]
-        for turn in (message, *reversed(patient_since)):
+        patient_all = [t["content"] for t in turns if t.get("role") == "user"] + [message]
+        for turn in reversed(patient_all):
             # The operation talked about last, not every card sent (2026-11-09).
-            latest = [t for t in titles if _about_card(op_prices[t].get("topic", ""), turn)]
+            latest = [
+                t for t in titles if promo_images.talks_about(op_prices[t].get("topic", ""), turn)
+            ]
             if latest:
                 titles = latest
                 break
@@ -1741,17 +1742,6 @@ def plan(
     """The scripted answer from whichever flow this conversation is in."""
     if not flows:
         return None
-    turns = list(history or [])
-    unanswered = 0
-    while unanswered < len(turns) and turns[-1 - unanswered].get("role") == "user":
-        unanswered += 1
-    if unanswered:
-        # "Акмал", then "Денервация нечпул?" before any reply (2026-11-09):
-        # read as one message, so the name is not asked for again.
-        user_message = "\n".join(
-            [*(str(t.get("content", "")) for t in turns[-unanswered:]), user_message]
-        )
-        history = turns[:-unanswered]
     if _EMERGENCY.search(user_message) or (
         reading is not None and reading.complaint_kind == "emergency"
     ):

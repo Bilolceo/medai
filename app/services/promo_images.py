@@ -319,14 +319,7 @@ OPERATIONS: dict[str, tuple[re.Pattern[str], bool]] = {
     ),
     "op:falloprotez": (re.compile(r"fall?oprotez|protez|фаллопротез|протез", re.IGNORECASE), False),
     "op:micro-tese": (
-        # "Tuxumdan urug' topish", "тухимдан уриг топиш" (2026-11-09): Micro-TESE.
-        re.compile(
-            r"m[ia]kro\W?tese|\btese\b|микро\W?тезе|\bтезе\b|"
-            r"ur[ui]g['‘ʻ’`]?\w*\s+(?:\w+\s+)?top|ур[уи][гғ]\w*\s+(?:\w+\s+)?топ|"
-            r"sperma\w*\s+top|сперма\w*\s+топ|"
-            r"(?:tux[ui]m|moyak)\w*dan\s+ur[ui]g|(?:тух[уи]м|мояк)\w*дан\s+ур[уи][гғ]",
-            re.IGNORECASE,
-        ),
+        re.compile(r"m[ia]kro\W?tese|\btese\b|микро\W?тезе|\bтезе\b", re.IGNORECASE),
         False,
     ),
     "op:denervatsiya": (re.compile(r"denervats|денервац", re.IGNORECASE), False),
@@ -388,7 +381,11 @@ COMPLAINT_CARDS: dict[str, re.Pattern[str]] = {
         r"(?:фарзанд|бола)\w*\s+(?:\w+\s+)?(?:бўлма|булма|йўқ|йук|кўрма)|"
         r"spermatozoid\w*\s+(?:\w+\s+)?(?:yo['‘ʻ’`]?q|chiqma)|"
         r"сперматозоид\w*\s+(?:\w+\s+)?(?:йўқ|нет|чиқма)|"
-        r"urug['‘ʻ’`]?\w*\s+yo['‘ʻ’`]?q|уруғ\w*\s+йўқ|не\s+можем\s+зачать|нет\s+детей",
+        r"urug['‘ʻ’`]?\w*\s+yo['‘ʻ’`]?q|уруғ\w*\s+йўқ|не\s+можем\s+зачать|нет\s+детей|"
+        # "Tuxumdan urug' topish", "тухимдан уриг топиш" (2026-11-09).
+        r"ur[ui]g['‘ʻ’`]?\w*\s+(?:\w+\s+)?top|ур[уи][гғ]\w*\s+(?:\w+\s+)?топ|"
+        r"sperma\w*\s+top|сперма\w*\s+топ|"
+        r"(?:tux[ui]m|moyak)\w*dan\s+ur[ui]g|(?:тух[уи]м|мояк)\w*дан\s+ур[уи][гғ]",
         re.IGNORECASE,
     ),
     # Steroids and hormones (2026-11-09): the consultation's own card.
@@ -426,6 +423,13 @@ _OPERATION_NOTE = {
 }
 
 
+def talks_about(topic: str, text: str) -> bool:
+    """Does ``text`` name this card's operation, or the complaint it treats?"""
+    rule = OPERATIONS.get(topic)
+    complaint = COMPLAINT_CARDS.get(topic)
+    return bool(rule and rule[0].search(text)) or bool(complaint and complaint.search(text))
+
+
 def operations_asked(
     images: Sequence[Mapping[str, Any]] | None,
     *,
@@ -441,11 +445,6 @@ def operations_asked(
     general = bool(_OPERATION_ONLY.search(user_message)) and bool(PRICE_WORD.search(user_message))
     talked = [*patient_turns, user_message]
 
-    def about(topic: str, text: str) -> bool:
-        rule = OPERATIONS.get(topic)
-        complaint = COMPLAINT_CARDS.get(topic)
-        return bool(rule and rule[0].search(text)) or bool(complaint and complaint.search(text))
-
     operations_talked = any(
         _OPERATION_ONLY.search(t)
         or OPERATION_NAMES.search(t)
@@ -456,7 +455,7 @@ def operations_asked(
         earlier = [
             image
             for image in images or []
-            if any(about(str(image.get("topic", "")), t) for t in talked)
+            if any(talks_about(str(image.get("topic", "")), t) for t in talked)
         ]
         pool = earlier or [i for i in images or [] if str(i.get("topic", "")) in OPERATIONS]
         unsent = [
@@ -482,7 +481,7 @@ def operations_asked(
             image
             for image in images or []
             if str(image.get("topic", "")) in OPERATIONS
-            and any(about(str(image.get("topic", "")), t) for t in patient_turns)
+            and any(talks_about(str(image.get("topic", "")), t) for t in talked)
         ]
         if before:
             return [

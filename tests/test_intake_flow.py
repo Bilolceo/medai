@@ -970,15 +970,26 @@ def test_yesterday_in_the_past_is_not_the_evening() -> None:
     assert "990 000" not in _offered("Kecha yozgan edim, javob kelmadi")
 
 
-def test_messages_sent_before_a_reply_are_read_together() -> None:
-    # Production chat 2026-11-09: "Акмал", then "Денервация нечпул" -- the name asked again.
+def test_the_evening_asked_in_the_present_tense_is_offered() -> None:
+    reply = _offered("Kechqurun kelsam bo'ladi")
+    assert "990 000" in reply
+
+
+def test_excuse_me_is_not_the_evening() -> None:
+    assert "990 000" not in _offered("Kechirasiz, ertaga 09:00 bo'ladi")
+
+
+def test_the_hour_alone_picks_the_time_offered() -> None:
+    # Production chat 2026-11-09, the other flow: "15" to the times offered.
+    texts = FLOWS["intake"]["texts"]["uz-latn"]
     history = [
-        {"role": "user", "content": "Ассалом алейкум"},
-        {"role": "assistant", "content": _talk(["Ассалом алейкум"], "uz-cyrl")[0]},
-        {"role": "user", "content": "Акмал"},
+        {"role": "user", "content": "Varikotsele"},
+        {"role": "assistant", "content": texts["online_choice"]},
+        {"role": "user", "content": "Ha"},
+        {"role": "assistant", "content": texts["offer_slots"].format(slots="ertaga 15:00 da")},
     ]
+    slots = [NOW.replace(day=4, hour=15, minute=0)]
     plan = scripted_flow.plan(
-        FLOWS, script="uz-cyrl", user_message="Денервация нечпул", history=history, now=NOW
+        FLOWS, script="uz-latn", user_message="15", history=history, now=NOW, slots=slots
     )
-    assert plan is not None and plan.reply is not None
-    assert "Акмал" in plan.reply and "Исмингиз" not in plan.reply
+    assert plan is not None and plan.reply is not None and "15:00" in plan.reply
