@@ -341,8 +341,10 @@ def build_settings(template: str, doctor: Mapping[str, Any]) -> dict[str, Any]:
         line = f"{name_uz} narxi {price}, barcha xarajatlar narx ichida."
         price_ru = re.sub(r"(?i)so['‘ʻ’`]?m", "сум", price)
         operation_prices[title] = {
+            "topic": "op:" + key.lower().replace("_", "-"),
             "uz-latn": line,
-            "uz-cyrl": to_cyrillic(line),
+            # "Micro-TESE" letter by letter would be "Мицро-ТЕСЕ".
+            "uz-cyrl": to_cyrillic(line).replace("Мицро-ТЕСЕ", "Микро-TESE"),
             "ru": f"{name_ru}: {price_ru}, все расходы включены.",
         }
     # A scripted flow: lines the clinic wants said word for word and in

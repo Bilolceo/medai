@@ -944,3 +944,41 @@ def test_the_steroid_price_asked_is_said_in_words() -> None:
     replies = _sport_book(["Testosteron ukol qilganman", "Jasur", "Samarqand", "Narxi qancha?"])
     assert "500 000 so'm" in replies[3] and "250 000 so'm" in replies[3]
     assert "990 000" not in replies[3]
+
+
+def _offered(message: str, history_patient: str = "Varikotsele") -> str:
+    texts = FLOWS["intake"]["texts"]["uz-latn"]
+    history = [
+        {"role": "user", "content": history_patient},
+        {"role": "assistant", "content": texts["online_choice"]},
+        {"role": "user", "content": "Ha"},
+        {"role": "assistant", "content": texts["offer_slots"].format(slots="ertaga 09:00 da")},
+    ]
+    plan = scripted_flow.plan(
+        FLOWS, script="uz-latn", user_message=message, history=history, now=NOW
+    )
+    return plan.reply if plan and plan.reply else "<model>"
+
+
+def test_kecha_for_a_booking_is_the_evening() -> None:
+    # Production chat 2026-11-09: "kecha qilib bera oladilarmi" got "kecha bo'lmaydi".
+    reply = _offered("Menga online kasultatsiya kecha qilib bera oladilarmi")
+    assert "19:00 dan 22:00 gacha" in reply and "990 000" in reply
+
+
+def test_yesterday_in_the_past_is_not_the_evening() -> None:
+    assert "990 000" not in _offered("Kecha yozgan edim, javob kelmadi")
+
+
+def test_messages_sent_before_a_reply_are_read_together() -> None:
+    # Production chat 2026-11-09: "Акмал", then "Денервация нечпул" -- the name asked again.
+    history = [
+        {"role": "user", "content": "Ассалом алейкум"},
+        {"role": "assistant", "content": _talk(["Ассалом алейкум"], "uz-cyrl")[0]},
+        {"role": "user", "content": "Акмал"},
+    ]
+    plan = scripted_flow.plan(
+        FLOWS, script="uz-cyrl", user_message="Денервация нечпул", history=history, now=NOW
+    )
+    assert plan is not None and plan.reply is not None
+    assert "Акмал" in plan.reply and "Исмингиз" not in plan.reply

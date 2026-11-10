@@ -170,6 +170,26 @@ def parse_time(message: str) -> time | None:
     return time(hour, minute)
 
 
+def _about_card(topic: str, text: str) -> bool:
+    """Does ``text`` name the operation of this card, or its complaint?"""
+    rule = promo_images.OPERATIONS.get(topic)
+    complaint = promo_images.COMPLAINT_CARDS.get(topic)
+    return bool(rule and rule[0].search(text)) or bool(complaint and complaint.search(text))
+
+
+_BARE_HOUR = re.compile(r"^\s*(?:soat|соат)?\s*(\d{1,2})\s*[.!]?\s*$", re.IGNORECASE)
+
+
+def _bare_hour(message: str) -> time | None:
+    """ "15" to "Ertaga soat nechiga?": the hour alone (2026-11-09)."""
+    match = _BARE_HOUR.match(message)
+    if not match:
+        return None
+    hour = int(match.group(1))
+    hour += 12 if 1 <= hour <= 7 else 0
+    return time(hour, 0) if 8 <= hour <= 23 else None
+
+
 def _within(flow: Mapping[str, Any], at: time, prefix: str = "online") -> bool:
     start, end = flow.get(f"{prefix}_start"), flow.get(f"{prefix}_end")
     if not start or not end:
@@ -178,6 +198,12 @@ def _within(flow: Mapping[str, Any], at: time, prefix: str = "online") -> bool:
 
 
 _EVENING_WORD = re.compile(r"kech(?!ro)|кеч(?!ро)|вечер", re.IGNORECASE)
+# "Kecha yozgan edim": yesterday, in the past -- not the evening.
+_PAST = re.compile(
+    r"\w+(?:gan|gandim|dim|dik|ding|di)\b|\bedi\w*|\w+(?:ган|гандим|дим|дик|динг|ди)\b|"
+    r"\bэди\w*|вчера",
+    re.IGNORECASE,
+)
 
 
 _TASHKENT = re.compile(r"to[sš]h?kent|tashkent|тошкент|ташкент|toshken|тошкен", re.IGNORECASE)
@@ -297,7 +323,7 @@ def plan_libido(
         return Plan(reply=f"{texts['price_early']} {bubbles.MARKER} {again}")
 
     if pending == "causes":
-        at = parse_time(message)
+        at = parse_time(message) or _bare_hour(message)
         if at is None:
             if question:
                 return Plan(then=fill("ask_time"), instruction=INSTRUCTION)
@@ -599,6 +625,8 @@ def _understand(message: str, reading: Any, *, asked_name: bool) -> _Understood:
             and len(first_line.split()) <= 2
             and _NAME_WORD.match(word)
             and not _GREETING.search(word)
+            # "Нечпул нархи" asks the price; "Нечпул" is no name.
+            and not promo_images.PRICE_WORD.search(first_line)
         ):
             name = _cap(word)
         return _Understood(
@@ -619,7 +647,9 @@ def _understand(message: str, reading: Any, *, asked_name: bool) -> _Understood:
             complaint_words=None,
         )
     name = reading.name
-    if name and (_ABROAD.search(name) or _COMPLAINT.search(name)):
+    if name and (
+        _ABROAD.search(name) or _COMPLAINT.search(name) or promo_images.PRICE_WORD.search(name)
+    ):
         name = None
     lines = message.strip().splitlines()
     if name is None and asked_name and len(lines) > 1:
@@ -843,7 +873,11 @@ def plan_intake(
     # "Telefon raqamingizni yozing" asked again is the same step.
     said["ask_phone"] += _said(flow, "ask_phone_again", since)
     said["online_choice"] += _said(flow, "choice_again", since) + _said(flow, "visit_choice", since)
-    said["offer_slots"] += _said(flow, "slot_taken", since) + _said(flow, "offer_evening", since)
+    said["offer_slots"] += (
+        _said(flow, "slot_taken", since)
+        + _said(flow, "offer_evening", since)
+        + _said(flow, "evening_ok", since)
+    )
     if said["paid_confirm"] or _said(flow, "hesitate_thanks", since):
         return None
     corrected = said["confirm"] and phone_check.read(message) is not None
@@ -994,7 +1028,7 @@ def plan_intake(
         aliases = {
             "ask_place": ("ask_place_named",),
             "online_choice": ("visit_choice", "choice_again"),
-            "offer_slots": ("slot_taken", "day_full", "offer_evening"),
+            "offer_slots": ("slot_taken", "day_full", "offer_evening", "evening_ok"),
         }
         last_step = next(
             (
@@ -1393,6 +1427,17 @@ def plan_intake(
         return Plan(reply=texts["ask_phone"])
     if (
         pending in ("offer_slots", "online_choice")
+        and "evening_ok" in texts
+        and not evening_only
+        and parse_time(message) is None
+        and _EVENING_WORD.search(message)
+        and not _PAST.search(message)
+    ):
+        # "Kecha qilib bera oladilarmi?" -- the evening, not yesterday
+        # (2026-11-09): the evening hours and their price.
+        return Plan(reply=texts["evening_ok"].format(price=price_of("evening")[0]))
+    if (
+        pending in ("offer_slots", "online_choice")
         and parse_time(message) is None
         and (_named_day(message, now) is not None or _LATER.search(message))
         and not _WANTS_CALL.search(message)
@@ -1510,9 +1555,14 @@ def plan_intake(
     )
     if asks_price and op_cards and operation_asked and not asks_about_operation:
         # "1- komponentli protez narxi?" again: the operation's price, in words.
-        lines = [
-            op_prices[t].get(script) or op_prices[t]["uz-latn"] for t in op_cards if t in op_prices
-        ]
+        titles = [t for t in op_cards if t in op_prices]
+        for turn in (message, *reversed(patient_since)):
+            # The operation talked about last, not every card sent (2026-11-09).
+            latest = [t for t in titles if _about_card(op_prices[t].get("topic", ""), turn)]
+            if latest:
+                titles = latest
+                break
+        lines = [op_prices[t].get(script) or op_prices[t]["uz-latn"] for t in dict.fromkeys(titles)]
         if lines:
             again = {
                 "online_choice": choice_again(),
@@ -1691,6 +1741,17 @@ def plan(
     """The scripted answer from whichever flow this conversation is in."""
     if not flows:
         return None
+    turns = list(history or [])
+    unanswered = 0
+    while unanswered < len(turns) and turns[-1 - unanswered].get("role") == "user":
+        unanswered += 1
+    if unanswered:
+        # "Акмал", then "Денервация нечпул?" before any reply (2026-11-09):
+        # read as one message, so the name is not asked for again.
+        user_message = "\n".join(
+            [*(str(t.get("content", "")) for t in turns[-unanswered:]), user_message]
+        )
+        history = turns[:-unanswered]
     if _EMERGENCY.search(user_message) or (
         reading is not None and reading.complaint_kind == "emergency"
     ):

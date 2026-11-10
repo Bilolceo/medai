@@ -238,3 +238,11 @@ def test_a_place_to_the_name_question_is_not_a_name() -> None:
 def test_a_sentence_is_not_a_name() -> None:
     replies = _talk(["Xohishim yo'q", "Bilmayman nima qilishni endi"])
     assert "Bilmayman," not in replies[1]
+
+
+def test_the_hour_alone_is_the_time() -> None:
+    # Production chat 2026-11-09: "15" to "Ertaga soat nechiga?" was not taken.
+    replies = _talk(["Jinsiy xohishim pasayib ketdi", "Sardor", "Toshkent", "19", "15"])
+    assert "15:00" in replies[-1]
+    assert scripted_flow._bare_hour("19 yosh") is None
+    assert scripted_flow._bare_hour("3") is not None and scripted_flow._bare_hour("3").hour == 15

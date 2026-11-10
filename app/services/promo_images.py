@@ -35,7 +35,7 @@ _EVENING = re.compile(
     re.IGNORECASE,
 )
 _UROLOGY = re.compile(
-    r"erek|potens|xohish|istak|libido|prostat|varikot|bepusht|farzand|siydik|moyak|tez\s*bo['‘ʻ’`]?shan|"
+    r"erek|potens|xohish|istak|libido|prostat|varikot|varakat|bepusht|farzand|siydik|moyak|tez\s*bo['‘ʻ’`]?shan|"
     r"erkak|urolog|androlog|gormon|testosteron|"
     r"эрек|потенц|хоҳиш|хохиш|истак|либидо|простат|варикоц|фарзанд|сийдик|мояк|"
     r"влечен|желани|бесплод|моч|яичк|уролог|андролог|гормон|тестостерон",
@@ -271,7 +271,7 @@ _OPERATION_WORD = re.compile(
 )
 _OPERATION_ONLY = re.compile(r"operats|operasi|amaliyot|операц|амалиёт", re.IGNORECASE)
 # "Nechpul", "неча пул", "нечпул слада": how much, as patients write it.
-_PRICE_WORD = re.compile(
+PRICE_WORD = re.compile(
     r"narx|qancha|нарх|қанча|цен|стоим|сколько|почём|почем|nech\w{0,2}\s*pul|неч\w{0,2}\s*пул",
     re.IGNORECASE,
 )
@@ -295,7 +295,7 @@ _SAYS_PICTURE = re.compile(
 # topic -> (what the patient wrote, does it need an operation or price word with it)
 OPERATIONS: dict[str, tuple[re.Pattern[str], bool]] = {
     "op:varikosele": (
-        re.compile(r"varik[oa]t?s?[eia]l|варик[оаэе]ц|варик[оа]с", re.IGNORECASE),
+        re.compile(r"var[iae]k[oa]t?s?[eia]l|вар[иа]к[оаэе]ц|вар[иа]к[оа]с", re.IGNORECASE),
         True,
     ),
     "op:skrotoplastika": (
@@ -319,7 +319,14 @@ OPERATIONS: dict[str, tuple[re.Pattern[str], bool]] = {
     ),
     "op:falloprotez": (re.compile(r"fall?oprotez|protez|фаллопротез|протез", re.IGNORECASE), False),
     "op:micro-tese": (
-        re.compile(r"m[ia]kro\W?tese|\btese\b|микро\W?тезе|\bтезе\b", re.IGNORECASE),
+        # "Tuxumdan urug' topish", "тухимдан уриг топиш" (2026-11-09): Micro-TESE.
+        re.compile(
+            r"m[ia]kro\W?tese|\btese\b|микро\W?тезе|\bтезе\b|"
+            r"ur[ui]g['‘ʻ’`]?\w*\s+(?:\w+\s+)?top|ур[уи][гғ]\w*\s+(?:\w+\s+)?топ|"
+            r"sperma\w*\s+top|сперма\w*\s+топ|"
+            r"(?:tux[ui]m|moyak)\w*dan\s+ur[ui]g|(?:тух[уи]м|мояк)\w*дан\s+ур[уи][гғ]",
+            re.IGNORECASE,
+        ),
         False,
     ),
     "op:denervatsiya": (re.compile(r"denervats|денервац", re.IGNORECASE), False),
@@ -345,7 +352,8 @@ COMPLAINT_CARDS: dict[str, re.Pattern[str]] = {
     ),
     # Varicocele: "moyakda tomir", "tomirlar kengaygan".
     "op:varikosele": re.compile(
-        r"varik[oa]t?s?[eia]l|варик[оаэе]ц|варик[оа]с|"
+        # "Varakatsel" (2026-11-09) as patients spell it.
+        r"var[iae]k[oa]t?s?[eia]l|вар[иа]к[оаэе]ц|вар[иа]к[оа]с|"
         r"moya[kg]\w*\s+(?:\w+\s+)?(?:tomir|vena)|моя[кг]\w*\s+(?:\w+\s+)?(?:томир|вена)|"
         r"tomir\w*\s+(?:\w+\s+)?kengay|томир\w*\s+(?:\w+\s+)?кенгай|"
         r"расширен\w*\s+вен|вен\w*\s+яичк",
@@ -398,6 +406,11 @@ COMPLAINT_CARDS: dict[str, re.Pattern[str]] = {
         re.IGNORECASE,
     ),
 }
+# "Boshqa operatsiyalar narxi?": the rest of the cards, not the one talked about.
+_OTHERS = re.compile(
+    r"boshqa|qolgan|hamma|barcha|бошқа|қолган|колган|ҳамма|хамма|барча|други|остальн|все\b",
+    re.IGNORECASE,
+)
 OPERATION_NAMES = re.compile(
     "|".join(pattern.pattern for pattern, _ in OPERATIONS.values()), re.IGNORECASE
 )
@@ -425,7 +438,7 @@ def operations_asked(
     or all of them for "operatsiya narxlari qancha?" naming none. "Rasm qani?"
     after operations were talked about, or a reply that says the price is in
     the picture, sends the ones named so far (all of them, none named)."""
-    general = bool(_OPERATION_ONLY.search(user_message)) and bool(_PRICE_WORD.search(user_message))
+    general = bool(_OPERATION_ONLY.search(user_message)) and bool(PRICE_WORD.search(user_message))
     talked = [*patient_turns, user_message]
 
     def about(topic: str, text: str) -> bool:
@@ -454,7 +467,7 @@ def operations_asked(
         if not unsent and _ASKS_PICTURE.search(user_message):
             # "Rasm qani?" after they went out: not seen, so sent again.
             return earlier or pool
-        if unsent or not general:
+        if unsent or not general or (earlier and not _OTHERS.search(user_message)):
             return unsent
     named = [
         image
@@ -462,6 +475,21 @@ def operations_asked(
         if (rule := OPERATIONS.get(str(image.get("topic", "")))) is not None
         and rule[0].search(user_message)
     ]
+    if general and not named and not _OTHERS.search(user_message):
+        # "Нечпул операция" after one operation was talked about: that one's
+        # card, not all seven (2026-11-09) -- and none again once it went.
+        before = [
+            image
+            for image in images or []
+            if str(image.get("topic", "")) in OPERATIONS
+            and any(about(str(image.get("topic", "")), t) for t in patient_turns)
+        ]
+        if before:
+            return [
+                image
+                for image in before
+                if not any(sent_line(str(image.get("title", ""))) in turn for turn in own_turns)
+            ]
     found = []
     for image in images or []:
         topic = str(image.get("topic", ""))

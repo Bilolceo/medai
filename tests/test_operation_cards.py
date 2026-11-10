@@ -214,3 +214,46 @@ def test_the_steroid_card_has_no_operation_note() -> None:
 
 def test_a_dollar_course_is_not_a_steroid_course() -> None:
     assert _sport("Dollar kursi qancha?") == []
+
+
+def test_misspelt_varicocele_brings_its_card() -> None:
+    # Production chat 2026-11-09: "Varakatsel bn" sent no card.
+    assert _asked("Varakatsel bn") == ["op:varikosele"]
+
+
+def test_sperm_retrieval_in_everyday_words_is_micro_tese() -> None:
+    assert _asked("Тухумдан уруг топиш операция клалми?") == ["op:micro-tese"]
+    assert _asked("Тухимдан уриг топиш") == ["op:micro-tese"]
+    assert _asked("Moyakdan urug' topish mumkinmi?") == ["op:micro-tese"]
+
+
+def test_operation_price_after_one_operation_sends_only_that_card() -> None:
+    # Production chat 2026-11-09: "Нечпул операция" after denervation sent six cards.
+    sent = [promo_images.sent_line("Selektiv denervatsiya: narx va paket")]
+    assert _cards("Нечпул операция", patient=["Денервация нечпул"], own=sent) == []
+    assert _cards("Операция нечпул", patient=["Варикоцеле бор"]) == ["op:varikosele"]
+    others = _cards("Boshqa operatsiyalar narxi qancha?", patient=["Varikotsele bor"], own=sent)
+    assert len(others) == 6
+
+
+def test_the_price_in_words_is_of_the_operation_talked_about_last() -> None:
+    # Production chat 2026-11-09: all seven prices in words after Micro-TESE was asked.
+    flows = SETTINGS["scripted_flows"]
+    ask = "Ha, doktor shu bilan shug'ullanadi. Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?"
+    history = [
+        {"role": "user", "content": "Denervatsiya narxi?"},
+        {"role": "assistant", "content": f"{ask}\n\n📎 Selektiv denervatsiya: narx va paket"},
+        {"role": "user", "content": "Moyakdan urug' topish operatsiyasi narxi?"},
+        {"role": "assistant", "content": f"{ask}\n\n📎 Micro-TESE: narx va paket"},
+    ]
+    plan = scripted_flow.plan(
+        flows, script="uz-latn", user_message="Narxi qancha?", history=history, now=NOW
+    )
+    assert plan is not None and plan.reply is not None
+    assert plan.reply.startswith("Micro-TESE narxi 9 000 000 so'm")
+    assert "denervatsiya" not in plan.reply.lower()
+
+
+def test_micro_tese_is_spelt_right_in_cyrillic() -> None:
+    line = SETTINGS["scripted_flows"]["intake"]["operation_prices"]["Micro-TESE: narx va paket"]
+    assert line["uz-cyrl"].startswith("Микро-TESE нархи")
