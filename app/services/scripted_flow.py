@@ -170,6 +170,16 @@ def parse_time(message: str) -> time | None:
     return time(hour, minute)
 
 
+# "Menga operatsiya kerak": the operation spoken of, not a time or a choice.
+_OPERATION_SAID = re.compile(r"operats|operasi|amaliyot|операц|амалиёт", re.IGNORECASE)
+# Operations with no card of their own: the doctor names the price after the consultation.
+_OTHER_OPS = re.compile(
+    r"gidrots|gidrosel|гидроц|гидросел|vodyank|водянк|sunnat|xatna|суннат|хатна|обрезан|"
+    r"frenul|френул|uzdechk|уздечк|fimoz|фимоз|kista|киста",
+    re.IGNORECASE,
+)
+
+
 _BARE_HOUR = re.compile(r"^\s*(?:soat|соат)?\s*(\d{1,2})\s*[.!]?\s*$", re.IGNORECASE)
 
 
@@ -1425,6 +1435,18 @@ def plan_intake(
         return Plan(reply=texts["ask_phone"])
     if (
         pending in ("offer_slots", "online_choice")
+        and _OPERATION_SAID.search(message)
+        and parse_time(message) is None
+        and not asks_price
+        and not _WANTS_CALL.search(message)
+        and "op_first_consult" in texts
+    ):
+        # "Menga operatsiya kerak" to the times offered (live, 2026-11-10):
+        # the doctor decides at the consultation -- and the step's question again.
+        again = choice_again() if pending == "online_choice" else offer_slots().reply or ""
+        return Plan(reply=f"{texts['op_first_consult']} {again}".strip())
+    if (
+        pending in ("offer_slots", "online_choice")
         and "evening_ok" in texts
         and not evening_only
         and parse_time(message) is None
@@ -1586,6 +1608,17 @@ def plan_intake(
             "ask_name": texts["ask_name"],
         }.get(pending or "", "")
         return Plan(reply=f"{texts[key].format(price=price, prepay=prepay)} {again}".strip())
+    if asks_price and _OTHER_OPS.search(message) and "op_first_consult" in texts:
+        # "Gidrotsele nechpul?": an operation with no card -- the doctor names
+        # its price after the consultation (live, 2026-11-10).
+        again = {
+            "online_choice": choice_again(),
+            "offer_slots": choice_again(),
+            "ask_place": texts["ask_place"],
+            "ask_name": texts["ask_name"],
+            "ask_topic": texts["ask_topic"],
+        }.get(pending or "", "")
+        return Plan(reply=f"{texts['op_first_consult']} {again}".strip())
     if asks_price and not asks_about_operation:
         again = {
             "ask_name": (

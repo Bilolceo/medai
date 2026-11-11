@@ -993,3 +993,43 @@ def test_the_hour_alone_picks_the_time_offered() -> None:
         FLOWS, script="uz-latn", user_message="15", history=history, now=NOW, slots=slots
     )
     assert plan is not None and plan.reply is not None and "15:00" in plan.reply
+
+
+def test_an_operation_asked_for_at_the_slots_gets_the_doctor_decides_line() -> None:
+    # Live chat 2026-11-10: "Операциячи манга операция керак" got the times again, nothing else.
+    texts = FLOWS["intake"]["texts"]["uz-latn"]
+    history = [
+        {"role": "user", "content": "Varikotsele"},
+        {"role": "assistant", "content": texts["online_choice"]},
+        {"role": "user", "content": "Ha"},
+        {"role": "assistant", "content": texts["offer_slots"].format(slots="ertaga 09:00 da")},
+    ]
+    plan = scripted_flow.plan(
+        FLOWS,
+        script="uz-latn",
+        user_message="Operatsiyachi, menga operatsiya kerak",
+        history=history,
+        now=NOW,
+        slots=[NOW.replace(day=4, hour=9, minute=0)],
+    )
+    assert plan is not None and plan.reply is not None
+    assert "doktor ko'rikda aniqlaydi" in plan.reply and "09:00" in plan.reply
+
+
+def test_the_price_of_an_operation_without_a_card_is_the_doctors_to_say() -> None:
+    # Live chat 2026-11-10: "Гидроцели нечпул" got the consultation price alone.
+    texts = FLOWS["intake"]["texts"]["uz-latn"]
+    history = [
+        {"role": "user", "content": "Gidrotsele bor"},
+        {"role": "assistant", "content": texts["ask_name"]},
+        {"role": "user", "content": "Sardor"},
+        {"role": "assistant", "content": texts["ask_place_named"].format(name="Sardor")},
+        {"role": "user", "content": "Toshkent"},
+        {"role": "assistant", "content": texts["visit_choice"]},
+    ]
+    plan = scripted_flow.plan(
+        FLOWS, script="uz-latn", user_message="Gidrotsele nechpul?", history=history, now=NOW
+    )
+    assert plan is not None and plan.reply is not None
+    assert plan.reply.startswith("Operatsiya kerakligi va usulini doktor ko'rikda aniqlaydi")
+    assert "330 000" in plan.reply
