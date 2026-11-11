@@ -57,9 +57,23 @@ _QUESTION_WORDS = re.compile(
     r"что|почему|зачем|сколько|как|где|когда|кто|какой|можно|ли)\b|\w+(mi|ми)\b",
     re.IGNORECASE,
 )
+# "Qancha kun", "qancha vaqt": how long, not how much.
 _ASKS_PRICE = re.compile(
-    r"narx|нарх|qancha|қанча|pul|пул|to['‘ʻ’`]?lov|тўлов|сколько|стоим|стоит|цен|оплат",
+    r"narx|нарх|qancha(?!\s*(?:kun|vaqt|soat|muddat|marta|yosh|daqiqa|oy))|қанча(?!\s*(?:кун|вақт|соат|муддат|марта|ёш|дақиқа|ой))|pul|пул|to['‘ʻ’`]?lov|тўлов|"
+    r"сколько(?!\s*(?:дней|времени|часов|раз|лет|длится))|стоим|стоит|цен|оплат",
     re.IGNORECASE,
+)
+_NOT_A_PRICE = re.compile(
+    r"qancha\s*(?:kun|vaqt|soat|muddat|marta|yosh|daqiqa|oy)|"
+    r"қанча\s*(?:кун|вақт|соат|муддат|марта|ёш|дақиқа|ой)|"
+    r"сколько\s*(?:дней|времени|часов|раз|лет|длится)|davom\s*et|давом\s*эт|длится",
+    re.IGNORECASE,
+)
+INSTRUCTION_REASK = (
+    "THIS REPLY: answer only the patient's question in this message, in one or two short "
+    "sentences. Do not greet and do not introduce yourself. The patient was already asked "
+    'this and has not answered yet: "{question}" -- so end with ONE short sentence of your '
+    "own that asks for it again in different words, never repeating that line word for word."
 )
 _CLOCK = re.compile(r"\b(\d{1,2})\s*[:.]\s*(\d{2})\b")
 # "15 00 ga": the colon left out (live chat, 2026-11-07).
@@ -172,6 +186,12 @@ def parse_time(message: str) -> time | None:
 
 # "Menga operatsiya kerak": the operation spoken of, not a time or a choice.
 _OPERATION_SAID = re.compile(r"operats|operasi|amaliyot|операц|амалиёт", re.IGNORECASE)
+# "Operatsiya qilasizlarmi?", "operatsiya kerakmi?": wanting one, question or not.
+_OPERATION_WANT = re.compile(
+    r"(?:operats|operasi|amaliyot|операц|амалиёт)\w*\s+(?:kerak|qil|керак|қил)|"
+    r"qilasiz|қиласиз|qildir|қилдир",
+    re.IGNORECASE,
+)
 # Operations with no card of their own: the doctor names the price after the consultation.
 _OTHER_OPS = re.compile(
     r"gidrots|gidrosel|гидроц|гидросел|vodyank|водянк|sunnat|xatna|суннат|хатна|обрезан|"
@@ -911,7 +931,18 @@ def plan_intake(
         complaint = ""
     reason = " ".join(complaint.split()[:12]) or texts["default_reason"]
     question = u.question
-    asks_price = u.asks_price and not _NOT_OUR_PRICE.search(message)
+    asks_price = (
+        u.asks_price and not _NOT_OUR_PRICE.search(message) and not _NOT_A_PRICE.search(message)
+    )
+
+    def reask(question_text: str) -> Plan:
+        """The model answers what was asked; then the step's question -- in the
+        model's own words once it has been asked word for word already
+        (the doctor, 2026-11-11: "the bot asks the same thing again and again")."""
+        if any(_norm(question_text) in _norm(turn) for turn in own):
+            return Plan(instruction=INSTRUCTION_REASK.format(question=question_text))
+        return Plan(then=question_text, instruction=INSTRUCTION)
+
     sport_words = _sport_words(flow)
     sport = (reading is not None and reading.complaint_kind == "sport") or any(
         sport_words.search(t) for t in patient_since
@@ -1381,6 +1412,16 @@ def plan_intake(
         # "Raqam bermayman": the number is refused, so not asked for again.
         and not (_CONTACT.search(message) and _NO_NUMBER.search(message))
     )
+    early_hesitation = (
+        pending in ("ask_name", "ask_place", "ask_topic")
+        and bool(_HESITATE.search(message))
+        and not named_complaint(message)
+        and not _is_question(message)
+    )
+    if early_hesitation:
+        # "O'ylab ko'raman" before anything was offered: the model answers it
+        # with the whole conversation in view, nothing scripted.
+        return None
     if (
         pending in ("online_choice", "offer_slots", "book_ok")
         and hesitant
@@ -1436,6 +1477,7 @@ def plan_intake(
     if (
         pending in ("offer_slots", "online_choice")
         and _OPERATION_SAID.search(message)
+        and (not _is_question(message) or _OPERATION_WANT.search(message))
         and parse_time(message) is None
         and not asks_price
         and not _WANTS_CALL.search(message)
@@ -1685,7 +1727,7 @@ def plan_intake(
                 if pending == "offer_slots" and slots
                 else offer
             )
-            return Plan(then=again, instruction=INSTRUCTION)
+            return reask(again)
         if said[pending] < 2:
             again = (
                 texts["ask_phone_again"]
@@ -1706,7 +1748,7 @@ def plan_intake(
                 "ask_name": texts["ask_place"],
                 "ask_place": texts["ask_topic"],
             }[pending]
-        return Plan(then=again, instruction=INSTRUCTION)
+        return reask(again)
 
     if pending == "ask_name" and u.greeting_only and (not u.name or _GREETING.search(u.name)):
         # "Ассаламу алейкум" after "Ismingiz nima?": not a name.
@@ -1730,6 +1772,15 @@ def plan_intake(
         # Then the complaint, if not yet said; then online or the clinic --
         # booked and half paid here, so the administrator only checks the
         # receipt and rings to confirm before the visit.
+        if (
+            _is_question(message)
+            and not asks_price
+            and known_place() is None
+            and not abroad_said()
+            and not _TASHKENT.search(message)
+        ):
+            # "Operatsiya qancha davom etadi?" to "qayerdansiz?": answered, then the place.
+            return reask(texts["ask_place"])
         if named_complaint(message) and not known_place():
             # "Prostatit bor" in answer to "qayerdansiz?": taken, the place asked again.
             return Plan(reply=f"{texts['handles']} {texts['ask_place']}", card_topic=card_topic)

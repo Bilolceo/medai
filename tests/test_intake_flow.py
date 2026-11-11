@@ -107,7 +107,8 @@ def test_abroad_with_the_name_skips_the_place_question() -> None:
 
 def test_a_question_mid_way_goes_to_the_model_and_the_step_follows() -> None:
     replies = _talk(["Prostatit bor", "Davolanadimi?"])
-    assert replies[1] == f"<model> ||| {NAME}"
+    # Asked in the last line already: the model answers and asks again in its own words.
+    assert replies[1] == "<model> ||| "
 
 
 def test_a_first_message_that_is_a_question_still_gets_the_introduction() -> None:
@@ -192,8 +193,9 @@ def test_men_with_a_place_is_not_taken_for_a_name() -> None:
 
 def test_a_third_question_moves_on_instead_of_taking_it_for_a_name() -> None:
     replies = _talk(["Prostatit bor", "Ish vaqtingiz?", "Siz botmisiz?"])
-    assert replies[1] == f"<model> ||| {NAME}"
-    assert replies[2] == "<model> ||| Qayerdansiz: Toshkentdanmisiz yoki viloyatdanmi?"
+    # Asked in the last line already: the model answers and asks again in its own words.
+    assert replies[1] == "<model> ||| "
+    assert replies[2] == "<model> ||| "
 
 
 # --- the call, only when the patient asks for it ---
@@ -1033,3 +1035,83 @@ def test_the_price_of_an_operation_without_a_card_is_the_doctors_to_say() -> Non
     assert plan is not None and plan.reply is not None
     assert plan.reply.startswith("Operatsiya kerakligi va usulini doktor ko'rikda aniqlaydi")
     assert "330 000" in plan.reply
+
+
+def _history(step: str) -> list[dict[str, str]]:
+    texts = FLOWS["intake"]["texts"]["uz-latn"]
+    h = [
+        {"role": "user", "content": "Varikotsele bor"},
+        {"role": "assistant", "content": texts["ask_name"]},
+    ]
+    if step == "ask_name":
+        return h
+    h += [
+        {"role": "user", "content": "Sardor"},
+        {"role": "assistant", "content": texts["ask_place_named"].format(name="Sardor")},
+    ]
+    if step == "ask_place":
+        return h
+    h += [
+        {"role": "user", "content": "Toshkent"},
+        {"role": "assistant", "content": texts["visit_choice"]},
+    ]
+    if step == "online_choice":
+        return h
+    h += [
+        {"role": "user", "content": "Klinikaga"},
+        {
+            "role": "assistant",
+            "content": texts["offer_slots"].format(slots="ertaga 09:00 va 10:30 da"),
+        },
+    ]
+    return h
+
+
+def _at(step: str, message: str) -> scripted_flow.Plan | None:
+    slots = [NOW.replace(day=4, hour=9, minute=0), NOW.replace(day=4, hour=10, minute=30)]
+    return scripted_flow.plan(
+        FLOWS, script="uz-latn", user_message=message, history=_history(step), now=NOW, slots=slots
+    )
+
+
+def test_how_many_days_is_not_a_price_question() -> None:
+    # The doctor, 2026-11-11: the bot answers the price to anything with "qancha".
+    plan = _at("ask_name", "Qancha kunda tuzalaman?")
+    assert (
+        plan is not None
+        and plan.reply is None
+        and plan.then is None
+        and "Ismingiz" in (plan.instruction or "")
+    )
+
+
+def test_a_question_about_the_operation_at_the_place_step_is_answered_first() -> None:
+    plan = _at("ask_place", "Operatsiya qancha vaqt davom etadi?")
+    assert plan is not None and plan.reply is None
+    assert plan.then is None and "Qayerdansiz" in (plan.instruction or "")
+
+
+def test_hesitation_at_the_name_step_goes_to_the_model() -> None:
+    # Nothing was offered yet: the model answers, not the next step's question.
+    assert _at("ask_name", "Rahmat, o'ylab ko'raman") is None
+
+
+def test_a_question_about_life_after_the_operation_is_the_models_at_the_slots() -> None:
+    plan = _at("offer_slots", "Operatsiyadan keyin ishga chiqsam bo'ladimi?")
+    assert (
+        plan is not None and plan.reply is None and "09:00" in (plan.then or plan.instruction or "")
+    )
+
+
+def test_the_step_question_is_not_repeated_word_for_word() -> None:
+    # The doctor, 2026-11-11: "qayta-qayta so'rayapti". The second time the model rephrases.
+    texts = FLOWS["intake"]["texts"]["uz-latn"]
+    history = _history("online_choice") + [
+        {"role": "user", "content": "Doktor o'zi ko'radimi?"},
+        {"role": "assistant", "content": "Ha, doktor o'zi ko'radi. " + texts["choice_again"]},
+    ]
+    plan = scripted_flow.plan(
+        FLOWS, script="uz-latn", user_message="Narkoz bilan qilinadimi?", history=history, now=NOW
+    )
+    # Asked twice already: the model takes the turn with the whole conversation.
+    assert plan is None or (plan.reply is None and plan.then is None)

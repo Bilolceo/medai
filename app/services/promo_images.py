@@ -265,14 +265,14 @@ def for_topic(
 
 _OPERATION_WORD = re.compile(
     r"operats|operasi|amaliyot|jarroh|marmar|операц|амалиёт|жарроҳ|хирург|"
-    r"narx|qancha|нарх|қанча|цен|стоим|сколько|"
+    r"narx|qancha(?!\s*(?:kun|vaqt|soat|muddat|marta|yosh|daqiqa|oy))|нарх|қанча(?!\s*(?:кун|вақт|соат|муддат|марта|ёш|дақиқа|ой))|цен|стоим|сколько|"
     r"nech\w{0,2}\s*pul|неч\w{0,2}\s*пул|почём|почем",
     re.IGNORECASE,
 )
 _OPERATION_ONLY = re.compile(r"operats|operasi|amaliyot|операц|амалиёт", re.IGNORECASE)
 # "Nechpul", "неча пул", "нечпул слада": how much, as patients write it.
 PRICE_WORD = re.compile(
-    r"narx|qancha|нарх|қанча|цен|стоим|сколько|почём|почем|nech\w{0,2}\s*pul|неч\w{0,2}\s*пул",
+    r"narx|qancha(?!\s*(?:kun|vaqt|soat|muddat|marta|yosh|daqiqa|oy))|нарх|қанча(?!\s*(?:кун|вақт|соат|муддат|марта|ёш|дақиқа|ой))|цен|стоим|сколько|почём|почем|nech\w{0,2}\s*pul|неч\w{0,2}\s*пул",
     re.IGNORECASE,
 )
 # "Rasm qani?", "расм кани", "фото скиньте": the picture itself is asked for.
