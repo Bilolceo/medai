@@ -59,7 +59,7 @@ _QUESTION_WORDS = re.compile(
 )
 # "Qancha kun", "qancha vaqt": how long, not how much.
 _ASKS_PRICE = re.compile(
-    r"narx|нарх|qancha(?!\s*(?:kun|vaqt|soat|muddat|marta|yosh|daqiqa|oy))|қанча(?!\s*(?:кун|вақт|соат|муддат|марта|ёш|дақиқа|ой))|pul|пул|to['‘ʻ’`]?lov|тўлов|"
+    r"narx|narh|нарх|нарҳ|qancha(?!\s*(?:kun|vaqt|soat|muddat|marta|yosh|daqiqa|oy))|қанча(?!\s*(?:кун|вақт|соат|муддат|марта|ёш|дақиқа|ой))|pul|пул|to['‘ʻ’`]?lov|тўлов|"
     r"сколько(?!\s*(?:дней|времени|часов|раз|лет|длится))|стоим|стоит|цен|оплат",
     re.IGNORECASE,
 )

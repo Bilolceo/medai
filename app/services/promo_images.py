@@ -265,14 +265,14 @@ def for_topic(
 
 _OPERATION_WORD = re.compile(
     r"operats|operasi|amaliyot|jarroh|marmar|операц|амалиёт|жарроҳ|хирург|"
-    r"narx|qancha(?!\s*(?:kun|vaqt|soat|muddat|marta|yosh|daqiqa|oy))|нарх|қанча(?!\s*(?:кун|вақт|соат|муддат|марта|ёш|дақиқа|ой))|цен|стоим|сколько|"
+    r"narx|narh|qancha(?!\s*(?:kun|vaqt|soat|muddat|marta|yosh|daqiqa|oy))|нарх|нарҳ|қанча(?!\s*(?:кун|вақт|соат|муддат|марта|ёш|дақиқа|ой))|цен|стоим|сколько|"
     r"nech\w{0,2}\s*pul|неч\w{0,2}\s*пул|почём|почем",
     re.IGNORECASE,
 )
 _OPERATION_ONLY = re.compile(r"operats|operasi|amaliyot|операц|амалиёт", re.IGNORECASE)
 # "Nechpul", "неча пул", "нечпул слада": how much, as patients write it.
 PRICE_WORD = re.compile(
-    r"narx|qancha(?!\s*(?:kun|vaqt|soat|muddat|marta|yosh|daqiqa|oy))|нарх|қанча(?!\s*(?:кун|вақт|соат|муддат|марта|ёш|дақиқа|ой))|цен|стоим|сколько|почём|почем|nech\w{0,2}\s*pul|неч\w{0,2}\s*пул",
+    r"narx|narh|qancha(?!\s*(?:kun|vaqt|soat|muddat|marta|yosh|daqiqa|oy))|нарх|нарҳ|қанча(?!\s*(?:кун|вақт|соат|муддат|марта|ёш|дақиқа|ой))|цен|стоим|сколько|почём|почем|nech\w{0,2}\s*pul|неч\w{0,2}\s*пул",
     re.IGNORECASE,
 )
 # "Rasm qani?", "расм кани", "фото скиньте": the picture itself is asked for.
@@ -287,8 +287,11 @@ _ASKS_PICTURE = re.compile(
     re.IGNORECASE,
 )
 # A reply that points at the operation's picture: "...narxi va paketi rasmda".
+# Only an OPERATION's picture: "konsultatsiya narxi rasmda" is the
+# consultation card, which must not drag the seven operation cards along
+# (owner's test, 2026-11-11).
 _SAYS_PICTURE = re.compile(
-    r"(?:narx|paket|нарх|пакет|стоимост|цен)\w*[^.!?]{0,40}"
+    r"(?:operats|operasi|amaliyot|операц|амалиёт)[^.!?]{0,80}"
     r"(?:rasmda|расмда|на фото|на изображении|на картинке)",
     re.IGNORECASE,
 )

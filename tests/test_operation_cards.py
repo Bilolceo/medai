@@ -165,6 +165,12 @@ def test_a_reply_that_points_at_the_picture_carries_it() -> None:
     reply = "Операциянинг нархи ва пакети расмда, қайси операция кераклигини доктор аниқлайди."
     assert len(_cards("Операция қанақа бўлади?", reply=reply)) == 7
     assert _cards("Salom", reply="Rasmda qizarish ko'rinyapti.") == []
+    # The consultation card's own line never brings the operation cards.
+    assert _cards("Narxi qancha?", reply="Konsultatsiya narxi va tartibi rasmda.") == []
+    assert (
+        _cards("Xohishim ko'p", reply="Konsultatsiya narxi va tartibi rasmda. Yozib qo'yaymi?")
+        == []
+    )
 
 
 def test_the_picture_asked_again_is_sent_again() -> None:

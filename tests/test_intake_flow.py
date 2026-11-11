@@ -1174,3 +1174,9 @@ def test_a_discount_asked_for_is_refused_by_the_model_then_the_step() -> None:
     plan = _at("offer_slots", "Chegirma qiling, 2 kishi boramiz")
     assert plan is not None and plan.reply is None
     assert "no discount" in (plan.instruction or "")
+
+
+def test_narhi_is_narxi() -> None:
+    # The owner's test, 2026-11-11: "Narhi qancha" after the complaint got no price.
+    plan = _at("online_choice", "Narhi qancha")
+    assert plan is not None and plan.reply is not None and "330 000" in plan.reply
