@@ -119,13 +119,15 @@ def test_kazakh_spelling_of_enlargement_brings_the_cards() -> None:
     ]
 
 
-def test_operation_prices_asked_without_a_name_bring_all_the_cards() -> None:
-    assert len(_asked("Operatsiya narxlari qancha?")) == 7
-    assert len(_asked("Операция нархи қанча?")) == 7
+def test_operation_prices_asked_without_a_name_bring_no_card() -> None:
+    # The owner, 2026-11-11: "operatsiya" alone never sends all the cards --
+    # the reply asks which operation; the card comes once it is named.
+    assert _asked("Operatsiya narxlari qancha?") == []
+    assert _asked("Операция нархи қанча?") == []
     assert _asked("Operatsiya qilasizlarmi?") == []
+    assert _asked("Operatsiyalar bormi sizlarda?") == []
     assert _asked("Varikotsele operatsiyasi narxi qancha?") == ["op:varikosele"]
-    sent = [f"📎 {c['title']}" for c in CARDS if str(c.get("topic", "")).startswith("op:")]
-    assert _asked("Operatsiya narxi qancha?", [" ".join(sent)]) == []
+    assert _asked("Operatsiya narxi qancha?", ["📎 Falloprotez: narx va paket"]) == []
 
 
 def _cards(
@@ -138,8 +140,10 @@ def _cards(
 
 
 def test_nechpul_is_a_price_question() -> None:
-    # Production chat 2026-11-09: "Операция нечпул?" sent no card.
-    assert len(_cards("Операция нечпул?")) == 7
+    # Production chat 2026-11-09: "Операция нечпул?"; since 2026-11-11 no card
+    # until the operation is named -- but the one talked about, yes.
+    assert _cards("Операция нечпул?") == []
+    assert _cards("Операция нечпул?", patient=["Варикоцеле бор"]) == ["op:varikosele"]
 
 
 def test_a_misspelt_varicocele_with_nechpul_sends_its_card() -> None:
@@ -232,8 +236,11 @@ def test_operation_price_after_one_operation_sends_only_that_card() -> None:
     sent = [promo_images.sent_line("Selektiv denervatsiya: narx va paket")]
     assert _cards("Нечпул операция", patient=["Денервация нечпул"], own=sent) == []
     assert _cards("Операция нечпул", patient=["Варикоцеле бор"]) == ["op:varikosele"]
-    others = _cards("Boshqa operatsiyalar narxi qancha?", patient=["Varikotsele bor"], own=sent)
-    assert len(others) == 6
+    # "Boshqa operatsiyalar?" too: the reply asks which, no flood of cards.
+    varik = [promo_images.sent_line("Varikosele operatsiyasi: narx va paket")]
+    assert (
+        _cards("Boshqa operatsiyalar narxi qancha?", patient=["Varikotsele bor"], own=varik) == []
+    )
     # The complaint and the question in one message: that card alone.
     assert _cards("Moyagimda tomir bor, operatsiya narxi qancha?") == ["op:varikosele"]
 

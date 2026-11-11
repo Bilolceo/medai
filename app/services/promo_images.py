@@ -403,11 +403,6 @@ COMPLAINT_CARDS: dict[str, re.Pattern[str]] = {
         re.IGNORECASE,
     ),
 }
-# "Boshqa operatsiyalar narxi?": the rest of the cards, not the one talked about.
-_OTHERS = re.compile(
-    r"boshqa|qolgan|hamma|barcha|бошқа|қолган|колган|ҳамма|хамма|барча|други|остальн|все\b",
-    re.IGNORECASE,
-)
 OPERATION_NAMES = re.compile(
     "|".join(pattern.pattern for pattern, _ in OPERATIONS.values()), re.IGNORECASE
 )
@@ -466,7 +461,7 @@ def operations_asked(
         if not unsent and _ASKS_PICTURE.search(user_message):
             # "Rasm qani?" after they went out: not seen, so sent again.
             return earlier or pool
-        if unsent or not general or (earlier and not _OTHERS.search(user_message)):
+        if unsent or not general or earlier:
             return unsent
     named = [
         image
@@ -474,21 +469,21 @@ def operations_asked(
         if (rule := OPERATIONS.get(str(image.get("topic", "")))) is not None
         and rule[0].search(user_message)
     ]
-    if general and not named and not _OTHERS.search(user_message):
-        # "Нечпул операция" after one operation was talked about: that one's
-        # card, not all seven (2026-11-09) -- and none again once it went.
+    if general and not named:
+        # "Нечпул операция" with no operation named (the owner, 2026-11-11):
+        # the one talked about, if any -- never all seven; otherwise none,
+        # and the reply asks which operation.
         before = [
             image
             for image in images or []
             if str(image.get("topic", "")) in OPERATIONS
             and any(talks_about(str(image.get("topic", "")), t) for t in talked)
         ]
-        if before:
-            return [
-                image
-                for image in before
-                if not any(sent_line(str(image.get("title", ""))) in turn for turn in own_turns)
-            ]
+        return [
+            image
+            for image in before
+            if not any(sent_line(str(image.get("title", ""))) in turn for turn in own_turns)
+        ]
     found = []
     for image in images or []:
         topic = str(image.get("topic", ""))

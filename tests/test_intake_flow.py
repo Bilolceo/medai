@@ -1115,3 +1115,62 @@ def test_the_step_question_is_not_repeated_word_for_word() -> None:
     )
     # Asked twice already: the model takes the turn with the whole conversation.
     assert plan is None or (plan.reply is None and plan.then is None)
+
+
+def test_the_clinic_chosen_two_questions_after_the_offer_still_counts() -> None:
+    # Long replay 2026-11-11: "Klinikaga kelaman" after two questions booked "onlayn".
+    texts = FLOWS["intake"]["texts"]["uz-latn"]
+    history = _history("online_choice") + [
+        {"role": "user", "content": "Operatsiya qancha davom etadi?"},
+        {"role": "assistant", "content": "Doktor aytadi. " + texts["choice_again"]},
+        {"role": "user", "content": "Narkoz bilanmi?"},
+        {"role": "assistant", "content": "Doktor aytadi."},
+        {"role": "user", "content": "Klinikaga kelaman"},
+        {"role": "assistant", "content": texts["offer_slots"].format(slots="ertaga 10:30 da")},
+    ]
+    plan = scripted_flow.plan(
+        FLOWS,
+        script="uz-latn",
+        user_message="Ertaga 10:30",
+        history=history,
+        now=NOW,
+        slots=[NOW.replace(day=4, hour=10, minute=30)],
+    )
+    assert plan is not None and plan.reply is not None
+    assert "klinikaga" in plan.reply.lower() and "onlayn" not in plan.reply.lower()
+
+
+def test_intercourse_and_the_online_channel_are_not_requests_for_a_number() -> None:
+    assert scripted_flow.contact_wish("Operatsiyadan keyin jinsiy aloqa qachon mumkin?") is None
+    assert scripted_flow.contact_wish("Onlayn qanaqa bo'ladi, telefon orqalimi?") is None
+    assert scripted_flow.contact_wish("Можно по телеграму?") is None
+    assert scripted_flow.contact_wish("Doktor raqamini bering") is not None
+
+
+def test_a_no_with_the_clinic_in_it_is_a_choice_not_a_hesitation() -> None:
+    plan = _at("online_choice", "Yoq, kelaman klinikaga")
+    assert plan is not None and plan.reply is not None
+    assert "Telefon raqamingizni qoldiring" not in plan.reply
+
+
+def test_why_so_expensive_is_a_question_not_a_hesitation() -> None:
+    plan = _at("offer_slots", "Nega kechqurun qimmat?")
+    assert (
+        plan is None
+        or (plan.reply or "") == ""
+        or "Telefon raqamingizni qoldiring" not in (plan.reply or "")
+    )
+
+
+def test_a_general_operation_price_question_goes_to_the_model() -> None:
+    plan = scripted_flow.plan(
+        FLOWS, script="uz-latn", user_message="Operatsiya narxi qancha?", history=[], now=NOW
+    )
+    assert plan is not None and plan.reply is None and plan.then is not None
+    assert "330 000" not in (plan.prefix or "")
+
+
+def test_a_discount_asked_for_is_refused_by_the_model_then_the_step() -> None:
+    plan = _at("offer_slots", "Chegirma qiling, 2 kishi boramiz")
+    assert plan is not None and plan.reply is None
+    assert "no discount" in (plan.instruction or "")

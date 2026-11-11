@@ -193,6 +193,11 @@ _OPERATION_WANT = re.compile(
     re.IGNORECASE,
 )
 # Operations with no card of their own: the doctor names the price after the consultation.
+# "Chegirma qiling", "skidka bormi": there is none.
+_DISCOUNT = re.compile(
+    r"chegirma|skidka|скидк|чегирма|aksiya|акция|arzon(?:roq)?\s+(?:qil|bo['‘ʻ’`]?l)|арзон\w*\s+(?:қил|бўл)",
+    re.IGNORECASE,
+)
 _OTHER_OPS = re.compile(
     r"gidrots|gidrosel|гидроц|гидросел|vodyank|водянк|sunnat|xatna|суннат|хатна|обрезан|"
     r"frenul|френул|uzdechk|уздечк|fimoz|фимоз|kista|киста",
@@ -380,7 +385,10 @@ def plan_libido(
     # A question in place of the answer: the model answers it, and the same
     # step's question follows -- once; a second time, the step is let go.
     if question and not asked_twice:
-        return Plan(then=fill(_PENDING_QUESTION[pending]), instruction=INSTRUCTION)
+        pending_q = fill(_PENDING_QUESTION[pending])
+        if any(_norm(pending_q) in _norm(turn) for turn in own):
+            return Plan(instruction=INSTRUCTION_REASK.format(question=pending_q))
+        return Plan(then=pending_q, instruction=INSTRUCTION)
 
     if pending == "ask_name":
         if _ABROAD.search(message) or _REGIONS.search(message) or _TASHKENT.search(message):
@@ -468,6 +476,7 @@ _WANTS_ONLINE = re.compile(
     r"mayli|xo['‘ʻ’`]?p|майли|хўп|хорошо|давайте",
     re.IGNORECASE,
 )
+_ONLINE_WORD = re.compile(r"onla[iy]?e?n|online|онла[йи]?е?н|video|видео", re.IGNORECASE)
 _WANTS_CALL = re.compile(
     r"qo['‘ʻ’`]?ng['‘ʻ’`]?iroq|telefon|administrator|qilsin|қўнғироқ|телефон|администратор|"
     r"звон|позвон|перезвон",
@@ -544,6 +553,10 @@ def contact_wish(text: str) -> str | None:
     if _NO_NUMBER.search(text):
         # "Raqam bermayman": a no, not a request for a number.
         return None
+    if _NOT_A_CONTACT.search(text) and not _ASKS_NUMBER.search(text):
+        # "Jinsiy aloqa qachon mumkin?", "Onlayn telefon orqalimi?", "Можно по
+        # телеграму?": about the consultation, not asking for a number.
+        return None
     if not (_CONTACT.search(text) or _WANTS_PERSON.search(text)):
         return None
     if _ASKS_ADMIN.search(text):
@@ -553,6 +566,20 @@ def contact_wish(text: str) -> str | None:
     return "ask"
 
 
+_NOT_A_CONTACT = re.compile(
+    r"jinsiy\s+aloqa|жинсий\s+алоқа|полов\w+\s+(?:акт|жизн|связ)|"
+    r"onla[iy]?e?n\w*\s+(?:qanaqa|qanday|qanday\s+o['‘ʻ’`]?tadi)|онлайн\w*\s+(?:қанақа|қандай)|"
+    r"(?:telegram|телеграм|whatsapp|ватсап|вацап|telefon|телефон)\w*\s*(?:orqali|орқали|через|по)?\w*\s*"
+    r"(?:bo['‘ʻ’`]?ladimi|mumkinmi|бўладими|мумкинми|можно)|"
+    r"(?:можно|mumkinmi)\s+(?:по\s+)?(?:телеграм|ватсап|telegram|whatsapp)",
+    re.IGNORECASE,
+)
+_ASKS_NUMBER = re.compile(
+    r"raqam\w*\s*(?:ni|ini)?\s*(?:ber|yoz|tashla|yubor)|nomer\w*\s*(?:ni|ini)?\s*(?:ber|yoz|tashla)|"
+    r"рақам\w*\s*(?:ни|ини)?\s*(?:бер|ёз|ташла)|номер\w*\s*(?:ни|ини)?\s*(?:бер|ёз|ташла)|"
+    r"дайте\s+номер|номер\s+(?:дайте|скиньте)",
+    re.IGNORECASE,
+)
 # "O'ylab ko'raman", "qimmat ekan": not yet -- the number is asked, once.
 _HESITATE = re.compile(
     r"o['‘ʻ’`]?ylab|keyinroq|keyin\s+(?:yozaman|o['‘ʻ’`]?zim|bog['‘ʻ’`]?lanaman)|qimmat|"
@@ -931,17 +958,29 @@ def plan_intake(
         complaint = ""
     reason = " ".join(complaint.split()[:12]) or texts["default_reason"]
     question = u.question
-    asks_price = (
-        u.asks_price and not _NOT_OUR_PRICE.search(message) and not _NOT_A_PRICE.search(message)
+    general_operation = bool(
+        _OPERATION_SAID.search(message)
+        and not promo_images.OPERATION_NAMES.search(message)
+        and not any(c.search(message) for c in promo_images.COMPLAINT_CARDS.values())
     )
+    asks_price = (
+        u.asks_price
+        and not _NOT_OUR_PRICE.search(message)
+        and not _NOT_A_PRICE.search(message)
+        # "Operatsiya narxi qancha?" with no operation named: the model asks
+        # which one (the owner, 2026-11-11), not the consultation price line.
+        and not general_operation
+    )
+    if general_operation and u.asks_price:
+        question = True
 
-    def reask(question_text: str) -> Plan:
+    def reask(question_text: str, note: str = "") -> Plan:
         """The model answers what was asked; then the step's question -- in the
         model's own words once it has been asked word for word already
         (the doctor, 2026-11-11: "the bot asks the same thing again and again")."""
         if any(_norm(question_text) in _norm(turn) for turn in own):
-            return Plan(instruction=INSTRUCTION_REASK.format(question=question_text))
-        return Plan(then=question_text, instruction=INSTRUCTION)
+            return Plan(instruction=INSTRUCTION_REASK.format(question=question_text) + note)
+        return Plan(then=question_text, instruction=INSTRUCTION + note)
 
     sport_words = _sport_words(flow)
     sport = (reading is not None and reading.complaint_kind == "sport") or any(
@@ -1196,11 +1235,25 @@ def plan_intake(
         """Did the patient choose to come to the clinic?"""
         if evening_only:
             return False
-        chosen = answer_after("online_choice", "visit_choice", "choice_again")
-        replies = [chosen] if chosen else []
+        # Every patient message since the choice was last offered: "Klinikaga
+        # kelaman" two questions after the offer still counts (long replay,
+        # 2026-11-11), and the last decisive word wins.
+        start = 0
+        for i, turn in enumerate(since_turns):
+            if turn.get("role") == "assistant" and any(
+                _said(flow, key, [turn["content"]])
+                for key in ("online_choice", "visit_choice", "choice_again")
+            ):
+                start = i + 1
+        replies = [t["content"] for t in since_turns[start:] if t.get("role") == "user"]
         if pending in ("online_choice", "offer_slots"):
             replies.append(message)
-        return any(_WANTS_VISIT.search(t) for t in replies)
+        decided = [
+            bool(_WANTS_VISIT.search(t))
+            for t in replies
+            if _WANTS_VISIT.search(t) or _ONLINE_WORD.search(t)
+        ]
+        return bool(decided and decided[-1])
 
     if pending is None:
         lead = opening()
@@ -1409,6 +1462,10 @@ def plan_intake(
     hesitant = (
         (_HESITATE.search(message) or (u.refuses and _REFUSE.search(message)))
         and not _PAID.search(message)
+        # "Nega kechqurun qimmat?" is a question; "Yo'q, klinikaga kelaman" a choice.
+        and not _is_question(message)
+        and not _WANTS_VISIT.search(message)
+        and not _ONLINE_WORD.search(message)
         # "Raqam bermayman": the number is refused, so not asked for again.
         and not (_CONTACT.search(message) and _NO_NUMBER.search(message))
     )
@@ -1474,6 +1531,21 @@ def plan_intake(
     ):
         # "Qo'ng'iroq qilinglar": the call, as the patient asks.
         return Plan(reply=texts["ask_phone"])
+    if _DISCOUNT.search(message) and not _PAID.search(message):
+        # "Chegirma qiling": none -- said by the model, then the step's question.
+        again = {
+            "ask_name": texts["ask_name"],
+            "ask_place": texts["ask_place"],
+            "ask_topic": texts["ask_topic"],
+            "online_choice": choice_again(),
+            "offer_slots": choice_again(),
+            "ask_phone": texts["ask_phone_again"],
+        }.get(pending or "", texts["ask_name"])
+        return reask(
+            again,
+            note=" The patient asks for a discount: say plainly there is no discount, the price "
+            "is the same for everyone, in one sentence.",
+        )
     if (
         pending in ("offer_slots", "online_choice")
         and _OPERATION_SAID.search(message)
@@ -1500,7 +1572,7 @@ def plan_intake(
         return Plan(reply=texts["evening_ok"].format(price=price_of("evening")[0]))
     if (
         pending in ("offer_slots", "online_choice")
-        and parse_time(message) is None
+        and (parse_time(message) is None or (_LATER.search(message) and _is_question(message)))
         and (_named_day(message, now) is not None or _LATER.search(message))
         and not _WANTS_CALL.search(message)
     ):
