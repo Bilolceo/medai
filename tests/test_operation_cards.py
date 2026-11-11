@@ -163,8 +163,13 @@ def test_the_patients_own_photo_sends_no_card() -> None:
 
 def test_a_reply_that_points_at_the_picture_carries_it() -> None:
     reply = "Операциянинг нархи ва пакети расмда, қайси операция кераклигини доктор аниқлайди."
-    assert len(_cards("Операция қанақа бўлади?", reply=reply)) == 7
+    assert _cards("Варикоцеле операцияси қанақа бўлади?", reply=reply) == ["op:varikosele"]
     assert _cards("Salom", reply="Rasmda qizarish ko'rinyapti.") == []
+    # No operation named by the patient: the model's "rasmda" sends nothing.
+    assert (
+        _cards("Operatsiya narxlari qancha?", reply="Operatsiyalarning narxi va paketi rasmda.")
+        == []
+    )
     # The consultation card's own line never brings the operation cards.
     assert _cards("Narxi qancha?", reply="Konsultatsiya narxi va tartibi rasmda.") == []
     assert (

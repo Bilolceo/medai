@@ -28,6 +28,7 @@ from datetime import datetime, time, timedelta
 from typing import Any
 
 from app.services import bubbles, phone_check, promo_images
+from app.services.promo_images import PRICE_WORD
 
 # A complaint about desire, in any of the three alphabets, with a word that
 # says it is low or gone -- "qabulga yozilish xohishim bor" is not one.
@@ -965,14 +966,15 @@ def plan_intake(
     )
     asks_price = (
         u.asks_price
+        # "Bilol" after a price card is a name, whatever the reader thought
+        # (image replay, 2026-11-11): a price question has a price word or asks.
+        and bool(_ASKS_PRICE.search(message) or PRICE_WORD.search(message) or _is_question(message))
         and not _NOT_OUR_PRICE.search(message)
         and not _NOT_A_PRICE.search(message)
         # "Operatsiya narxi qancha?" with no operation named: the model asks
         # which one (the owner, 2026-11-11), not the consultation price line.
         and not general_operation
     )
-    if general_operation and u.asks_price:
-        question = True
 
     def reask(question_text: str, note: str = "") -> Plan:
         """The model answers what was asked; then the step's question -- in the
@@ -1255,6 +1257,23 @@ def plan_intake(
         ]
         return bool(decided and decided[-1])
 
+    only_operation_price = (
+        general_operation
+        and bool(u.asks_price or PRICE_WORD.search(message))
+        and "op_which" in texts
+        and len(message.strip().splitlines()) == 1
+        and not u.name
+        # By the words alone: the reader calls any operation talk "urology".
+        and not (
+            _COMPLAINT.search(message)
+            or promo_images.OPERATION_NAMES.search(message)
+            or sport_words.search(message)
+        )
+    )
+    if only_operation_price and pending is None:
+        lead = opening()
+        body = f"{texts['op_which']} {texts['ask_name']}"
+        return Plan(reply=f"{lead} {bubbles.MARKER} {body}" if lead else body)
     if pending is None:
         lead = opening()
         if not named_complaint(message):
@@ -1531,6 +1550,20 @@ def plan_intake(
     ):
         # "Qo'ng'iroq qilinglar": the call, as the patient asks.
         return Plan(reply=texts["ask_phone"])
+    if only_operation_price and pending is not None:
+        # "Operatsiya narxi qancha?" with no operation named: the seven kinds,
+        # which one -- the card comes once it is named (the owner, 2026-11-11).
+        again = {
+            "ask_name": texts["ask_name"],
+            "ask_place": texts["ask_place"],
+            "ask_topic": texts["ask_topic"],
+            "online_choice": choice_again(),
+            "offer_slots": choice_again(),
+            "ask_phone": texts["ask_phone_again"],
+        }.get(pending or "", texts["ask_name"])
+        lead = opening() if pending is None else None
+        body = f"{texts['op_which']} {again}"
+        return Plan(reply=f"{lead} {bubbles.MARKER} {body}" if lead else body)
     if _DISCOUNT.search(message) and not _PAID.search(message):
         # "Chegirma qiling": none -- said by the model, then the step's question.
         again = {

@@ -455,7 +455,13 @@ def operations_asked(
             for image in images or []
             if any(talks_about(str(image.get("topic", "")), t) for t in talked)
         ]
-        pool = earlier or [i for i in images or [] if str(i.get("topic", "")) in OPERATIONS]
+        # Nothing named so far: only the patient's own "rasm qani?" opens the
+        # whole set; the model saying "rasmda" on its own never does.
+        pool = earlier or (
+            [i for i in images or [] if str(i.get("topic", "")) in OPERATIONS]
+            if _ASKS_PICTURE.search(user_message)
+            else []
+        )
         unsent = [
             image
             for image in pool

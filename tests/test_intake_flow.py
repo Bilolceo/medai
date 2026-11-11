@@ -1162,12 +1162,15 @@ def test_why_so_expensive_is_a_question_not_a_hesitation() -> None:
     )
 
 
-def test_a_general_operation_price_question_goes_to_the_model() -> None:
+def test_a_general_operation_price_question_lists_the_kinds() -> None:
     plan = scripted_flow.plan(
         FLOWS, script="uz-latn", user_message="Operatsiya narxi qancha?", history=[], now=NOW
     )
-    assert plan is not None and plan.reply is None and plan.then is not None
-    assert "330 000" not in (plan.prefix or "")
+    assert plan is not None and plan.reply is not None
+    assert "Qaysi biri kerak?" in plan.reply and "Ismingiz nima" in plan.reply
+    assert "330 000" not in plan.reply and "rasmda" not in plan.reply
+    later = _at("online_choice", "Operatsiyalar narxi qancha?")
+    assert later is not None and later.reply is not None and "Qaysi biri kerak?" in later.reply
 
 
 def test_a_discount_asked_for_is_refused_by_the_model_then_the_step() -> None:

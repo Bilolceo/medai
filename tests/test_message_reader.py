@@ -147,3 +147,16 @@ def test_a_sport_complaint_the_model_read_is_a_complaint_with_the_evening_card()
     assert plan is not None and plan.reply is not None
     assert bubbles.parts(plan.reply)[-1] == HANDLES_NAME
     assert plan.card_topic == "evening"
+
+
+def test_a_bare_name_is_never_a_price_question_whatever_the_reader_says() -> None:
+    history = [
+        {"role": "user", "content": "Varikotsele operatsiyasi narxi qancha?"},
+        {
+            "role": "assistant",
+            "content": HANDLES_NAME + "\n\n📎 Varikosele operatsiyasi: narx va paket",
+        },
+    ]
+    plan = _plan("Bilol", history, asks_price=True)
+    assert plan is not None and plan.reply is not None
+    assert "qayerdansiz" in plan.reply.lower() and "4 500 000" not in plan.reply
