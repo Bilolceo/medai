@@ -12,7 +12,7 @@ NOW = datetime(2026, 11, 3, 11, 0, tzinfo=CLINIC_TIMEZONE)
 HANDLES_NAME = (
     "Ha, doktor shu bilan shug'ullanadi. Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?"
 )
-PLACE = "qayerdansiz: Toshkentdanmisiz yoki viloyatdanmi?"
+PLACE = "qayerdansiz?"
 
 
 def _reading(**fields: Any) -> message_reader.Reading:
@@ -77,8 +77,8 @@ def test_a_misspelt_country_the_model_understood_brings_the_online_line() -> Non
         {"role": "assistant", "content": "Bilol, " + PLACE},
     ]
     plan = _plan("raseyadaman hozir", history, abroad=True, place="Rossiya")
-    assert plan is not None and plan.reply is not None
-    assert "onlayn videoqo'ng'iroqda" in bubbles.parts(plan.reply)[0]
+    assert plan is not None and plan.then is not None
+    assert "video qo'ng'iroq orqali onlayn" in plan.then
 
 
 def test_a_time_the_model_understood_confirms_the_call() -> None:
@@ -142,11 +142,12 @@ def test_a_time_with_call_me_in_it_is_just_the_time() -> None:
     assert "Operatorimiz ertaga 10 da +998 95 890 12 34 raqamiga" in plan.reply
 
 
-def test_a_sport_complaint_the_model_read_is_a_complaint_with_the_evening_card() -> None:
+def test_a_sport_complaint_the_model_read_is_a_complaint() -> None:
+    # The card waits for the agreed time (the doctor, 2026-11-17).
     plan = _plan("Steroid kursidan keyin gormonlarim buzildi", [], complaint_kind="sport")
     assert plan is not None and plan.reply is not None
     assert bubbles.parts(plan.reply)[-1] == HANDLES_NAME
-    assert plan.card_topic == "evening"
+    assert plan.card_topic is None
 
 
 def test_a_bare_name_is_never_a_price_question_whatever_the_reader_says() -> None:

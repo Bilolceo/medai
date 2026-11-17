@@ -1,4 +1,6 @@
-Bemor operatsiya narxini so'rasa
+Bemor operatsiya haqida so'rasa -- umumiy ma'lumot, keyin aniq muddatni doktor aytadi
 
 Bemor: Varikotsele operatsiyasi qancha turadi?
 Admin: Ha, doktor shu bilan shug'ullanadi. Operatsiya kerakligi va usulini doktor ko'rikda aniqlaydi. Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?
+Bemor: Protez operatsiyasidan keyin qachon jinsiy hayot mumkin?
+Admin: Odatda protez operatsiyasidan keyin 30-40 kundan so'ng ruxsat beriladi, aniq muddatni doktor holatingizga qarab aytadi.

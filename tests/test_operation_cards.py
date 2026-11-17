@@ -212,13 +212,16 @@ def _sport(message: str, own: list[str] | None = None) -> list[str]:
     return [str(c["topic"]) for c in found]
 
 
-def test_steroids_and_hormones_bring_their_card_once() -> None:
-    assert _sport("Steroid ishlatganman") == ["sport"]
-    assert _sport("Gormonlarim buzildi") == ["sport"]
-    assert _sport("Testosteron past chiqdi") == ["sport"]
-    assert _sport("После курса проблемы") == ["sport"]
+def test_steroids_and_hormones_bring_their_card_once_asked_its_price() -> None:
+    # The doctor, 2026-11-17: the consultation's card comes with the agreed
+    # time; with the complaint alone, only when its price is asked.
+    assert _sport("Steroid ishlatganman") == []
+    assert _sport("Steroid ishlatganman, konsultatsiya narxi qancha?") == ["sport"]
+    assert _sport("Gormonlarim buzildi, narxi qancha") == ["sport"]
+    assert _sport("Testosteron past chiqdi, qancha turadi?") == ["sport"]
+    assert _sport("После курса проблемы, сколько стоит?") == ["sport"]
     sent = [promo_images.sent_line("Anabolik steroidlar va gormonal muammolar: konsultatsiya")]
-    assert _sport("Steroid ishlatganman", sent) == []
+    assert _sport("Steroid ishlatganman, narxi?", sent) == []
 
 
 def test_the_steroid_card_has_no_operation_note() -> None:

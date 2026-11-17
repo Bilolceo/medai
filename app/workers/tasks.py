@@ -1631,7 +1631,9 @@ async def answer_voice_note(
             ):
                 return
             text = await voice_notes.reply_for(session, conversation_uuid)
-            if await _said_today(session, conversation_uuid, voice_notes.REPLIES.values()):
+            own_lines = await voice_notes.replies(session)
+            said_lines = {*voice_notes.REPLIES.values(), *own_lines.values()}
+            if await _said_today(session, conversation_uuid, said_lines):
                 # The patient has been told once today that the doctor answers
                 # these; telling them under every recording is a wall of it.
                 logger.info("voice_note_reply_skipped_repeat")

@@ -12,7 +12,9 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.tenant_context import get_current_tenant
 from app.models.message import MessageSender
+from app.models.tenant import Tenant
 from app.repositories.message import MessageRepository
 from app.services import message_labels
 from app.services.language import reply_script
@@ -33,13 +35,29 @@ REPLIES = {
 }
 
 
+async def replies(session: AsyncSession) -> dict[str, str]:
+    """The fixed lines, by alphabet -- the clinic's own where its intake flow
+    has one (Dr Sultonbek, 2026-11-17: "eshita olmayman, matn qilib yozing"),
+    these otherwise."""
+    tenant = await session.get(Tenant, get_current_tenant())
+    flows = ((tenant.settings or {}) if tenant is not None else {}).get("scripted_flows") or {}
+    texts = (flows.get("intake") or {}).get("texts") or {}
+    own = {
+        script: str(lines["voice_reply"])
+        for script, lines in texts.items()
+        if isinstance(lines, dict) and lines.get("voice_reply")
+    }
+    return {**REPLIES, **own}
+
+
 async def reply_for(session: AsyncSession, conversation_id: uuid.UUID) -> str:
     """The fixed reply, in the script this patient has been writing in."""
+    lines = await replies(session)
     for message in reversed(await MessageRepository(session).list_recent(conversation_id, 20)):
         if (
             message.sender == MessageSender.PATIENT
             and not message_labels.is_label(message.content)
             and not message.content.startswith("💬")
         ):
-            return REPLIES[reply_script(message.content)]
-    return REPLIES["uz-latn"]
+            return lines[reply_script(message.content)]
+    return lines["uz-latn"]

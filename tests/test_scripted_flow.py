@@ -66,7 +66,7 @@ def test_the_whole_flow_goes_in_the_doctors_order_and_words() -> None:
         "Va alaykum assalom. Men doktor Sultonbekning administratoriman, ismim Dildora.",
         "Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?",
     ]
-    assert replies[1] == "Farrux, qayerdansiz: Toshkentdanmisiz yoki viloyatdanmi?"
+    assert replies[1] == "Farrux, qayerdansiz?"
     assert replies[2] == "Yoshingiz nechada?"
     causes, online, today = bubbles.parts(replies[3])
     assert causes.startswith(
@@ -102,7 +102,7 @@ def test_a_price_question_is_answered_and_the_same_question_asked_again() -> Non
     price, again = bubbles.parts(replies[1])
     assert "330 000 so'm" in price and "165 000 so'm" in price
     assert again == "Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?"
-    assert replies[2] == "Bobur, qayerdansiz: Toshkentdanmisiz yoki viloyatdanmi?"
+    assert replies[2] == "Bobur, qayerdansiz?"
 
 
 def test_a_price_said_early_is_not_said_again_with_the_slot() -> None:
@@ -165,7 +165,7 @@ def test_other_complaints_and_other_wishes_are_left_to_the_ordinary_sequence(mes
 def test_cyrillic_and_russian_are_said_in_their_own_alphabet() -> None:
     cyr = _talk(["Жинсий хоҳишим пасайган", "Ботир", "Фарғона", "35", "Эртага 14 да"], "uz-cyrl")
     assert bubbles.parts(cyr[0])[-1] == "Исмингиз нима, сизга қандай мурожаат қилсам бўлади?"
-    assert cyr[1] == "Ботир, қаердансиз: Тошкентданмисиз ёки вилоятданми?"
+    assert cyr[1] == "Ботир, қаердансиз?"
     assert "14:00" in cyr[4] and "165 000 сўм" in cyr[4]
     ru = _talk(["Пропало влечение", "Руслан", "Ташкент", "40", "в 12"], "ru")
     assert bubbles.parts(ru[0])[-1] == "Как вас зовут, как к вам обращаться?"

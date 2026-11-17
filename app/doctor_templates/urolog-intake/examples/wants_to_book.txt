@@ -1,8 +1,8 @@
-Bemor yozilmoqchi
+Bemor yozilmoqchi -- avval masala, keyin ism va qayerdan
 
 Bemor: Qabulga yozilsam bo'ladimi?
-Admin: Ha, shu yerning o'zida yozib qo'yaman. Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?
+Admin: Ha, shu yerning o'zida yozib qo'yaman. Qanday masala yoki shikoyat bilan murojaat qilyapsiz?
+Bemor: Prostatit bor
+Admin: Ha, doktor shu bilan shug'ullanadi. Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?
 Bemor: Bobur
-Admin: Bobur, qayerdansiz: Toshkentdanmisiz yoki viloyatdanmi?
-Bemor: Toshkent, Chilonzor
-Admin: Qanday masala yoki shikoyat bilan murojaat qilyapsiz?
+Admin: Bobur, qayerdansiz?

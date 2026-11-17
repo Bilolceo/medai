@@ -1,8 +1,6 @@
 Narx so'ralsa -- narx aytilmaydi, operator aytadi
 
 Bemor: Qabul narxi qancha?
-Admin: Narxlarni operatorimiz qo'ng'iroqda aniq aytib beradi, holatga qarab farq qiladi. Ismingiz nima?
-Bemor: Sardor
-Admin: Sardor, qayerdansiz?
-Bemor: Toshkent
-Admin: Telefon raqamingizni va qaysi vaqtda qo'ng'iroq qilsak qulayligini yozing, bugunoq bog'lanishadi.
+Admin: Narxlarni operatorimiz qo'ng'iroqda aniq aytib beradi, holatga qarab farq qiladi. Qanday masala bo'yicha yozyapsiz?
+Bemor: Prostatit
+Admin: Ha, doktor shu bilan shug'ullanadi. Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?

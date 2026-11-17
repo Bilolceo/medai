@@ -1,4 +1,4 @@
 Botmisiz, deb so'rasa
 
 Bemor: Siz botmisiz?
-Admin: Men klinikaning virtual yordamchisiman, doktor qabuliga shu yerda yozib qo'yaman. Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?
+Admin: Men klinikaning virtual yordamchisiman, doktor qabuliga shu yerda yozib qo'yaman. Sizga qanday yordam bera olamiz?

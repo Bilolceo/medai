@@ -103,6 +103,16 @@ def choose(
     )
     if not wants:
         return None
+    # An operation talked about and its price asked: the operation's card
+    # answers (operations_asked), never the consultation's -- whose price
+    # comes once a time is agreed (the doctor, 2026-11-17).
+    # The answer to "qaysi masala bo'yicha?" is the consultation's topic.
+    if (
+        not asked_topic_last
+        and any(OPERATION_NAMES.search(t) or _OPERATION_ONLY.search(t) for t in recent)
+        and not _CONSULTATION.search(user_message)
+    ):
+        return None
     if evening_wish or any(_EVENING.search(text) for text in recent):
         topic = "evening"
     elif any(_SPORT.search(text) for text in everything):
@@ -125,6 +135,9 @@ def choose(
     return image
 
 
+_CONSULTATION = re.compile(
+    r"konsult|консульт|qabul|қабул|приём|прием|ko['‘ʻ’`]?rik|кўрик", re.IGNORECASE
+)
 _CAPTIONS = {
     "uz-latn": "Konsultatsiya narxi va tartibi rasmda.",
     "uz-cyrl": "Консультация нархи ва тартиби расмда.",
@@ -217,22 +230,31 @@ _SPORT = re.compile(
 
 
 def attach_scripted(
-    reply: str, image: Mapping[str, Any], script: str = "uz-latn", *, keep_text: bool = True
+    reply: str,
+    image: Mapping[str, Any],
+    script: str = "uz-latn",
+    *,
+    keep_text: bool = True,
+    caption: bool = True,
 ) -> str:
     """A scripted reply with the card: the caption goes before the step's own
     question, in the last message, so the question stays the last word. The
     step's words always stay, under the evening card too (code review,
-    2026-11-07); ``keep_text`` is accepted for old callers and ignored."""
+    2026-11-07); ``keep_text`` is accepted for old callers and ignored.
+    ``caption=False``: the reply writes the price out itself (the booking
+    line), so "narxi rasmda" would only repeat it."""
     del keep_text
+    if not caption:
+        return f"{reply.strip()} [[IMAGE:{image['url']}|{image.get('title', '')}]]"
     captions = _EVENING_SHORT if image.get("topic") == "evening" else _CAPTIONS
-    caption = captions.get(script, captions["uz-latn"])
+    said = captions.get(script, captions["uz-latn"])
     parts = reply.split("|||")
     last = parts[-1].strip()
     sentences = _SENTENCE.findall(last)
     if len(sentences) > 1:
-        last = " ".join(s.strip() for s in sentences[:-1]) + f" {caption} " + sentences[-1].strip()
+        last = " ".join(s.strip() for s in sentences[:-1]) + f" {said} " + sentences[-1].strip()
     else:
-        last = f"{caption} {last}"
+        last = f"{said} {last}"
     parts[-1] = " " + last.strip()
     text = "|||".join(parts).strip()
     return f"{text} [[IMAGE:{image['url']}|{image.get('title', '')}]]"
@@ -325,7 +347,19 @@ OPERATIONS: dict[str, tuple[re.Pattern[str], bool]] = {
         re.compile(r"m[ia]kro\W?tese|\btese\b|микро\W?тезе|\bтезе\b", re.IGNORECASE),
         False,
     ),
-    "op:denervatsiya": (re.compile(r"denervats|денервац", re.IGNORECASE), False),
+    # "Tez bo'shanishga operatsiya": patients do not know the name (the
+    # doctor, 2026-11-17) -- it is selective denervation.
+    "op:denervatsiya": (
+        re.compile(
+            r"denervats|денервац|"
+            r"tez\s*bo['‘ʻ’`]?sh[ae][nl]\w*[^.!?]{0,30}(?:operats|operasi|amaliyot)|"
+            r"(?:operats|operasi|amaliyot)\w*[^.!?]{0,30}tez\s*bo['‘ʻ’`]?sh[ae][nl]|"
+            r"тез\s*б[ўу]ш[аә][нл]\w*[^.!?]{0,30}(?:операц|амалиёт)|"
+            r"(?:операц|амалиёт)\w*[^.!?]{0,30}тез\s*б[ўу]ш[аә][нл]",
+            re.IGNORECASE,
+        ),
+        False,
+    ),
 }
 # The owner's order (2026-11-09): a complaint brings the card of the
 # operation that treats it, with the note that the doctor decides at the
@@ -499,10 +533,13 @@ def operations_asked(
         rule = OPERATIONS.get(topic)
         complaint = COMPLAINT_CARDS.get(topic)
         if rule is None:
-            # A card for a complaint only (steroids and hormones), sent once.
+            # A card for a complaint only (steroids and hormones), sent once --
+            # asked its price; otherwise it comes with the agreed time, as the
+            # consultation's own card (the doctor, 2026-11-17: the time first).
             if (
                 complaint is not None
                 and complaint.search(user_message)
+                and PRICE_WORD.search(user_message)
                 and not any(sent_line(str(image.get("title", ""))) in t for t in own_turns)
             ):
                 found.append(image)

@@ -469,7 +469,9 @@ async def generate_answer(
                 own_turns=[t["content"] for t in history or [] if t.get("role") == "assistant"],
             )
             if card is not None:
-                reply = promo_images.attach_scripted(reply, card, script, keep_text=True)
+                reply = promo_images.attach_scripted(
+                    reply, card, script, caption=scripted.card_caption
+                )
         if scripted.cards:
             patient_said = [t["content"] for t in history or [] if t.get("role") == "user"]
             card = promo_images.choose(
@@ -560,8 +562,10 @@ async def generate_answer(
         reply = stripped
     if scripted is not None and scripted.then:
         answer = scripted_flow.drop_questions(reply)
+        if scripted.instruction == scripted_flow.INSTRUCTION_INFO:
+            answer = scripted_flow.drop_offer(answer)
         step = scripted_flow.drop_repeats(scripted.then, answer)
-        reply = f"{answer} {bubbles.MARKER} {step}"
+        reply = f"{answer} {bubbles.MARKER} {step}" if answer else step
     if scripted is not None and scripted.prefix:
         reply = f"{scripted.prefix} {bubbles.MARKER} {reply}"
     # The clinic's price card, when the patient asked the price (see

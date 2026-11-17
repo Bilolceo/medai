@@ -76,7 +76,9 @@ INSTRUCTION_REASK = (
     'this and has not answered yet: "{question}" -- so end with ONE short sentence of your '
     "own that asks for it again in different words, never repeating that line word for word."
 )
-_CLOCK = re.compile(r"\b(\d{1,2})\s*[:.]\s*(\d{2})\b")
+# Not \b: "14:00га" has no word boundary before the Cyrillic suffix, and
+# "00га" alone was read as midnight -- "00:00 band" (the doctor, 2026-11-17).
+_CLOCK = re.compile(r"(?<!\d)(\d{1,2})\s*[:.]\s*(\d{2})(?!\d)")
 # "15 00 ga": the colon left out (live chat, 2026-11-07).
 _CLOCK_SPACED = re.compile(r"(?<!\d)([01]?\d|2[0-3])\s(00|15|30|45)(?!\d)")
 _HOUR = re.compile(
@@ -117,8 +119,24 @@ class Plan:
     # The card the complaint itself calls for: "day" (urology and andrology)
     # or "evening" (steroids and sport -- the evening online consultation).
     card_topic: str | None = None
+    # Whether "Konsultatsiya narxi va tartibi rasmda" is said with that card;
+    # not when the price is already written out in the reply.
+    card_caption: bool = True
 
 
+# The doctor (2026-11-17): after the place, a short word on the complaint --
+# two or three possible causes, in general -- and that the doctor finds the
+# exact cause and the tests needed; "doktor aniqlaydi" alone is not enough.
+INSTRUCTION_INFO = (
+    "THIS REPLY: the patient told you their complaint earlier in this conversation. In two or "
+    "three short sentences give general information about it: two or three possible causes in "
+    "general terms (never a diagnosis, never 'sizda ... bor'), then say that the exact cause, "
+    "and which tests are needed, the doctor finds out in the conversation with the patient. If "
+    "it is about an operation, say instead in general terms what the operation is. No prices, "
+    "no greeting, no introduction; do not mention the online or video consultation, the "
+    "clinic or a visit, do not ask anything and do not offer anything -- the next message, "
+    "sent separately, does that."
+)
 INSTRUCTION = (
     "THIS REPLY: answer only the patient's question in this message, in one or two short "
     "sentences. Do not greet, do not introduce yourself, do not ask anything and do not offer "
@@ -415,6 +433,22 @@ def drop_questions(reply: str) -> str:
     return " ".join(kept).strip() or reply.strip()
 
 
+_OFFER_WORDS = re.compile(
+    r"onla[iy]?n|video|онлайн|видео|klinika|клиник|kelish\s+shart|келиш\s+шарт|"
+    r"приезжа|приход|telefon|телефон|raqam|рақам|номер|qo['‘ʻ’`]?ng['‘ʻ’`]?iroq|қўнғироқ|звон",
+    re.IGNORECASE,
+)
+
+
+def drop_offer(answer: str) -> str:
+    """The model's word on the complaint without its own offer of the video
+    call or the clinic: the step right after it makes that offer, and the same
+    offer twice in a row reads as a machine (replay, 2026-11-17: "Qirg'izistondan
+    bo'lsangiz, ... onlayn maslahatlashish mumkin" before the offer itself)."""
+    sentences = re.split(r"(?<=[.!?])\s+", answer.strip())
+    return " ".join(s for s in sentences if not _OFFER_WORDS.search(s)).strip()
+
+
 # --- the ordinary sequence: any complaint, or a wish to be seen ----------------
 
 _COMPLAINT = re.compile(
@@ -457,7 +491,13 @@ _JUST_A_VISIT = re.compile(
     re.IGNORECASE,
 )
 _INTAKE_STEPS = (
+    # "Sizga qanday yordam bera olamiz?" -- the complaint first, before the
+    # name (the doctor, 2026-11-17).
+    "ask_help",
     "who_choice",
+    # The same asked later in the sequence (after "doktor bilan muloqot..."):
+    # "Qanday masala yoki shikoyat bo'yicha yozyapsiz?" -- before the name.
+    "ask_issue",
     "ask_name",
     "ask_place",
     "ask_topic",
@@ -468,6 +508,8 @@ _INTAKE_STEPS = (
     "hesitate_ask",
     "admin_busy",
     "ask_phone",
+    # Falloprotez: a free telephone talk with the doctor first (2026-11-17).
+    "protez_call",
     "ask_time",
     "confirm",
     "paid_confirm",
@@ -531,6 +573,19 @@ _WANTS_PERSON = re.compile(
     r"(?:doktor|vrach|shifokor|admin\w*|operator)\w*\s+bilan\s+gaplash|gaplashmoqchi|"
     r"(?:доктор|врач|шифокор|админ\w*|оператор)\w*\s+билан\s+гаплаш|гаплашмоқчи|"
     r"поговорить|связаться",
+    re.IGNORECASE,
+)
+# "А консультация?" after an operation's price: the consultation's, not it.
+_CONSULTATION_WORD = re.compile(
+    r"konsult|консульт|qabul|қабул|приём|прием|ko['‘ʻ’`]?rik|кўрик", re.IGNORECASE
+)
+# "Avval doktor bilan telefonda gaplashib olay": to talk first, before booking
+# anything -- for the prosthesis, a free call with the doctor (2026-11-17).
+_TALK_FIRST = re.compile(
+    r"(?:doktor|doxtir|vrach|shifokor|доктор|врач|шифокор)[^.!?]{0,40}"
+    r"(?:gaplash|гаплаш|поговор|созвон)|"
+    r"(?:telefon|телефон)\w*\s+(?:orqali\s+|орқали\s+)?(?:gaplash|гаплаш)|"
+    r"по\s+телефону\s+(?:поговор|обсуд)",
     re.IGNORECASE,
 )
 # Who the patient asking for a number wants: the administrator or the doctor.
@@ -644,6 +699,34 @@ def _when(text: str) -> str | None:
             continue
         pieces.append(part)
     return ", ".join(pieces) or None
+
+
+_EVERYDAY_WORD = re.compile(
+    r"^(?:mayli|xo['‘ʻ’`]?p|hop|okey|ok|yaxshi|tushunarli|rahmat|spasibo|kerak|zo['‘ʻ’`]?r|"
+    r"bilmadim|bilmayman|bilmiman|hech|shunchaki|savol|maslahat|билмадим|билмайман|ҳеч|шунчаки|савол|"
+    r"майли|хўп|хоп|яхши|тушунарли|раҳмат|рахмат|керак|спасибо|хорошо|ладно|понятно|ок|окей)$",
+    re.IGNORECASE,
+)
+
+
+def _bare_name(text: str) -> bool:
+    """One word that can only be a name: "Otabek", not "salom", "ha", "Buxoro"
+    or "prostatit"."""
+    word = text.strip().strip(".,!")
+    return bool(
+        _NAME_WORD.match(word)
+        and not _GREETING.search(word)
+        and not _COMPLAINT.search(word)
+        and not _YES.search(word)
+        and not _REFUSE.search(word)
+        and not _QUESTION_WORDS.search(word)
+        and not _TASHKENT.search(word)
+        and not _REGIONS.search(word)
+        and not _ABROAD.search(word)
+        and not _NOT_NAMES.search(word)
+        and not PRICE_WORD.search(word)
+        and not _EVERYDAY_WORD.search(word)
+    )
 
 
 def _greeting_only(text: str) -> bool:
@@ -916,7 +999,14 @@ def plan_intake(
             if turn.get("role") == "assistant"
             and any(
                 _said(flow, key, [turn["content"]])
-                for key in ("ask_name", "who_choice", "admin_busy", "doctor_consult")
+                for key in (
+                    "ask_help",
+                    "ask_issue",
+                    "ask_name",
+                    "who_choice",
+                    "admin_busy",
+                    "doctor_consult",
+                )
             )
         ),
         None,
@@ -934,7 +1024,11 @@ def plan_intake(
         + _said(flow, "offer_evening", since)
         + _said(flow, "evening_ok", since)
     )
-    if said["paid_confirm"] or _said(flow, "hesitate_thanks", since):
+    if (
+        said["paid_confirm"]
+        or _said(flow, "hesitate_thanks", since)
+        or _said(flow, "protez_confirm", since)
+    ):
         return None
     corrected = said["confirm"] and phone_check.read(message) is not None
     # The evening card sent for an evening wish hands the conversation to the
@@ -963,6 +1057,18 @@ def plan_intake(
         _OPERATION_SAID.search(message)
         and not promo_images.OPERATION_NAMES.search(message)
         and not any(c.search(message) for c in promo_images.COMPLAINT_CARDS.values())
+        # "Operatsiya qancha?" after "varikotsele": that operation, not "which
+        # one?" again (the doctor, 2026-11-17: asked about the prosthesis, the
+        # bot asked "qaysi operatsiya?").
+        # "Operatsiyalar narxi?" -- all of them -- still lists the kinds.
+        and (
+            bool(
+                re.search(
+                    r"(?:operats|operasi|amaliyot|операц|амалиёт)\w*(?:lar|лар|ий)\b", message, re.I
+                )
+            )
+            or not any(promo_images.OPERATION_NAMES.search(t) for t in patient_since[:-1])
+        )
     )
     asks_price = (
         u.asks_price
@@ -974,6 +1080,12 @@ def plan_intake(
         # "Operatsiya narxi qancha?" with no operation named: the model asks
         # which one (the owner, 2026-11-11), not the consultation price line.
         and not general_operation
+    )
+    # "Varikotsele operatsiyasi qancha?", "Falloprotez narxi?": the operation's
+    # own card answers it -- never the consultation's card or price (the
+    # doctor, 2026-11-17: the consultation price comes once a time is agreed).
+    operation_price = asks_price and bool(
+        _OPERATION_SAID.search(message) or promo_images.OPERATION_NAMES.search(message)
     )
 
     def reask(question_text: str, note: str = "") -> Plan:
@@ -1006,6 +1118,32 @@ def plan_intake(
                 if _COMPLAINT.search(word):
                     continue
                 return _cap(word)
+        # "Otabek" in answer to "Sizga qanday yordam bera olamiz?", or as the
+        # very first message: a name.
+        # Only the real start, answered with the introduction: a history cut
+        # short may begin with "Chilonzor".
+        opener = str(turns[0]["content"]) if turns else message
+        at_start = not turns or (
+            turns[0].get("role") == "user"
+            and len(turns) > 1
+            and bool(_INTRO.search(str(turns[1].get("content", ""))))
+        )
+        if at_start and _bare_name(opener):
+            return _cap(opener.strip().strip(".,!"))
+        answers = [
+            next((t["content"] for t in since_turns[i + 1 :] if t.get("role") == "user"), message)
+            for i, turn in enumerate(since_turns)
+            if turn.get("role") == "assistant"
+            and (
+                _said(flow, "ask_help", [turn["content"]])
+                or _said(flow, "ask_issue", [turn["content"]])
+            )
+        ]
+        for answer in answers:
+            # "Сардор\nОперация нархи...\nВодянка": the first line.
+            line = (answer.strip().splitlines() or [""])[0]
+            if _bare_name(line):
+                return _cap(line.strip().strip(".,!"))
         return None
 
     def name_part() -> str:
@@ -1034,6 +1172,11 @@ def plan_intake(
         if re.fullmatch(r"\d{1,2}(?:[:.]\d{2})?", when.strip()):
             # A bare "16:00" reads as "16:00 da" / "в 16:00".
             when = texts.get("at_clock", "{t}").format(t=when.strip())
+        if said["protez_call"] and "protez_confirm" in texts:
+            # The prosthesis: the doctor rings, free, nothing paid ahead.
+            text = texts["protez_confirm"].format(name_part=name_part(), when=when, shown=phone)
+            note = f"PROTEZ: DOKTOR BILAN BEPUL TELEFON SUHBATI -- {reason}"
+            return Plan(reply=f"{text} [[CALLBACK:{phone}|{note}|{when}]]")
         text = texts["confirm"].format(name_part=name_part(), when=when, shown=phone)
         note = f"{reason} -- 50% oldindan"
         if said["admin_busy"]:
@@ -1047,6 +1190,12 @@ def plan_intake(
                 return Plan(reply=texts["ask_app"])
             return Plan(reply=texts["phone_foreign"].format(shown=found.shown))
         when = earlier_when() or texts["any_time"]
+        if said["protez_call"] and "protez_confirm" in texts:
+            # Kyrgyzstan, Russia: the doctor's free call by the messenger.
+            shown = f"{found.shown} ({app})"
+            text = texts["protez_confirm"].format(name_part=name_part(), when=when, shown=shown)
+            note = f"PROTEZ: DOKTOR BILAN BEPUL SUHBAT (chet el, {app}) -- {reason}"
+            return Plan(reply=f"{text} [[CALLBACK:{found.shown}|{note}|{when}]]")
         text = texts["foreign_confirm"].format(
             name_part=name_part(), when=when, app=app, shown=found.shown
         )
@@ -1122,6 +1271,11 @@ def plan_intake(
         if last_step is not None:
             pending = last_step
 
+    if pending in ("ask_help", "ask_issue"):
+        # The answer to "Sizga qanday yordam bera olamiz?" is read as a first
+        # message: a complaint, a question, a wish -- the greeting is done.
+        pending = None
+
     def named_complaint(text: str) -> bool:
         if sport_words.search(text) or promo_images.OPERATION_NAMES.search(text):
             return True
@@ -1168,8 +1322,25 @@ def plan_intake(
     def abroad_said() -> bool:
         return u.abroad or any(_ABROAD.search(t) for t in patient_since)
 
+    def time_question() -> str:
+        """The free times and which one suits: asked with the online offer, so
+        the time is agreed before any price is said (the doctor, 2026-11-17:
+        "avval vaqt, keyin narx")."""
+        if slots is None:
+            return str(texts.get("online_again") or "")
+        if not slots:
+            return str(texts["no_slots"])
+        return str(texts["offer_slots"].format(slots=_slot_words(texts, list(slots), now)))
+
     def choice(place: str | None, abroad: bool = False) -> str:
-        """Online or in the clinic, by where the patient is."""
+        """Online or in the clinic, by where the patient is: a video call with
+        the doctor, and straight away which time suits. The prosthesis is
+        talked over by telephone, free -- never pulled to the paid online
+        consultation (the doctor, 2026-11-17)."""
+        if "protez_call" in texts and any(
+            promo_images.OPERATIONS["op:falloprotez"][0].search(t) for t in patient_since
+        ):
+            return str(texts["protez_call"])
         if evening_only:
             # Sport pharmacology: online only, in the evening.
             return str(texts["offer_evening"])
@@ -1177,7 +1348,7 @@ def plan_intake(
         tashkent = re.search(flow.get("tashkent") or "toshkent", place, re.IGNORECASE)
         if tashkent and not abroad and not abroad_said():
             return str(texts["visit_choice"])
-        return str(texts["online_choice"])
+        return f"{texts['online_choice']} {time_question()}".strip()
 
     def choice_again() -> str:
         """The choice asked again: the clinic only for Tashkent."""
@@ -1185,9 +1356,9 @@ def plan_intake(
         offer = choice(place)
         if offer == texts["visit_choice"]:
             return str(texts["choice_again"])
-        if offer == texts["online_choice"]:
-            # Only its question: "Onlayn konsultatsiyaga yozib qo'yaymi?".
-            return re.split(r"(?<=[.!?])\s+", str(offer).strip())[-1]
+        if offer.startswith(texts["online_choice"]):
+            # Only the time question, not the offer said again.
+            return time_question() or str(offer)
         return str(offer)
 
     def phone_given() -> bool:
@@ -1208,10 +1379,14 @@ def plan_intake(
         return f"{texts['doctor_consult']} {sequence_step()}"
 
     def sequence_step() -> str:
-        """The next of name, place, complaint -- or the choice."""
+        """The next of complaint, name, place -- or the choice. The complaint
+        first, asked once (the doctor, 2026-11-17)."""
         named = given_name()
         place = known_place()
-        if not named and not said["ask_name"] and not name_part():
+        asked = said["ask_topic"] or said["ask_help"] or said["ask_issue"]
+        if not complaint_known() and not asked:
+            step = texts["ask_issue"]
+        elif not named and not said["ask_name"] and not name_part():
             step = texts["ask_name"]
         elif not place:
             step = texts["ask_place_named"].format(name=named) if named else texts["ask_place"]
@@ -1231,7 +1406,9 @@ def plan_intake(
     def after_place(place: str, abroad: bool = False) -> Plan:
         if not complaint_known():
             return Plan(reply=texts["ask_topic"])
-        return Plan(reply=next_after_complaint(place, abroad))
+        # A little about the complaint first, in general terms, then the
+        # video call and the time (the doctor, 2026-11-17).
+        return Plan(then=next_after_complaint(place, abroad), instruction=INSTRUCTION_INFO)
 
     def in_person() -> bool:
         """Did the patient choose to come to the clinic?"""
@@ -1270,32 +1447,74 @@ def plan_intake(
             or sport_words.search(message)
         )
     )
+    # The prosthesis, and "avval doktor bilan telefonda gaplashay": a free
+    # call with the doctor, never the paid online consultation (the doctor,
+    # 2026-11-17: "qimmatroq, hammasi avval gaplashaylik deydi").
+    protez = promo_images.OPERATIONS["op:falloprotez"][0]
+    protez_talked = any(protez.search(t) for t in patient_since) or any(
+        "falloprotez" in _norm(t) for t in own
+    )
+    if (
+        "protez_call" in texts
+        and not said["protez_call"]
+        and protez_talked
+        and _TALK_FIRST.search(message)
+        and phone_check.read(message) is None
+    ):
+        lead = opening() if pending is None else None
+        body = texts["protez_call"]
+        return Plan(reply=f"{lead} {bubbles.MARKER} {body}" if lead else body)
+    if pending == "protez_call" and not (asks_price and phone_check.read(message) is None):
+        # The price asked meanwhile is answered further down, in words.
+        by_phone = take_phone()
+        if by_phone is not None:
+            return by_phone
+        if question:
+            return reask(texts["protez_phone"])
+        if u.refuses or said["protez_call"] + _said(flow, "protez_phone", since) >= 2:
+            return None
+        return Plan(reply=texts["protez_phone"])
+
     if only_operation_price and pending is None:
+        # Which operation is the complaint itself: named, it starts the
+        # sequence (the name comes after it, the doctor, 2026-11-17).
         lead = opening()
-        body = f"{texts['op_which']} {texts['ask_name']}"
+        body = texts["op_which"]
         return Plan(reply=f"{lead} {bubbles.MARKER} {body}" if lead else body)
     if pending is None:
         lead = opening()
         if not named_complaint(message):
-            # No complaint yet: the name first, as the doctor asks. "Doktor bilan
+            # No complaint yet: what is it about, in a message of its own,
+            # before the name (the doctor, 2026-11-17: "tanishishdan oldin
+            # dardini so'rasin"). Asked once; then the name. "Doktor bilan
             # qanday bog'lansam bo'ladi?" is answered with the booking here,
             # never with the clinic's numbers.
-            body = texts["ask_name"]
+            asked_help = bool(_said(flow, "ask_help", own))
+            asked_issue = bool(_said(flow, "ask_issue", own))
             named = given_name()
-            if named:
+            if not asked_help and not asked_issue:
+                body = texts["ask_help"]
+            elif not asked_issue:
+                # Still no complaint: asked once more, in other words -- by
+                # name if the patient gave one ("Otabek").
+                issue = str(texts["ask_issue"])
+                body = f"{named}, {issue[:1].lower()}{issue[1:]}" if named else issue
+            elif named:
                 # "Men Bobur, Rossiyadaman": the name and maybe the place.
                 body = (
                     texts["ask_topic"]
                     if known_place()
                     else texts["ask_place_named"].format(name=named)
                 )
+            else:
+                body = texts["ask_name"]
             wish = contact_wish(message)
             if wish:
                 body = contact_reply(wish)
             elif question and not asks_price and not u.greeting_only:
                 return Plan(prefix=lead, then=body, instruction=INSTRUCTION)
             plan_body = f"{lead} {bubbles.MARKER} {body}" if lead else body
-            return Plan(reply=plan_body, cards=asks_price)
+            return Plan(reply=plan_body, cards=asks_price and not operation_price)
         early = take_phone()
         if early is not None and early.reply is not None:
             # All of it in one message: complaint, number, time.
@@ -1322,7 +1541,7 @@ def plan_intake(
         if question and not asks_price and not (named and place):
             return Plan(prefix=lead, then=step, instruction=INSTRUCTION)
         body = f"{lead} {bubbles.MARKER} {step}" if lead else step
-        return Plan(reply=body, cards=asks_price, card_topic=card_topic)
+        return Plan(reply=body, cards=asks_price and not operation_price)
 
     prices = flow.get("prices") or {}
     suffix = {"uz-cyrl": "_cyr", "ru": "_ru"}.get(script, "")
@@ -1477,7 +1696,7 @@ def plan_intake(
     ):
         # "Ereksiya yo'q" after the offer: the complaint, not a no.
         place = answer_after("ask_place", "ask_place_named") or known_place()
-        return Plan(reply=f"{texts['handles']} {choice(place)}", card_topic=card_topic)
+        return Plan(reply=f"{texts['handles']} {choice(place)}")
     hesitant = (
         (_HESITATE.search(message) or (u.refuses and _REFUSE.search(message)))
         and not _PAID.search(message)
@@ -1543,10 +1762,11 @@ def plan_intake(
         return Plan(reply=f"{text} [[CALLBACK:{found.shown}|{note}|{day} {at}]]")
 
     if (
-        pending == "online_choice"
+        pending in ("online_choice", "offer_slots")
         and _WANTS_CALL.search(message)
         and phone_check.read(message) is None
         and not _WANTS_ONLINE.search(message)
+        and parse_time(message) is None
     ):
         # "Qo'ng'iroq qilinglar": the call, as the patient asks.
         return Plan(reply=texts["ask_phone"])
@@ -1633,6 +1853,7 @@ def plan_intake(
                 mode = texts["mode_online"]
                 price, prepay = price_of("evening")
                 line = texts["price_line_evening"].format(price=price, prepay=prepay)
+                topic = "evening"
             else:
                 slot = _chosen_slot(message, at, list(slots or []), now)
                 if slot is None:
@@ -1645,9 +1866,24 @@ def plan_intake(
                     return Plan(reply=text)
                 day = _day_word(texts, slot, now)
                 price, prepay = price_of(kind)
-                line = texts["price_line"].format(price=price, prepay=prepay)
-            book = texts["book_ok"].format(day=day, time=f"{at:%H:%M}", mode=mode)
-            return Plan(reply=f" {bubbles.MARKER} ".join((book, line, texts["card_line"])))
+                what = (
+                    texts.get("what_sport")
+                    if kind == "sport"
+                    else texts.get("what_visit") if mode == texts["mode_visit"] else None
+                ) or texts.get("what_online", "")
+                line = texts["price_line"].format(price=price, prepay=prepay, what=what)
+                topic = "sport" if kind == "sport" else card_topic
+            # The time is agreed: now the card, the price, half of it for the
+            # first stage, and "pay and I book you for that time" (the doctor,
+            # 2026-11-17) -- never the price before the time.
+            hhmm = f"{at:%H:%M}"
+            book = texts["book_ok"].format(day=day, time=hhmm, mode=mode)
+            pay = texts["card_line"].format(day=day, time=hhmm)
+            return Plan(
+                reply=f" {bubbles.MARKER} ".join((book, line, pay)),
+                card_topic=topic,
+                card_caption=False,
+            )
 
     no_number = phone_check.read(message) is None
     if pending == "online_choice" and not question and no_number:
@@ -1670,7 +1906,9 @@ def plan_intake(
         # "Ereksiya yo'q" is the complaint, not a no.
         place = answer_after("ask_place", "ask_place_named") or known_place()
         return Plan(
-            reply=f"{texts['handles']} {next_after_complaint(place)}", card_topic=card_topic
+            prefix=texts["handles"],
+            then=next_after_complaint(place),
+            instruction=INSTRUCTION_INFO,
         )
     if pending == "ask_name" and not u.name and named_complaint(message) and not question:
         # "Prostatit" in answer to "Ismingiz nima?": the complaint came late.
@@ -1693,8 +1931,8 @@ def plan_intake(
 
     if asks_price and pending == "ask_place" and not question_only(message):
         # "Toshkentdanman, narxi qancha?": the place is answered; the card goes.
-        step_plan = after_place(message, abroad=u.abroad)
-        return Plan(reply=step_plan.reply, cards=True)
+        step = next_after_complaint(message, u.abroad) if complaint_known() else texts["ask_topic"]
+        return Plan(reply=step, cards=not operation_price)
     asks_about_operation = question and re.search(r"operats|amaliyot|операц|амалиёт", message, re.I)
     card_sent = any(
         "📎" in line and "paket" not in line for turn in own for line in turn.splitlines()
@@ -1720,7 +1958,7 @@ def plan_intake(
         )
         for t in patient_since
     )
-    if asks_price and op_cards and operation_asked and not asks_about_operation:
+    if asks_price and op_cards and operation_asked and not _CONSULTATION_WORD.search(message):
         # "1- komponentli protez narxi?" again: the operation's price, in words.
         titles = [t for t in op_cards if t in op_prices]
         patient_all = [t["content"] for t in turns if t.get("role") == "user"] + [message]
@@ -1778,7 +2016,7 @@ def plan_intake(
             "ask_phone": texts["ask_phone_again"],
             "ask_time": texts["ask_time"],
         }.get(pending, texts["ask_phone_again"])
-        return Plan(reply=again, cards=True)
+        return Plan(reply=again, cards=not operation_price)
 
     if early is not None and pending == "ask_time" and phone_check.read(message) is not None:
         return early
@@ -1888,7 +2126,7 @@ def plan_intake(
             return reask(texts["ask_place"])
         if named_complaint(message) and not known_place():
             # "Prostatit bor" in answer to "qayerdansiz?": taken, the place asked again.
-            return Plan(reply=f"{texts['handles']} {texts['ask_place']}", card_topic=card_topic)
+            return Plan(reply=f"{texts['handles']} {texts['ask_place']}")
         return after_place(message, abroad=abroad_said())
     if pending in ("ask_phone", "admin_busy"):
         if said["ask_phone"] >= 2:
@@ -1905,7 +2143,10 @@ def finished(flows: Mapping[str, Any] | None, history: Sequence[Mapping[str, Any
     if not intake:
         return False
     own = [t["content"] for t in history or [] if t.get("role") == "assistant"]
-    return any(_said(intake, key, own) for key in ("confirm", "paid_confirm", "hesitate_thanks"))
+    return any(
+        _said(intake, key, own)
+        for key in ("confirm", "paid_confirm", "hesitate_thanks", "protez_confirm")
+    )
 
 
 def drop_repeats(step: str, answer: str) -> str:

@@ -152,8 +152,13 @@ def check(reply: str, rules: Sequence[str]) -> list[str]:
 # although the rule said only when asked -- so a sum is let through only
 # when the message being answered asks for one.
 _ASKS_PRICE = re.compile(
-    r"narx|нарх|qancha|қанча|ne\w{0,3}\s*pul|не\w{0,3}\s*пул|\bpul|\bпул|xarajat|харажат|расход|to['‘ʻ’`]?lov|тўлов"
-    r"|сколько|стоим|стоит|цен[аыуе]|поч[её]м|chegirma|чегирма|скидк|arzon|арзон"
+    # "Qancha vaqt davom etadi?", "сколько дней": how long, not how much
+    # (long replay, 2026-11-17: answered with the consultation's price card).
+    r"narx|нарх|qancha(?!\s*(?:kun|vaqt|soat|muddat|marta|yosh|daqiqa|oy))"
+    r"|қанча(?!\s*(?:кун|вақт|соат|муддат|марта|ёш|дақиқа|ой))"
+    r"|ne\w{0,3}\s*pul|не\w{0,3}\s*пул|\bpul|\bпул|xarajat|харажат|расход|to['‘ʻ’`]?lov|тўлов"
+    r"|сколько(?!\s*(?:дней|времени|часов|раз|лет|длится))|стоим|стоит|цен[аыуе]|поч[её]м"
+    r"|chegirma|чегирма|скидк|arzon|арзон"
     r"|qimmat|қиммат|price|cost|how\s+much|dollar|доллар|so['‘ʻ’`]m|сўм|\bсум|mln|млн|\$",
     re.IGNORECASE,
 )

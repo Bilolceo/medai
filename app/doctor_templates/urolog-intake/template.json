@@ -1,6 +1,6 @@
 {
   "name": "urolog-intake",
-  "description": "Urolog / androlog, yozuv bilan ishlaydigan klinika: avval ism, keyin joy, keyin raqam va vaqt; narxlar telefon orqali; hamdardliksiz, ish ohangida.",
+  "description": "Urolog / androlog, yozuv bilan ishlaydigan klinika: avval shikoyat, keyin ism va joy, keyin video qo'ng'iroq va vaqt, vaqtdan keyin narx; hamdardliksiz, ish ohangida.",
   "required": [
     "DOCTOR_FULL_NAME_OF",
     "DOCTOR_SHORT",

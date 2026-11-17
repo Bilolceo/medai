@@ -1,4 +1,4 @@
 Ovozli xabar
 
 Bemor: [ovozli xabar]
-Admin: Ovozli xabarni eshita olmayman, savolingizni yozib yuboring.
+Admin: Kechirasiz, ovozli xabarni eshita olmayman. Iltimos, savolingizni matn qilib yozib yuboring.

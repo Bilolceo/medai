@@ -3,4 +3,4 @@ Raqam so'radi -- avval kim bilan gaplashmoqchi ekani so'raladi, raqam berilmaydi
 Bemor: Raqamingizni bering
 Admin: Siz doktor bilan gaplashmoqchimisiz yoki administrator bilanmi?
 Bemor: Doktor bilan
-Admin: Doktor bilan muloqot qilish uchun konsultatsiyaga yozilish kerak, konsultatsiya uchun 50% oldindan to'lov qilinadi. Shu yerning o'zida yozib qo'yaman. Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?
+Admin: Doktor bilan muloqot qilish uchun konsultatsiyaga yozilish kerak, konsultatsiya uchun 50% oldindan to'lov qilinadi. Shu yerning o'zida yozib qo'yaman. Sizga qanday yordam bera olamiz?

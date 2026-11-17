@@ -1,4 +1,4 @@
 Nega ism va joy so'raysiz, desa
 
 Bemor: Nega ismimni so'rayapsiz?
-Admin: Sizni doktor qabuliga yozish uchun. Xohlamasangiz, ismsiz ham davom etamiz: qayerdansiz, Toshkentdanmisiz yoki viloyatdanmi?
+Admin: Sizni doktor qabuliga yozish uchun. Xohlamasangiz, ismsiz ham davom etamiz: qayerdansiz?
