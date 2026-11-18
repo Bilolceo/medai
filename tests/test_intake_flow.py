@@ -231,10 +231,12 @@ def test_the_call_when_asked_for_names_the_prepayment() -> None:
     replies = _talk([*CALL, "+998 90 123 45 67, ertaga 10 da"])
     assert replies[3].startswith("Operatorimiz qo'ng'iroq qilib hammasini batafsil aytib beradi.")
     assert replies[4].startswith(
-        "Rahmat, Akmal. Operatorimiz ertaga 10 da +998 90 123 45 67 raqamiga qo'ng'iroq qiladi."
+        "Rahmat, Akmal. Operatorimiz ertaga 10:00 da +998 90 123 45 67 raqamiga qo'ng'iroq qiladi."
     )
     assert "50%" in replies[4]
-    assert "[[CALLBACK:+998 90 123 45 67|Prostatit bor -- 50% oldindan|ertaga 10 da]]" in replies[4]
+    assert (
+        "[[CALLBACK:+998 90 123 45 67|Prostatit bor -- 50% oldindan|ertaga 10:00 da]]" in replies[4]
+    )
 
 
 def test_a_number_without_a_time_asks_the_time_then_confirms() -> None:
@@ -261,9 +263,9 @@ def test_everything_in_one_message_is_confirmed_at_once() -> None:
     last = bubbles.parts(replies[0])[-1]
     assert last.startswith(
         f"{HANDLES} Rahmat, Otabek. "
-        "Operatorimiz ertaga 10 da +998 95 890 12 34 raqamiga qo'ng'iroq qiladi."
+        "Operatorimiz ertaga 10:00 da +998 95 890 12 34 raqamiga qo'ng'iroq qiladi."
     )
-    assert "|ertaga 10 da]]" in last
+    assert "|ertaga 10:00 da]]" in last
 
 
 def test_an_evening_call_time_is_moved_into_the_operators_hours() -> None:
@@ -294,13 +296,13 @@ def test_a_number_with_a_digit_too_many_is_asked_again() -> None:
 def test_a_corrected_number_after_the_check_is_confirmed() -> None:
     replies = _talk([*CALL, "90 123 45 6 ertaga 10 da", "+998 90 123 45 67"])
     assert "+998 90 123 45 67 raqamiga qo'ng'iroq qiladi" in replies[5]
-    assert "|ertaga 10 da]]" in replies[5]
+    assert "|ertaga 10:00 da]]" in replies[5]
 
 
 def test_a_new_number_after_the_confirmation_is_taken_as_a_correction() -> None:
     replies = _talk([*CALL, "+998 90 123 45 67 ertaga 10 da", "+998 91 234 56 78"])
     assert "+998 91 234 56 78 raqamiga qo'ng'iroq qiladi" in replies[5]
-    assert "|ertaga 10 da]]" in replies[5]
+    assert "|ertaga 10:00 da]]" in replies[5]
 
 
 def test_a_foreign_number_asks_for_telegram_or_whatsapp() -> None:
@@ -621,7 +623,7 @@ def test_the_administrator_is_busy_and_rings_back_at_the_patients_time() -> None
     replies = _talk(["Telefon raqam bering", "administrator bilan", "90 123 45 67", "ertaga 11 da"])
     assert replies[1] == ADMIN_BUSY
     assert replies[2] == "Qaysi vaqtda qo'ng'iroq qilsak qulay?"
-    assert replies[3].startswith("Rahmat. Operatorimiz ertaga 11 da +998 90 123 45 67")
+    assert replies[3].startswith("Rahmat. Operatorimiz ertaga 11:00 da +998 90 123 45 67")
     assert "[[CALLBACK:+998 90 123 45 67|ADMINISTRATOR BILAN GAPLASHMOQCHI" in replies[3]
 
 
@@ -1032,20 +1034,22 @@ def _offered(message: str, history_patient: str = "Varikotsele") -> str:
 def test_kecha_for_a_booking_is_the_evening() -> None:
     # Production chat 2026-11-09: "kecha qilib bera oladilarmi" got "kecha bo'lmaydi".
     reply = _offered("Menga online kasultatsiya kecha qilib bera oladilarmi")
-    assert "19:00 dan 22:00 gacha" in reply and "990 000" in reply
+    # The evening's price comes once the time is agreed (the doctor, 2026-11-17).
+    assert "19:00 dan 22:00 gacha" in reply and "narxi boshqacha" in reply
+    assert "990 000" not in reply
 
 
 def test_yesterday_in_the_past_is_not_the_evening() -> None:
-    assert "990 000" not in _offered("Kecha yozgan edim, javob kelmadi")
+    assert "19:00 dan 22:00" not in _offered("Kecha yozgan edim, javob kelmadi")
 
 
 def test_the_evening_asked_in_the_present_tense_is_offered() -> None:
     reply = _offered("Kechqurun kelsam bo'ladi")
-    assert "990 000" in reply
+    assert "19:00 dan 22:00 gacha" in reply
 
 
 def test_excuse_me_is_not_the_evening() -> None:
-    assert "990 000" not in _offered("Kechirasiz, ertaga 09:00 bo'ladi")
+    assert "19:00 dan 22:00" not in _offered("Kechirasiz, ertaga 09:00 bo'ladi")
 
 
 def test_the_hour_alone_picks_the_time_offered() -> None:

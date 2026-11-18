@@ -171,7 +171,12 @@ def clear_script(user_message: str) -> str | None:
 def _script_of(user_message: str) -> tuple[str, bool]:
     """The script for one message, and whether the message made it clear."""
     lowered = user_message.lower()
-    if any("Ѐ" <= character <= "ӿ" for character in lowered):
+    cyrillic = sum(1 for character in lowered if "Ѐ" <= character <= "ӿ")
+    latin = sum(1 for character in lowered if "a" <= character <= "z")
+    # The alphabet most of the letters are in: "ko'rikkа" with one Cyrillic
+    # "а", "kursdan keyin кейин" or "konsulьtatsiya" is still Latin
+    # (simulation, 2026-11-18: such patients were answered in Cyrillic or Russian).
+    if cyrillic and cyrillic >= latin:
         return _cyrillic_language(lowered), _cyrillic_is_clear(lowered)
     return _latin_language(lowered)
 

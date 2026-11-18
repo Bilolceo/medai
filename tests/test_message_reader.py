@@ -139,7 +139,7 @@ def test_a_time_with_call_me_in_it_is_just_the_time() -> None:
         time="ertaga 10 da qo'ng'iroq qiling",
     )
     assert plan is not None and plan.reply is not None
-    assert "Operatorimiz ertaga 10 da +998 95 890 12 34 raqamiga" in plan.reply
+    assert "Operatorimiz ertaga 10:00 da +998 95 890 12 34 raqamiga" in plan.reply
 
 
 def test_a_sport_complaint_the_model_read_is_a_complaint() -> None:

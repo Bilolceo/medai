@@ -169,7 +169,13 @@ _UZBEK = re.compile(
     r"\b(?:o[o'’ʻ‘`]?|u)zbek\w*|ўзбек\w*|узбек\w*|lotin(?:cha)?da|лотинча",
     re.IGNORECASE,
 )
-_CYRILLIC_ASK = re.compile(r"кирилл(?:ча|ицей|ица)|кирил\w*\s*(?:ёз|яз)|kirill\w*", re.IGNORECASE)
+# "Kirillda yozing", not "men Kirill" -- a name (simulation, 2026-11-18: a
+# Latin-writing patient called Kirill was answered in Cyrillic).
+_CYRILLIC_ASK = re.compile(
+    r"кирилл(?:ча|ицей|ица)|кирил\w*\s*(?:ёз|яз)|kirill?(?:da|cha|chada|ga)\b|"
+    r"kirill?\w*\s+(?:alifbo|harf|yoz|yoz)",
+    re.IGNORECASE,
+)
 # "emas", "bilmayman", "tushunmayman", "yozmang", "kerakmas", "не", "нет".
 _NEGATION = re.compile(
     r"\bemas\b|\bmas\b|bilma\w*|bilmi\w*|tushunma\w*|yozma\w*|kerakmas|keremas"

@@ -4,7 +4,7 @@ dori?" -- to draw the patient in; then the name, the place, "tushunarli,
 bunday holatlar davolanadi", the times; the price once a time is chosen, half
 now and the rest on the day; an operation's price only when it is asked."""
 
-from datetime import datetime
+from datetime import datetime, time
 from typing import Any
 
 from app.services import bubbles, promo_images, scripted_flow
@@ -362,3 +362,84 @@ def test_a_place_with_another_question_lets_the_model_answer_it() -> None:
     last = plans[-1]
     assert last is not None and last.reply is None and last.then is not None
     assert last.then.endswith(FAR)
+
+
+# --- simulated patients, 2026-11-18 ---------------------------------------------
+
+
+def test_sending_money_is_not_going_to_the_clinic() -> None:
+    assert not scripted_flow._WANTS_VISIT.search("165 mingni yuboraman, karta raqamni tashlang")
+    assert scripted_flow._WANTS_VISIT.search("klinikaga boraman")
+    assert scripted_flow._WANTS_VISIT.search("Клиникага ўзим бораман")
+
+
+def test_a_name_said_as_deb_murojaat_qiling_is_taken() -> None:
+    found = scripted_flow._GIVEN_NAME.search("Ali deb murojaat qiling")
+    assert found is not None and (found.group(1) or found.group(2)) == "Ali"
+
+
+def test_the_card_number_asked_to_pay_is_no_request_for_a_phone() -> None:
+    assert scripted_flow.contact_wish("raqam yuboring pulini tashlab qo'yaman") is None
+    assert scripted_flow.contact_wish("telefonimni yuboraman") is None
+    assert scripted_flow.contact_wish("doktorning raqamini bering") == "doctor"
+
+
+def test_the_model_s_own_booking_and_free_times_are_dropped() -> None:
+    answer = "Ha, bo'ladi. Ali, 10:30 ga yozib qo'ydim. Bugun 09:00-16:00 oralig'ida bo'ladi."
+    assert scripted_flow.drop_claims(answer) == "Ha, bo'ladi."
+
+
+def test_a_call_now_after_hours_gets_the_hours() -> None:
+    late = datetime(2026, 11, 18, 21, 0, tzinfo=CLINIC_TIMEZONE)
+    history: list[dict[str, Any]] = []
+    plan = None
+    for message in ["Ereksiya, 90 123 45 67 qo'ng'iroq qilinglar", "hozir qo'ng'iroq qilinglar"]:
+        plan = scripted_flow.plan(
+            FLOWS, script="uz-latn", user_message=message, history=history, now=late
+        )
+        shown = plan.reply if plan is not None and plan.reply else "<model>"
+        history += [
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": shown},
+        ]
+    assert plan is not None and plan.reply is not None
+    assert "hozir" not in plan.reply.lower() and "09:00" in plan.reply
+
+
+def test_offering_one_s_own_number_is_no_request_for_one() -> None:
+    assert scripted_flow.contact_wish("ertaga bo'ladimi nomer qoldiraymi") is None
+    assert scripted_flow.contact_wish("номеримни ёзиб қўяманми ёки сизда борми?") is None
+
+
+def test_a_time_typed_without_a_colon() -> None:
+    assert scripted_flow.parse_time("juma 1030 qulayroq") == time(10, 30)
+    assert scripted_flow.parse_time("narxi 330000 so'm") is None
+
+
+def test_the_model_s_free_times_are_dropped() -> None:
+    assert scripted_flow.drop_claims("Ислом, 10:00 ёки 14:00 га тушишингиз мумкин.") == ""
+
+
+def test_the_gynaecology_line_is_said_once() -> None:
+    plans = _talk(["Hayzim 2 oydan beri kelmayapti", "Tushundim rahmat ginekologga yozaman"])
+    assert plans[0] is not None and plans[0].reply is not None and "ginekolog" in plans[0].reply
+    assert plans[1] is None
+
+
+def test_one_cyrillic_letter_does_not_switch_the_alphabet() -> None:
+    from app.services.language import reply_script
+
+    assert (
+        reply_script("men baribir ko‘rikkа kelmoqchiman to‘lovni qilib chekni yuboraman")
+        == "uz-latn"
+    )
+    assert (
+        reply_script("ertaga 10 30 qulay qanday qilib pul yuboraman кейин qilib berasizmi")
+        == "uz-latn"
+    )
+    assert reply_script("Простатит бор, эртага келаман") == "uz-cyrl"
+
+
+def test_the_evening_offer_names_no_price_before_the_time() -> None:
+    for texts in FLOWS["intake"]["texts"].values():
+        assert "990" not in texts["evening_ok"].format(price="990 000 so'm")

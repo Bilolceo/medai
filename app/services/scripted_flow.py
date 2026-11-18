@@ -60,13 +60,15 @@ _QUESTION_WORDS = re.compile(
 )
 # "Qancha kun", "qancha vaqt": how long, not how much.
 _ASKS_PRICE = re.compile(
-    r"narx|narh|нарх|нарҳ|qancha(?!\s*(?:kun|vaqt|soat|muddat|marta|yosh|daqiqa|oy))|қанча(?!\s*(?:кун|вақт|соат|муддат|марта|ёш|дақиқа|ой))|pul|пул|to['‘ʻ’`]?lov|тўлов|"
-    r"сколько(?!\s*(?:дней|времени|часов|раз|лет|длится))|стоим|стоит|цен|оплат",
+    r"narx|narh|нарх|нарҳ|qancha(?!\s*(?:kun|vaqt|soat|muddat|marta|yosh|daqiqa|oy|davom))|қанча(?!\s*(?:кун|вақт|соат|муддат|марта|ёш|дақиқа|ой|давом))|pul|пул|"
+    # "To'lovni qilaman" pays; "to'lov qancha?" asks with "qancha" (simulation, 2026-11-18).
+    r"to['‘ʻ’`]?lov\w*\s+(?:qancha|qanaqa|necha)|тўлов\w*\s+(?:қанча|неча)|"
+    r"сколько(?!\s*(?:дней|времени|часов|раз|лет|длится))|стоим|стоит|цен|сколько\s+оплат",
     re.IGNORECASE,
 )
 _NOT_A_PRICE = re.compile(
-    r"qancha\s*(?:kun|vaqt|soat|muddat|marta|yosh|daqiqa|oy)|"
-    r"қанча\s*(?:кун|вақт|соат|муддат|марта|ёш|дақиқа|ой)|"
+    r"qancha\s*(?:kun|vaqt|soat|muddat|marta|yosh|daqiqa|oy|davom)|"
+    r"қанча\s*(?:кун|вақт|соат|муддат|марта|ёш|дақиқа|ой|давом)|"
     r"сколько\s*(?:дней|времени|часов|раз|лет|длится)|davom\s*et|давом\s*эт|длится",
     re.IGNORECASE,
 )
@@ -75,11 +77,16 @@ INSTRUCTION_REASK = (
     "sentences. Do not greet and do not introduce yourself. The patient was already asked "
     'this and has not answered yet: "{question}" -- so end with ONE short sentence of your '
     "own that asks for it again in different words, never repeating that line word for word."
+    " Never say that you booked, recorded or will book the patient, never name free days or "
+    "hours as available, and never give the card number. Never tell the patient to pay before "
+    "a time is agreed."
 )
 # Not \b: "14:00га" has no word boundary before the Cyrillic suffix, and
 # "00га" alone was read as midnight -- "00:00 band" (the doctor, 2026-11-17).
 _CLOCK = re.compile(r"(?<!\d)(\d{1,2})\s*[:.]\s*(\d{2})(?!\d)")
 # "15 00 ga": the colon left out (live chat, 2026-11-07).
+# "Juma 1030 qulay": the colon and the space left out (simulation, 2026-11-18).
+_CLOCK_COMPACT = re.compile(r"(?<![\d+])((?:0?9|1[0-9]|2[0-2]))(00|15|30|45)(?!\d)")
 _CLOCK_SPACED = re.compile(r"(?<!\d)([01]?\d|2[0-3])\s(00|15|30|45)(?!\d)")
 _HOUR = re.compile(
     r"(?:soat|соат|в|к|at)\s*(\d{1,2})\b|\b(\d{1,2})\s*(?:da|ga|lar|ларда|да|га|час|ч\b)",
@@ -141,6 +148,10 @@ INSTRUCTION = (
     "THIS REPLY: answer only the patient's question in this message, in one or two short "
     "sentences. Do not greet, do not introduce yourself, do not ask anything and do not offer "
     "anything -- the next question is sent separately after your answer."
+    " Never say that you booked, recorded or will book the patient, never name free days or "
+    "hours as available, and never give the card number -- the clinic's next message does that."
+    " Never tell the patient to pay before a time is agreed: the time comes first, then the "
+    "payment."
 )
 
 
@@ -187,7 +198,9 @@ def _cap(text: str) -> str:
 def parse_time(message: str) -> time | None:
     """The hour the patient named: "10:00", "soat 2 da" (14:00), "в 12"."""
     message = _PHONE_DIGITS.sub(" ", message)
-    match = _CLOCK.search(message) or _CLOCK_SPACED.search(message)
+    match = (
+        _CLOCK.search(message) or _CLOCK_SPACED.search(message) or _CLOCK_COMPACT.search(message)
+    )
     if match:
         hour, minute = int(match.group(1)), int(match.group(2))
     else:
@@ -425,12 +438,35 @@ def plan_libido(
     )
 
 
+# The model's own word on a booking, the free times or the card -- the script
+# says those (simulation, 2026-11-18: "10:30 ga yozib qo'ydim" and "bugun
+# 09:00-16:00 bo'ladi" before any time was agreed).
+_MODEL_CLAIMS = re.compile(
+    r"yozib\s+qo['‘ʻ’`]?y(?:dim|aman|ildi|ib\s+qo['‘ʻ’`]?ydim)|yozdim|ёзиб\s+қўй(?:дим|аман|илди)|"
+    r"записал|запишу|записали|9860|"
+    r"(?:bugun|ertaga|indin\w*|dushanba|seshanba|chorshanba|payshanba|juma|shanba|"
+    r"бугун|эртага|индин\w*|сегодня|завтра|послезавтра)[^.!?]{0,60}"
+    r"(?:bo['‘ʻ’`]?sh|bo['‘ʻ’`]?ladi|mumkin|qabul\s+bor|бўш|бўлади|мумкин|свобод|можно|есть\s+время)|"
+    r"\d{1,2}[:.]\d{2}\s*[–—-]\s*\d{1,2}[:.]\d{2}|"
+    r"\d{1,2}[:.]\d{2}[^.!?]{0,50}(?:mumkin|bo['‘ʻ’`]?ladi|tushishingiz|kelishingiz|мумкин|бўлади|"
+    r"тушишингиз|келишингиз|можно)",
+    re.IGNORECASE,
+)
+
+
+def drop_claims(answer: str) -> str:
+    """The model's answer without a booking, a free time or a card of its own."""
+    sentences = re.split(r"(?<=[.!?])\s+", answer.strip())
+    return " ".join(s for s in sentences if not _MODEL_CLAIMS.search(s)).strip()
+
+
 def drop_questions(reply: str) -> str:
     """The model's off-script answer without any question of its own: the
     script's question follows it, and two questions in a row read as a form."""
     sentences = re.split(r"(?<=[.!?])\s+", reply.strip())
     kept = [s for s in sentences if not s.rstrip().endswith("?")]
-    return " ".join(kept).strip() or reply.strip()
+    # Nothing but questions: nothing -- the step's own question follows.
+    return " ".join(kept).strip()
 
 
 _OFFER_WORDS = re.compile(
@@ -559,15 +595,19 @@ _ASKS_ADDRESS = re.compile(
 # "Dollar kursi qancha?": a price, but not ours.
 _NOT_OUR_PRICE = re.compile(r"dollar|kurs|valyuta|ob-?havo|доллар|курс|валют|погод", re.IGNORECASE)
 # "Klinikaga kelaman": a visit in person, not online.
+# "Yuboraman" (I send) holds "boraman" (I go): the going only as its own word
+# (simulation, 2026-11-18: an online patient booked at the clinic).
 _WANTS_VISIT = re.compile(
-    r"kel(?:aman|ib|amiz|sam|ish)|klinika|oflayn|offline|borib|boraman|"
-    r"кел(?:аман|иб|амиз|сам)|клиник|офлайн|очно|приду|приеду|приехать|прийти",
+    r"kel(?:aman|ib|amiz|sam|ish)|klinika|oflayn|offline|(?<![a-zʻ'‘’`])bor(?:ib|aman|sam)|"
+    r"кел(?:аман|иб|амиз|сам)|клиник|офлайн|очно|приду|приеду|приехать|прийти|"
+    r"(?<![а-яўқғҳ])бор(?:иб|аман|сам)",
     re.IGNORECASE,
 )
 # To come in person, said as a wish -- not "klinikada davolanganman" or
 # "qon kelib qoldi" in a complaint (code review, 2026-11-18).
 _COME = re.compile(
-    r"kelaman|kelsam|kelamiz|kelmoqchiman|qachon\s+kel|klinikaga\s+kel|borsam|boraman|"
+    r"kelaman|kelsam|kelamiz|kelmoqchiman|qachon\s+kel|klinikaga\s+kel|"
+    r"(?<![a-zʻ'‘’`])bor(?:sam|aman)|(?<![а-яўқғҳ])бор(?:сам|аман)|"
     r"келаман|келсам|келамиз|келмоқчиман|қачон\s+кел|качон\s+кел|клиникага\s+кел|"
     r"приду|приеду|прийти|приехать|подъехать",
     re.IGNORECASE,
@@ -605,7 +645,10 @@ _SINCE_SAID = re.compile(
 _TREATED_SAID = re.compile(
     r"davolan(?:ganman|maganman|dim|madim|yapman)|dori\s+ich(?:ganman|maganman|yapman)|"
     r"даволан(?:ганман|маганман|дим|мадим|япман)|дори\s+ич(?:ганман|маганман|япман)|"
-    r"не\s+лечил|лечился|лечилась|принимал\w*\s+(?:лекарств|таблет|препарат)",
+    r"не\s+лечил|лечился|лечилась|принимал\w*\s+(?:лекарств|таблет|препарат)|"
+    # "Viagra ichganman", "tabletka ichib ko'rganman" (simulation, 2026-11-18).
+    r"ich(?:ganman|maganman|ib\s+ko['‘ʻ’`]?rganman)|ич(?:ганман|маганман|иб\s+кўрганман)|"
+    r"viagra|sialis|cialis|виагр|сиалис|антибиотик\w*\s+ич|antibiotik\w*\s+ich",
     re.IGNORECASE,
 )
 # "Hozircha kerak emas" stops the questions; "hozircha davolanmaganman" answers one.
@@ -623,7 +666,7 @@ _CONSULTATION_WORD = re.compile(
 _TALK_FIRST = re.compile(
     r"(?:doktor|doxtir|vrach|shifokor|доктор|врач|шифокор)[^.!?]{0,40}"
     r"(?:gaplash|гаплаш|поговор|созвон)|"
-    r"(?:telefon|телефон)\w*\s+(?:orqali\s+|орқали\s+)?(?:gaplash|гаплаш)|"
+    r"(?:telefon|телефон)\w*[^.!?]{0,25}(?:gaplash|гаплаш)|"
     r"по\s+телефону\s+(?:поговор|обсуд)",
     re.IGNORECASE,
 )
@@ -638,12 +681,20 @@ _NO_NUMBER = re.compile(
 )
 # "Karta raqami": the payment, not a contact.
 _CARD_NUMBER = re.compile(r"karta|карт", re.IGNORECASE)
+_PAYMENT = re.compile(
+    r"pul(?:ini|ni)?\s+(?:tashla|o['‘ʻ’`]?tkaz|yubor)|to['‘ʻ’`]?lov|tolov|to['‘ʻ’`]?la(?:yman|ymiz|dim)|"
+    r"пул(?:ини|ни)?\s+(?:ташла|ўтказ|юбор)|тўлов|тўла(?:йман|дим)|оплат|перевед|перевод",
+    re.IGNORECASE,
+)
 
 
 def contact_wish(text: str) -> str | None:
     """Asked for a number or a person: "admin", "doctor", or "ask" (which one
     is not said); None for anything else."""
     if phone_check.read(text) is not None or _CARD_NUMBER.search(text):
+        return None
+    if _PAYMENT.search(text):
+        # "Raqam yuboring, pulini tashlayman": the card's number, to pay.
         return None
     if _NO_NUMBER.search(text):
         # "Raqam bermayman": a no, not a request for a number.
@@ -663,15 +714,21 @@ def contact_wish(text: str) -> str | None:
 
 _NOT_A_CONTACT = re.compile(
     r"jinsiy\s+aloqa|жинсий\s+алоқа|полов\w+\s+(?:акт|жизн|связ)|"
+    # "Telefonimni yuboraman": the patient's own number (simulation, 2026-11-18).
+    r"telefon(?:im|imni|imga|imiz)|raqam(?:im|imni|imiz)|nomer(?:im|imni)|"
+    r"(?:nomer|raqam|telefon|номер|рақам|телефон)\w*\s+(?:qoldir|қолдир|оставл)|"
+    r"телефон(?:им|имни)|рақам(?:им|имни)|номер(?:им|имни)|мой\s+номер|"
     r"onla[iy]?e?n\w*\s+(?:qanaqa|qanday|qanday\s+o['‘ʻ’`]?tadi)|онлайн\w*\s+(?:қанақа|қандай)|"
     r"(?:telegram|телеграм|whatsapp|ватсап|вацап|telefon|телефон)\w*\s*(?:orqali|орқали|через|по)?\w*\s*"
     r"(?:bo['‘ʻ’`]?ladimi|mumkinmi|бўладими|мумкинми|можно)|"
     r"(?:можно|mumkinmi)\s+(?:по\s+)?(?:телеграм|ватсап|telegram|whatsapp)",
     re.IGNORECASE,
 )
+# Not "raqamimni yozaman" -- the patient's own number (simulation, 2026-11-18).
 _ASKS_NUMBER = re.compile(
-    r"raqam\w*\s*(?:ni|ini)?\s*(?:ber|yoz|tashla|yubor)|nomer\w*\s*(?:ni|ini)?\s*(?:ber|yoz|tashla)|"
-    r"рақам\w*\s*(?:ни|ини)?\s*(?:бер|ёз|ташла)|номер\w*\s*(?:ни|ини)?\s*(?:бер|ёз|ташла)|"
+    r"raqam(?!im)\w*\s*(?:ni|ini)?\s*(?:ber|yoz|tashla|yubor)|"
+    r"nomer(?!im)\w*\s*(?:ni|ini)?\s*(?:ber|yoz|tashla)|"
+    r"рақам(?!им)\w*\s*(?:ни|ини)?\s*(?:бер|ёз|ташла)|номер(?!им)\w*\s*(?:ни|ини)?\s*(?:бер|ёз|ташла)|"
     r"дайте\s+номер|номер\s+(?:дайте|скиньте)",
     re.IGNORECASE,
 )
@@ -688,6 +745,7 @@ _PAID = re.compile(
     re.IGNORECASE,
 )
 _TODAY = re.compile(r"bugun|бугун|сегодня", re.IGNORECASE)
+_NOW_WORD = re.compile(r"\bhozir\b|\bҳозир\b|\bсейчас\b|\bсрочно\b", re.IGNORECASE)
 _TOMORROW = re.compile(r"ertaga|эртага|завтра", re.IGNORECASE)
 _TELEGRAM = re.compile(r"telegram|telegramm|телеграм|tg\b", re.IGNORECASE)
 _WHATSAPP = re.compile(r"whats\s*app|vatsap|vatsapp|ватсап|вацап|уотсап", re.IGNORECASE)
@@ -711,6 +769,10 @@ _EMERGENCY = re.compile(
 # "Ismim Bobur", "men Otabek", "меня зовут Руслан": the name, given unasked.
 _GIVEN_NAME = re.compile(
     r"(?i:ismim|men|исмим|мен|меня\s+зовут|я)\s+([A-ZА-ЯЎҚҒҲ][a-zа-яёўқғҳ'‘ʻ’`]{1,19})(?=[\s,.!]|$)"
+    # "Ali deb murojaat qiling", "Дилшод ака десангиз" (simulation, 2026-11-18).
+    r"|(?:^|[\s,.!])([A-Za-zА-Яа-яЎўҚқҒғҲҳ][a-zа-яёўқғҳ'‘ʻ’`]{1,19})(?:\s+(?i:aka|ака))?\s+"
+    r"(?i:deb\s+(?:murojaat|yoz|chaqir|ayt)|деб\s+(?:мурожаат|ёз|чақир|айт)|desangiz|десангиз|"
+    r"deysiz|дейсиз|deng|денг)"
 )
 
 
@@ -996,7 +1058,13 @@ def plan_intake(
         return " ".join(parts) or None
 
     last_own = own[-1] if own else ""
-    if _GYNAECOLOGY.search(message) and texts.get("gynaecology"):
+    if (
+        _GYNAECOLOGY.search(message)
+        and texts.get("gynaecology")
+        and not _said(flow, "gynaecology", own)
+    ):
+        # Said once; "rahmat, ginekologga yozaman" after it is the model's to
+        # answer (simulation, 2026-11-18: the same line twice).
         # Not the doctor's field, and no gynaecologist is promised here.
         gyn_lead = " ".join(
             filter(
@@ -1013,7 +1081,7 @@ def plan_intake(
         )
         body = texts["gynaecology"]
         return Plan(reply=f"{gyn_lead} {bubbles.MARKER} {body}" if gyn_lead else body)
-    if _WOMAN.search(message):
+    if _WOMAN.search(message) or _said(flow, "gynaecology", own):
         return None
     u = _understand(message, reading, asked_name=bool(_said(flow, "ask_name", [last_own])))
     # Where the sequence began: the patient's first complaint by pattern, or
@@ -1088,7 +1156,11 @@ def plan_intake(
         r"после рабочего времени — только онлайн",
         re.IGNORECASE,
     )
-    if (said["confirm"] and not corrected) or any(evening_handover.search(t) for t in since):
+    # The evening card no longer hands the conversation to the model: the
+    # model then "booked" patients itself with no call-back to the clinic
+    # (simulation, 2026-11-18). The times are booked here, the evening's too.
+    del evening_handover
+    if said["confirm"] and not corrected:
         return None
 
     patient_since = [t["content"] for t in since_turns if t.get("role") == "user"] + [message]
@@ -1217,11 +1289,12 @@ def plan_intake(
             return u.name
         for text in patient_since:
             for found in _GIVEN_NAME.finditer(text):
-                word = found.group(1)
+                word = found.group(1) or found.group(2)
                 # "Men Rossiyadaman", "men Toshkentdanman": a place, not a name.
                 if re.search(r"(man|dan|da|ман|дан|да)$", word.lower()) or _ABROAD.search(word):
                     continue
-                if _COMPLAINT.search(word):
+                if _COMPLAINT.search(word) or not _bare_name(word):
+                    # "nima deb yozay?": not a name.
                     continue
                 return _cap(word)
         # "Otabek" in answer to "Sizga qanday yordam bera olamiz?", or as the
@@ -1273,11 +1346,27 @@ def plan_intake(
         at = parse_time(when)
         # "16:00" is inside "09:00 dan 16:00 gacha" for a call.
         callable_at = at is None or _within(flow, at) or f"{at:%H:%M}" == flow.get("online_end")
+        if at is None and _NOW_WORD.search(when) and not _within(flow, now.time()):
+            # "Hozir qo'ng'iroq qilinglar" at 21:00: nobody rings now
+            # (simulation, 2026-11-18: "Operatorimiz hozir ... qo'ng'iroq qiladi").
+            callable_at = False
         if not callable_at or _EVENING_ASK.search(when):
+            if said["protez_call"] and "protez_hours" in texts:
+                return Plan(reply=texts["protez_hours"])
             return Plan(reply=texts["operator_hours"])
         if re.fullmatch(r"\d{1,2}(?:[:.]\d{2})?", when.strip()):
             # A bare "16:00" reads as "16:00 da" / "в 16:00".
             when = texts.get("at_clock", "{t}").format(t=when.strip())
+        elif at is not None:
+            # "Soat 15 00 atrofida bo'lsa qulay bo'ladi rahmat": said back as
+            # "ertaga 15:00 da", not word for word (simulation, 2026-11-18).
+            day = (
+                texts["tomorrow"]
+                if _TOMORROW.search(when)
+                else texts["today"] if _TODAY.search(when) else ""
+            )
+            clock = texts.get("at_clock", "{t}").format(t=f"{at:%H:%M}")
+            when = f"{day} {clock}".strip()
         if said["protez_call"] and "protez_confirm" in texts:
             # The prosthesis: the doctor rings, free, nothing paid ahead.
             text = texts["protez_confirm"].format(name_part=name_part(), when=when, shown=phone)
@@ -1310,7 +1399,13 @@ def plan_intake(
 
     def take_phone() -> Plan | None:
         found = phone_check.read(message)
-        if found is None and u.when and _said(flow, "operator_hours", since[-1:]):
+        if (
+            found is None
+            and (u.when or parse_time(message))
+            and (
+                _said(flow, "operator_hours", since[-1:]) or _said(flow, "protez_hours", since[-1:])
+            )
+        ):
             # The number came with an hour the operators do not work; now the
             # hour is fixed, the number already given stands.
             earlier = next(
@@ -1322,7 +1417,7 @@ def plan_intake(
                 None,
             )
             if earlier:
-                return confirm(earlier, u.when)
+                return confirm(earlier, u.when or message)
         if found is None:
             # "Telegram bor" after the foreign number was pointed out.
             last_number = next(
@@ -1454,7 +1549,17 @@ def plan_intake(
             return str(texts.get("online_again") or "")
         if not slots:
             return str(texts["no_slots"])
-        return str(texts["offer_slots"].format(slots=_slot_words(texts, list(slots), now)))
+        free = list(slots)
+        # "Dushanba kuniga yozing": that day's times first, when there are any
+        # (simulation, 2026-11-18: Monday asked, tomorrow and Friday offered).
+        for text in reversed(patient_since):
+            day = _named_day(text, now)
+            if day is not None:
+                on_day = [x for x in free if x.date() == day]
+                if on_day:
+                    free = on_day
+                break
+        return str(texts["offer_slots"].format(slots=_slot_words(texts, free, now)))
 
     def choice(place: str | None, abroad: bool = False) -> str:
         """Online or in the clinic, by where the patient is: a video call with
@@ -1577,6 +1682,13 @@ def plan_intake(
     def contact_reply(wish: str) -> str:
         if wish == "admin":
             return str(texts["admin_busy"])
+        if (
+            wish in ("doctor", "ask")
+            and "protez_call" in texts
+            and any(promo_images.OPERATIONS["op:falloprotez"][0].search(t) for t in patient_since)
+        ):
+            # The prosthesis: talking to the doctor is free, by telephone.
+            return str(texts["protez_call"])
         if wish == "doctor":
             return doctor_path()
         return str(texts["who_choice"])
@@ -1750,16 +1862,22 @@ def plan_intake(
         entry = prices.get(kind) or prices.get("uro") or {}
         return entry.get("price" + suffix, ""), entry.get("prepay" + suffix, "")
 
-    if (
-        pending in ("ask_since", "ask_treated")
-        and phone_check.read(message) is None
-        and not contact_wish(message)
-    ):
+    if pending in ("ask_since", "ask_treated") and phone_check.read(message) is None:
         # The answer to "qachondan beri?" / "davolanganmisiz?": taken as it is,
         # and on to the next. A question meanwhile is answered by the model and
         # the same question follows -- asked twice, it moves on.
         # "2 yildan beri, davolanmaganman": both answered -- next_step knows.
+        current = texts["ask_since"] if pending == "ask_since" else treated_text()
         following = next_step()
+        wish_now = contact_wish(message)
+        if wish_now and not (
+            _said(flow, "who_choice", since) + _said(flow, "doctor_consult", since)
+        ):
+            # "Doktorning raqamini bering" mid-questions: no number, the
+            # consultation is the way -- and the same question, unanswered
+            # (simulation, 2026-11-18: this crashed with a KeyError).
+            way = texts["admin_busy"] if wish_now == "admin" else texts["doctor_consult"]
+            return Plan(reply=f"{way} {current}")
         if _STOP.search(message) and not named_complaint(message):
             # "Hozircha kerak emas": no more questions -- the model answers.
             return None
@@ -1869,10 +1987,27 @@ def plan_intake(
             return Plan(reply=f"{texts['handles']} {step}" if complaint_now else step)
         return Plan(reply=texts["ask_phone_again"])
     wish = contact_wish(message)
+    asked_who = _said(flow, "who_choice", since) + _said(flow, "doctor_consult", since)
     if (
         pending in ("ask_name", "ask_place", "ask_topic", "online_choice", "offer_slots")
         and wish
-        and _said(flow, "who_choice", since) + _said(flow, "doctor_consult", since) < 3
+        and asked_who
+    ):
+        # "Ali deb murojaat qiling, raqamini bering": answered about the number
+        # once already -- the name goes on (simulation, 2026-11-18: a loop of
+        # "Ismingiz nima?" while the patient kept giving it).
+        wish = None
+    if (
+        pending in ("online_choice", "offer_slots")
+        and wish
+        and (parse_time(message) is not None or _bare_hour(message) is not None)
+    ):
+        # "10:30 подойдет, адрес и номер?": the time books; the rest after.
+        wish = None
+    if (
+        pending in ("ask_name", "ask_place", "ask_topic", "online_choice", "offer_slots")
+        and wish
+        and asked_who < 2
     ):
         # "Doktor raqamini bering", "admin bilan gaplashsam": who, or that
         # person's way -- never a number, and never taken for a name.
@@ -2311,6 +2446,22 @@ def plan_intake(
         # question, so the model answers and the next step follows.
         place = answer_after("ask_place", "ask_place_named") or known_place()
         return Plan(then=next_after_complaint(place), instruction=INSTRUCTION)
+    name_now = u.name if reading is not None else None
+    if not name_now:
+        given = _GIVEN_NAME.search(message)
+        word = (given.group(1) or given.group(2)) if given else ""
+        name_now = _cap(word) if word and _bare_name(word) else None
+    if question and pending == "ask_name" and name_now and not _GREETING.search(name_now):
+        # "Mening ismim Azamat. Qachon kelsam bo'ladi?": the name is given --
+        # the model answers the question and the sequence goes on from it.
+        place = known_place()
+        if place:
+            step = after_place(place, abroad=abroad_said()).reply or texts["ask_place"]
+        else:
+            step = texts["ask_place_named"].format(name=name_now)
+        if _COME.search(message) and place:
+            return Plan(reply=step)
+        return Plan(then=step, instruction=INSTRUCTION)
     home = re.compile(flow.get("tashkent") or "toshkent", re.IGNORECASE)
     if (
         question
@@ -2339,11 +2490,11 @@ def plan_intake(
                 else offer
             )
             return reask(again)
-        if said[pending] < 2:
+        if said.get(pending, 0) < 2:
             again = (
                 texts["ask_phone_again"]
                 if pending in ("ask_phone", "admin_busy")
-                else texts[pending]
+                else texts.get(pending, texts["ask_name"])
             )
         else:
             if pending in (
@@ -2369,8 +2520,9 @@ def plan_intake(
         if place:
             # The place came earlier or with the name: not asked again.
             return after_place(place, abroad=abroad_said())
-        if u.name:
-            return Plan(reply=texts["ask_place_named"].format(name=u.name))
+        named_here = u.name or given_name()
+        if named_here:
+            return Plan(reply=texts["ask_place_named"].format(name=named_here))
         return Plan(reply=texts["ask_place"])
     told_online = any(
         _said(flow, "abroad_online", [turn]) or _said(flow, "online_choice", [turn])

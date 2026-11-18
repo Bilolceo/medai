@@ -166,7 +166,7 @@ def test_found_by_the_audit_however_it_is_written(reply: str) -> None:
         "PSA 4 ng/ml dan yuqori bo'lsa",
         "Bir kun, ikki hafta yoki uch marta -- yuz foiz o'n kun ichida",
         "Ming rahmat!",
-        "[[CALLBACK:+998 90 123 45 67|qabul|ertaga 10 da]]",
+        "[[CALLBACK:+998 90 123 45 67|qabul|ertaga 10:00 da]]",
         "0,3 mln so'm",  # the consultation, written another way
         "300 000 UZS",
     ],

@@ -42,7 +42,7 @@
       "and": "va",
       "at": "da",
       "ask_topic": "Qanday masala yoki shikoyat bilan murojaat qilyapsiz?",
-      "evening_ok": "Kechqurun <<EVENING_START>> dan <<EVENING_END>> gacha doktor onlayn videoqo'ng'iroqda konsultatsiya beradi, ish vaqtidan tashqari bo'lgani uchun narxi {price}. Bugun yoki ertaga, soat nechiga sizga qulay?",
+      "evening_ok": "Kechqurun <<EVENING_START>> dan <<EVENING_END>> gacha doktor onlayn videoqo'ng'iroqda konsultatsiya beradi, ish vaqtidan tashqari bo'lgani uchun narxi boshqacha -- vaqt kelishilgach aytaman. Bugun yoki ertaga, soat nechiga sizga qulay?",
       "offer_evening": "Sport farmakologiyasi bo'yicha doktor faqat onlayn videoqo'ng'iroqda, 19:00 dan 22:00 gacha konsultatsiya beradi. Bugun yoki ertaga, soat nechiga sizga qulay?",
       "contact_answer": "Doktor bilan konsultatsiyaga shu yerning o'zida yozib qo'yaman.",
       "visit_choice": "Klinikaga kelib qabulga yozilasizmi yoki doktor bilan video qo'ng'iroq orqali onlayn maslahatlashasizmi?",
@@ -77,7 +77,8 @@
       "ask_treated_sport": "Hozir biror dori yoki gormon ichyapsizmi?",
       "understood": "Tushunarli. Bunday holatlar doktorda davolanadi, qabulda doktor hammasini batafsil tushuntiradi.",
       "understood_op": "Tushunarli. Bizda bunday operatsiyalar qilinadi, qabulda doktor hammasini batafsil tushuntiradi.",
-      "far_choice": "Uzoqda bo'lsangiz, doktordan onlayn video konsultatsiya so'rab beraman, kelib o'tirishingiz shart bo'lmaydi. Klinikaga o'zingiz kelmoqchimisiz?"
+      "far_choice": "Uzoqda bo'lsangiz, doktordan onlayn video konsultatsiya so'rab beraman, kelib o'tirishingiz shart bo'lmaydi. Klinikaga o'zingiz kelmoqchimisiz?",
+      "protez_hours": "Doktor <<ONLINE_START>> dan <<ONLINE_END>> gacha qo'ng'iroq qiladi. Shu oraliqda qaysi vaqt qulay?"
     },
     "uz-cyrl": {
       "greet_back": "Ва алайкум ассалом.",
@@ -118,7 +119,7 @@
       "and": "ва",
       "at": "да",
       "ask_topic": "Қандай масала ёки шикоят билан мурожаат қиляпсиз?",
-      "evening_ok": "Кечқурун <<EVENING_START>> дан <<EVENING_END>> гача доктор онлайн видеоқўнғироқда консультация беради, иш вақтидан ташқари бўлгани учун нархи {price}. Бугун ёки эртага, соат нечига сизга қулай?",
+      "evening_ok": "Кечқурун <<EVENING_START>> дан <<EVENING_END>> гача доктор онлайн видеоқўнғироқда консультация беради, иш вақтидан ташқари бўлгани учун нархи бошқача -- вақт келишилгач айтаман. Бугун ёки эртага, соат нечига сизга қулай?",
       "offer_evening": "Спорт фармакологияси бўйича доктор фақат онлайн видеоқўнғироқда, 19:00 дан 22:00 гача консультация беради. Бугун ёки эртага, соат нечига сизга қулай?",
       "contact_answer": "Доктор билан консультацияга шу ернинг ўзида ёзиб қўяман.",
       "visit_choice": "Клиникага келиб қабулга ёзиласизми ёки доктор билан видео қўнғироқ орқали онлайн маслаҳатлашасизми?",
@@ -153,7 +154,8 @@
       "ask_treated_sport": "Ҳозир бирор дори ёки гормон ичяпсизми?",
       "understood": "Тушунарли. Бундай ҳолатлар докторда даволанади, қабулда доктор ҳаммасини батафсил тушунтиради.",
       "understood_op": "Тушунарли. Бизда бундай операциялар қилинади, қабулда доктор ҳаммасини батафсил тушунтиради.",
-      "far_choice": "Узоқда бўлсангиз, доктордан онлайн видео консультация сўраб бераман, келиб ўтиришингиз шарт бўлмайди. Клиникага ўзингиз келмоқчимисиз?"
+      "far_choice": "Узоқда бўлсангиз, доктордан онлайн видео консультация сўраб бераман, келиб ўтиришингиз шарт бўлмайди. Клиникага ўзингиз келмоқчимисиз?",
+      "protez_hours": "Доктор <<ONLINE_START>> дан <<ONLINE_END>> гача қўнғироқ қилади. Шу оралиқда қайси вақт қулай?"
     },
     "ru": {
       "greet_back": "Здравствуйте.",
@@ -194,7 +196,7 @@
       "and": "и",
       "at": "в",
       "ask_topic": "С какой проблемой или жалобой вы обращаетесь?",
-      "evening_ok": "Вечером с <<EVENING_START>> до <<EVENING_END>> доктор консультирует онлайн по видеозвонку, вне рабочего времени это стоит {price}. Сегодня или завтра, во сколько вам удобно?",
+      "evening_ok": "Вечером с <<EVENING_START>> до <<EVENING_END>> доктор консультирует онлайн по видеозвонку; вне рабочего времени цена другая -- скажу, когда согласуем время. Сегодня или завтра, во сколько вам удобно?",
       "offer_evening": "По спортивной фармакологии доктор консультирует только онлайн по видеозвонку, с 19:00 до 22:00. Сегодня или завтра, во сколько вам удобно?",
       "contact_answer": "На консультацию к доктору я запишу вас прямо здесь.",
       "visit_choice": "Записать вас на приём в клинику или на онлайн-консультацию с доктором по видеозвонку?",
@@ -229,7 +231,8 @@
       "ask_treated_sport": "Сейчас принимаете какие-то препараты или гормоны?",
       "understood": "Понятно. Такие состояния доктор лечит, на приёме он всё подробно объяснит.",
       "understood_op": "Понятно. Такие операции у нас делают, на приёме доктор всё подробно объяснит.",
-      "far_choice": "Если вы далеко, попрошу у доктора онлайн-консультацию по видеозвонку, приезжать не придётся. Хотите приехать в клинику сами?"
+      "far_choice": "Если вы далеко, попрошу у доктора онлайн-консультацию по видеозвонку, приезжать не придётся. Хотите приехать в клинику сами?",
+      "protez_hours": "Доктор звонит с <<ONLINE_START>> до <<ONLINE_END>>. Какое время в этом промежутке удобно?"
     }
   },
   "prices": {

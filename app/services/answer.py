@@ -560,8 +560,12 @@ async def generate_answer(
         if stripped != reply:
             logger.info("booking_offer_removed", extra={"reply": reply[:300]})
         reply = stripped
+    if scripted is not None and scripted.instruction and not scripted.then:
+        # Asked again in the model's own words: still no booking, free time or
+        # card of its own (simulation, 2026-11-18: "10:00 да ёзиб қўяман", the card).
+        reply = scripted_flow.drop_claims(reply) or reply
     if scripted is not None and scripted.then:
-        answer = scripted_flow.drop_questions(reply)
+        answer = scripted_flow.drop_claims(scripted_flow.drop_questions(reply))
         if scripted.instruction == scripted_flow.INSTRUCTION_INFO:
             answer = scripted_flow.drop_offer(answer)
         step = scripted_flow.drop_repeats(scripted.then, answer)
@@ -570,17 +574,30 @@ async def generate_answer(
         reply = f"{scripted.prefix} {bubbles.MARKER} {reply}"
     # The clinic's price card, when the patient asked the price (see
     # app.services.promo_images): chosen here, sent by delivery after the words.
-    card = promo_images.choose(
-        tenant.settings.get("promo_images") if tenant is not None else None,
-        user_message=user_message,
-        patient_turns=patient_turns,
-        own_turns=own_turns,
-        reply=reply,
-        hour=datetime.now(UTC).astimezone(CLINIC_TIMEZONE).hour,
+    # Inside the scripted sequence the card goes only for a price asked (the
+    # doctor: the price after the time), and never in place of the step's own
+    # words (simulation, 2026-11-18: "kechqurun" swapped the whole reply for
+    # the evening caption, the greeting and the question gone).
+    in_sequence = scripted is not None and bool(scripted.then)
+    card = (
+        None
+        if in_sequence and not price_guard.asks_price(user_message, patient_turns)
+        else promo_images.choose(
+            tenant.settings.get("promo_images") if tenant is not None else None,
+            user_message=user_message,
+            patient_turns=patient_turns,
+            own_turns=own_turns,
+            reply=reply,
+            hour=datetime.now(UTC).astimezone(CLINIC_TIMEZONE).hour,
+        )
     )
     if card is not None:
         logger.info("promo_image_attached", extra={"title": card.get("title")})
-        reply = promo_images.attach(reply, card, script, own_turns)
+        reply = (
+            promo_images.attach_scripted(reply, card, script)
+            if in_sequence
+            else promo_images.attach(reply, card, script, own_turns)
+        )
     return _with_operation_cards(
         reply, tenant.settings if tenant is not None else {}, user_message, history, script
     )
