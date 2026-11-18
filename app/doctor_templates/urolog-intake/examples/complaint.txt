@@ -9,6 +9,6 @@ Admin: Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?
 Bemor: Akmal
 Admin: Akmal, qayerdansiz?
 Bemor: Samarqanddanman
-Admin: Tushunarli. Bunday holatlar doktorda davolanadi, qabulda doktor hammasini batafsil tushuntiradi. Klinikaga kelmoqchimisiz? Uzoqda bo'lsangiz, doktordan onlayn video konsultatsiya so'rab beraman -- kelib o'tirishingiz shart bo'lmaydi.
+Admin: Tushunarli. Bunday holatlar doktorda davolanadi, qabulda doktor hammasini batafsil tushuntiradi. Uzoqda bo'lsangiz, doktordan onlayn video konsultatsiya so'rab beraman, kelib o'tirishingiz shart bo'lmaydi. Klinikaga o'zingiz kelmoqchimisiz?
 Bemor: Onlayn bo'lsin
 Admin: Ertaga 09:00 va 10:30 da bo'sh vaqtlar bor. Qaysi biri sizga qulay?

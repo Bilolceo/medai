@@ -564,6 +564,20 @@ _WANTS_VISIT = re.compile(
     r"кел(?:аман|иб|амиз|сам)|клиник|офлайн|очно|приду|приеду|приехать|прийти",
     re.IGNORECASE,
 )
+# To come in person, said as a wish -- not "klinikada davolanganman" or
+# "qon kelib qoldi" in a complaint (code review, 2026-11-18).
+_COME = re.compile(
+    r"kelaman|kelsam|kelamiz|kelmoqchiman|qachon\s+kel|klinikaga\s+kel|borsam|boraman|"
+    r"келаман|келсам|келамиз|келмоқчиман|қачон\s+кел|качон\s+кел|клиникага\s+кел|"
+    r"приду|приеду|прийти|приехать|подъехать",
+    re.IGNORECASE,
+)
+# "Uzoqdaman", "kela olmayman": far away, so online.
+_FAR_WORDS = re.compile(
+    r"uzoq|kela\s*olmay|kelolmay|borolmay|узоқ|узок|кела\s*олмай|келолмай|далеко|не\s+смогу",
+    re.IGNORECASE,
+)
+_BARE_NO = re.compile(r"^\s*(?:yo['‘ʻ’`]?q|йўқ|йук|нет)\s*[.!]?\s*$", re.IGNORECASE)
 # "Doktor bilan qanday bog'lansam bo'ladi?", "raqamini bering": the way to the
 # doctor is the booking here, not the clinic's numbers.
 _CONTACT = re.compile(
@@ -1377,6 +1391,15 @@ def plan_intake(
     elif "ask_since" in texts and _said(flow, "ask_since", last_line):
         pending = "ask_since"
 
+    # Was "klinikaga kelmoqchimisiz?" the bot's last line?
+    far_last = bool(since) and bool(_said(flow, "far_choice", since[-1:]))
+
+    def away(text: str) -> bool:
+        """An answer to it that means online: "uzoqman", "onlayn", a bare "yo'q"."""
+        if _STOP.search(text) or _HESITATE.search(text):
+            return False
+        return bool(_FAR_WORDS.search(text) or _ONLINE_WORD.search(text) or _BARE_NO.search(text))
+
     def named_complaint(text: str) -> bool:
         if sport_words.search(text) or promo_images.OPERATION_NAMES.search(text):
             return True
@@ -1447,13 +1470,13 @@ def plan_intake(
             return str(texts["offer_evening"])
         place = place or ""
         tashkent = re.search(flow.get("tashkent") or "toshkent", place, re.IGNORECASE)
-        wants_visit = any(_WANTS_VISIT.search(t) for t in patient_since)
+        wants_visit = any(_COME.search(t) for t in patient_since)
         # The word itself: _WANTS_ONLINE also takes a bare "ha"/"да" ("9 да").
         wants_online = any(_ONLINE_WORD.search(t) for t in patient_since)
-        if wants_visit and not wants_online and not evening_only:
+        if wants_visit and not wants_online:
             # "Qachon kelsam bo'ladi?": coming, so the times -- never "kelish
             # shart emas" to someone who asked to come (Humoyun, 2026-11-18).
-            return time_question() if slots else str(texts["visit_choice"])
+            return time_question() if slots is not None else str(texts["visit_choice"])
         if tashkent and not abroad and not abroad_said():
             return str(texts["visit_choice"])
         if "far_choice" in texts and not wants_online:
@@ -1590,14 +1613,22 @@ def plan_intake(
             replies.append(message)
         if start == 0:
             # No choice offered: "qachon kelsam bo'ladi?" said on the way.
-            replies = list(patient_since)
-        decided = [
-            bool(_WANTS_VISIT.search(t)) or (far and bool(_YES.search(t)))
-            for t in replies
-            if _WANTS_VISIT.search(t)
-            or _ONLINE_WORD.search(t)
-            or (far and (_YES.search(t) or _REFUSE.search(t)))
-        ]
+            return any(_COME.search(t) for t in patient_since) and not any(
+                _ONLINE_WORD.search(t) for t in patient_since
+            )
+
+        def visit(t: str) -> bool | None:
+            """Coming (True), online (False), or not said (None) -- the online
+            word first: "Ha, onlayn bo'lsin" is online."""
+            if _ONLINE_WORD.search(t) or (far and _FAR_WORDS.search(t)):
+                return False
+            if _WANTS_VISIT.search(t) or (far and _YES.search(t)):
+                return True
+            if far and _BARE_NO.search(t):
+                return False
+            return None
+
+        decided = [v for t in replies if (v := visit(t)) is not None]
         return bool(decided and decided[-1])
 
     only_operation_price = (
@@ -1912,8 +1943,9 @@ def plan_intake(
     hesitant = (
         (_HESITATE.search(message) or (u.refuses and _REFUSE.search(message)))
         and not _PAID.search(message)
-        # "Yo'q, uzoqman" to "klinikaga kelmoqchimisiz?" is online, not a no.
-        and not (_said(flow, "far_choice", since[-1:]) and not _HESITATE.search(message))
+        # "Yo'q, uzoqman" to "klinikaga kelmoqchimisiz?" is online, not a no;
+        # "yo'q, kerak emas" still is.
+        and not (far_last and away(message))
         # "Nega kechqurun qimmat?" is a question; "Yo'q, klinikaga kelaman" a choice.
         and not _is_question(message)
         and not _WANTS_VISIT.search(message)
@@ -2103,7 +2135,7 @@ def plan_intake(
     if pending == "online_choice" and not question and no_number:
         if _WANTS_CALL.search(message):
             return Plan(reply=texts["ask_phone"])
-        if _said(flow, "far_choice", since[-1:]) and (u.refuses or _REFUSE.search(message)):
+        if far_last and away(message):
             # "Yo'q, uzoqman" to "kelmoqchimisiz?": online, the times.
             return offer_slots()
         if _WANTS_VISIT.search(message) or _WANTS_ONLINE.search(message) or u.yes:
@@ -2148,9 +2180,20 @@ def plan_intake(
     if early is not None and (pending in callable_steps or corrected):
         return early
 
-    if asks_price and pending == "ask_place" and not question_only(message):
-        # "Toshkentdanman, narxi qancha?": the place is answered; the card goes.
-        step = next_after_complaint(message, u.abroad) if complaint_known() else texts["ask_topic"]
+    names_place = bool(
+        _ABROAD.search(message)
+        or _REGIONS.search(message)
+        or re.search(flow.get("tashkent") or "toshkent", message, re.IGNORECASE)
+    )
+    if asks_price and pending == "ask_place" and (not question_only(message) or names_place):
+        # "Toshkentdanman, narxi qancha?", "Samarqanddan. Narxi qancha?": the
+        # place is answered; the card goes, and the next step -- not the place again.
+        if anamnesis and complaint_known():
+            step = next_step(message, u.abroad)
+        elif complaint_known():
+            step = next_after_complaint(message, u.abroad)
+        else:
+            step = texts["ask_topic"]
         return Plan(reply=step, cards=not operation_price)
     asks_about_operation = question and re.search(r"operats|amaliyot|операц|амалиёт", message, re.I)
     card_sent = any(
@@ -2268,14 +2311,19 @@ def plan_intake(
         # question, so the model answers and the next step follows.
         place = answer_after("ask_place", "ask_place_named") or known_place()
         return Plan(then=next_after_complaint(place), instruction=INSTRUCTION)
+    home = re.compile(flow.get("tashkent") or "toshkent", re.IGNORECASE)
     if (
         question
         and pending == "ask_place"
-        and (_ABROAD.search(message) or _REGIONS.search(message) or _TASHKENT.search(message))
+        and (_ABROAD.search(message) or _REGIONS.search(message) or home.search(message))
     ):
-        # "Qozog'istondan. Qachon kelsam bo'ladi?": the place is given; the
-        # question is the next step's (the times), not the place asked again.
-        return after_place(message, abroad=abroad_said())
+        # "Qozog'istondan. Qachon kelsam bo'ladi?": the place is given, not
+        # asked again. "Qachon kelsam?" the next step answers itself; any other
+        # question ("narxi qancha?") the model answers first.
+        placed = after_place(message, abroad=abroad_said())
+        if placed.reply is not None and not _COME.search(message):
+            return Plan(then=placed.reply, instruction=INSTRUCTION)
+        return placed
     if question:
         # The model answers; the step's question follows -- twice at most,
         # then the next step's, so a patient full of questions is not asked

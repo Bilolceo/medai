@@ -47,8 +47,7 @@ TOPIC = "Qanday masala yoki shikoyat bilan murojaat qilyapsiz?"
 HELP = "Sizga qanday yordam bera olamiz?"
 ISSUE = "Qanday masala yoki shikoyat bo'yicha yozyapsiz?"
 OFFER = (
-    "Bu masala bo'yicha doktor bilan video qo'ng'iroq orqali onlayn maslahatlashishingiz "
-    "mumkin, klinikaga kelish shart emas."
+    "Bu masala bo'yicha doktor bilan video qo'ng'iroq orqali onlayn maslahatlashishingiz " "mumkin."
 )
 # With no free times known (the tests' default): the time asked openly.
 ONLINE = f"{OFFER} Doktor bilan video qo'ng'iroqda gaplashish uchun sizga qaysi vaqt qulay?"

@@ -27,7 +27,7 @@
       "foreign_confirm": "Rahmat{name_part}. Operatorimiz {when} {app} orqali {shown} raqamiga bog'lanadi. Qabulga yozilish uchun konsultatsiya narxining yarmi (50%) oldindan to'lanadi, buni operatorimiz batafsil aytadi.",
       "any_time": "ish vaqtida",
       "at_clock": "{t} da",
-      "online_choice": "Bu masala bo'yicha doktor bilan video qo'ng'iroq orqali onlayn maslahatlashishingiz mumkin, klinikaga kelish shart emas.",
+      "online_choice": "Bu masala bo'yicha doktor bilan video qo'ng'iroq orqali onlayn maslahatlashishingiz mumkin.",
       "choice_again": "Onlayn konsultatsiyaga yozib qo'yaymi yoki klinikaga kelasizmi?",
       "offer_slots": "{slots} bo'sh vaqtlar bor. Qaysi biri sizga qulay?",
       "slot_taken": "{time} band. {slots} bo'sh vaqtlar bor. Qaysi biri qulay?",
@@ -77,7 +77,7 @@
       "ask_treated_sport": "Hozir biror dori yoki gormon ichyapsizmi?",
       "understood": "Tushunarli. Bunday holatlar doktorda davolanadi, qabulda doktor hammasini batafsil tushuntiradi.",
       "understood_op": "Tushunarli. Bizda bunday operatsiyalar qilinadi, qabulda doktor hammasini batafsil tushuntiradi.",
-      "far_choice": "Klinikaga kelmoqchimisiz? Uzoqda bo'lsangiz, doktordan onlayn video konsultatsiya so'rab beraman -- kelib o'tirishingiz shart bo'lmaydi."
+      "far_choice": "Uzoqda bo'lsangiz, doktordan onlayn video konsultatsiya so'rab beraman, kelib o'tirishingiz shart bo'lmaydi. Klinikaga o'zingiz kelmoqchimisiz?"
     },
     "uz-cyrl": {
       "greet_back": "Ва алайкум ассалом.",
@@ -103,7 +103,7 @@
       "foreign_confirm": "Раҳмат{name_part}. Операторимиз {when} {app} орқали {shown} рақамига боғланади. Қабулга ёзилиш учун консультация нархининг ярми (50%) олдиндан тўланади, буни операторимиз батафсил айтади.",
       "any_time": "иш вақтида",
       "at_clock": "{t} да",
-      "online_choice": "Бу масала бўйича доктор билан видео қўнғироқ орқали онлайн маслаҳатлашишингиз мумкин, клиникага келиш шарт эмас.",
+      "online_choice": "Бу масала бўйича доктор билан видео қўнғироқ орқали онлайн маслаҳатлашишингиз мумкин.",
       "choice_again": "Онлайн консультацияга ёзиб қўяйми ёки клиникага келасизми?",
       "offer_slots": "{slots} бўш вақтлар бор. Қайси бири сизга қулай?",
       "slot_taken": "{time} банд. {slots} бўш вақтлар бор. Қайси бири қулай?",
@@ -153,7 +153,7 @@
       "ask_treated_sport": "Ҳозир бирор дори ёки гормон ичяпсизми?",
       "understood": "Тушунарли. Бундай ҳолатлар докторда даволанади, қабулда доктор ҳаммасини батафсил тушунтиради.",
       "understood_op": "Тушунарли. Бизда бундай операциялар қилинади, қабулда доктор ҳаммасини батафсил тушунтиради.",
-      "far_choice": "Клиникага келмоқчимисиз? Узоқда бўлсангиз, доктордан онлайн видео консультация сўраб бераман -- келиб ўтиришингиз шарт бўлмайди."
+      "far_choice": "Узоқда бўлсангиз, доктордан онлайн видео консультация сўраб бераман, келиб ўтиришингиз шарт бўлмайди. Клиникага ўзингиз келмоқчимисиз?"
     },
     "ru": {
       "greet_back": "Здравствуйте.",
@@ -179,7 +179,7 @@
       "foreign_confirm": "Спасибо{name_part}. Оператор свяжется с вами {when} через {app} по номеру {shown}. Для записи вносится предоплата -- половина (50%) стоимости консультации, оператор расскажет подробнее.",
       "any_time": "в рабочее время",
       "at_clock": "в {t}",
-      "online_choice": "По этому вопросу можно посоветоваться с доктором онлайн по видеозвонку, приезжать в клинику не обязательно.",
+      "online_choice": "По этому вопросу можно посоветоваться с доктором онлайн по видеозвонку.",
       "choice_again": "Записать вас на онлайн-консультацию или придёте в клинику?",
       "offer_slots": "Свободно: {slots}. Какое время вам удобно?",
       "slot_taken": "{time} занято. Свободно: {slots}. Какое время удобно?",
@@ -229,7 +229,7 @@
       "ask_treated_sport": "Сейчас принимаете какие-то препараты или гормоны?",
       "understood": "Понятно. Такие состояния доктор лечит, на приёме он всё подробно объяснит.",
       "understood_op": "Понятно. Такие операции у нас делают, на приёме доктор всё подробно объяснит.",
-      "far_choice": "Хотите приехать в клинику? Если вы далеко, попрошу у доктора онлайн-консультацию по видеозвонку -- приезжать не придётся."
+      "far_choice": "Если вы далеко, попрошу у доктора онлайн-консультацию по видеозвонку, приезжать не придётся. Хотите приехать в клинику сами?"
     }
   },
   "prices": {

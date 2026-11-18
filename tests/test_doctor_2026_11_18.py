@@ -25,8 +25,8 @@ SINCE = "Bu holat qachondan beri bor?"
 TREATED = "Oldin bu bo'yicha davolanganmisiz yoki biror dori ichganmisiz?"
 NAME = "Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?"
 FAR = (
-    "Klinikaga kelmoqchimisiz? Uzoqda bo'lsangiz, doktordan onlayn video konsultatsiya so'rab "
-    "beraman -- kelib o'tirishingiz shart bo'lmaydi."
+    "Uzoqda bo'lsangiz, doktordan onlayn video konsultatsiya so'rab beraman, kelib "
+    "o'tirishingiz shart bo'lmaydi. Klinikaga o'zingiz kelmoqchimisiz?"
 )
 UNDERSTOOD = (
     "Tushunarli. Bunday holatlar doktorda davolanadi, qabulda doktor hammasini batafsil "
@@ -301,3 +301,64 @@ def test_the_screenshot_in_cyrillic_kazakhstan_when_can_i_come() -> None:
     assert replies[4] is not None and "келиш шарт эмас" not in replies[4]
     assert replies[4].endswith("Қайси бири сизга қулай?")
     assert replies[5] is not None and "клиникага қабулга" in replies[5]
+
+
+# --- code review, 2026-11-18 ----------------------------------------------------
+
+
+def test_a_clinic_in_a_complaint_is_not_a_wish_to_come() -> None:
+    replies = _replies(
+        [
+            "Prostatit bor",
+            "1 yildan beri",
+            "Ha, boshqa klinikada davolanganman",
+            "Aziz",
+            "Qozog'istondan",
+        ]
+    )
+    assert replies[-1] == f"{UNDERSTOOD} {FAR}"
+
+
+def test_yes_online_is_online() -> None:
+    replies = _to_place("Ha, onlayn bo'lsin", "ertaga 09:00")
+    assert replies[-1] is not None and "onlayn konsultatsiyaga" in replies[-1]
+
+
+def test_a_real_no_after_the_question_is_not_offered_times() -> None:
+    replies = _to_place("Yo'q, kerak emas")
+    assert replies[-1] is None or "Qaysi biri sizga qulay?" not in replies[-1]
+
+
+def test_a_place_with_a_price_question_answers_it_and_goes_on() -> None:
+    plans = _talk(
+        ["Ereksiya muammosi", "1 yildan beri", "yo'q", "Aziz", "Samarqanddan. Narxi qancha?"]
+    )
+    last = plans[-1]
+    # The price answered (in words here: no card in these facts), then the
+    # question -- the place is not asked again.
+    assert last is not None and last.reply is not None
+    assert "330 000" in last.reply
+    assert last.reply.endswith("Klinikaga o'zingiz kelmoqchimisiz?")
+
+
+def test_coming_with_no_free_times_says_so() -> None:
+    history: list[dict[str, Any]] = []
+    plan = None
+    for message in ["Ereksiya muammosi", "1 yil", "yo'q", "Aziz", "Buxoro. Qachon kelsam bo'ladi?"]:
+        plan = scripted_flow.plan(
+            FLOWS, script="uz-latn", user_message=message, history=history, now=NOW, slots=[]
+        )
+        shown = plan.reply if plan is not None and plan.reply else "<model>"
+        history += [
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": bubbles.flatten(shown)},
+        ]
+    assert plan is not None and plan.reply is not None
+    assert "bo'sh vaqt qolmadi" in plan.reply
+
+
+def test_a_place_with_another_question_lets_the_model_answer_it() -> None:
+    plans = _talk(["Ereksiya muammosi", "1 yil", "yo'q", "Aziz", "Samarqanddan. Manzil qayerda?"])
+    last = plans[-1]
+    assert last is not None and last.reply is None and last.then is not None
+    assert last.then.endswith(FAR)
