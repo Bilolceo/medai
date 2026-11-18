@@ -26,7 +26,8 @@ S = [
  ("L1 operatsiya umumiy -> tur -> savollar", [
   "Assalomu alaykum",
   ("Sizlarda operatsiyalar bormi?", {"nocards": True}),
-  ("Varikotsele operatsiyasi", {"cards": {"varikosele"}}),
+  # The doctor, 2026-11-18: the operation's card only when its price is asked.
+  ("Varikotsele operatsiyasi", {"nocards": True}),
   "Bobur", "Toshkent, Chilonzor",
   "Operatsiya qancha vaqt davom etadi?",
   "Narkoz bilanmi yoki ukol bilanmi?",

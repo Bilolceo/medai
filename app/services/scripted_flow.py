@@ -575,6 +575,23 @@ _WANTS_PERSON = re.compile(
     r"поговорить|связаться",
     re.IGNORECASE,
 )
+# The anamnesis answered in the patient's own words, unasked.
+_SINCE_SAID = re.compile(
+    r"\d+\s*(?:-?\s*)(?:yil|oy|hafta|kun|йил|ой|ҳафта|кун|год|лет|месяц|недел|дн)|"
+    r"yildan|oydan|haftadan|йилдан|ойдан|ҳафтадан|qachondan\s+beri|"
+    r"(?:dan|дан)\s+beri|(?:дан)\s+бери|давно|недавно",
+    re.IGNORECASE,
+)
+_TREATED_SAID = re.compile(
+    r"davolan|dori\s*ich|ichganman|ichmaganman|ichyapman|даволан|дори\s*ич|ичганман|"
+    r"ичмаганман|лечил|принима\w*\s+(?:лекарств|таблет)",
+    re.IGNORECASE,
+)
+_STOP = re.compile(
+    r"kerak\s*emas|hozircha|keyin\s+yozaman|o['‘ʻ’`]?ylab\s+ko['‘ʻ’`]?raman|"
+    r"керак\s*эмас|ҳозирча|не\s+надо|пока\s+не|подумаю",
+    re.IGNORECASE,
+)
 # "А консультация?" after an operation's price: the consultation's, not it.
 _CONSULTATION_WORD = re.compile(
     r"konsult|консульт|qabul|қабул|приём|прием|ko['‘ʻ’`]?rik|кўрик", re.IGNORECASE
@@ -1102,6 +1119,17 @@ def plan_intake(
     def operation_price_lines() -> list[str]:
         """The price, in words, of the operation talked about last."""
         op_prices = flow.get("operation_prices") or {}
+        sent = [
+            line.split("📎", 1)[1].strip()
+            for turn in own
+            for line in turn.splitlines()
+            if "📎" in line and "paket" in line
+        ]
+        if sent and not promo_images.OPERATION_NAMES.search(message):
+            # The card that went last: "narxi qancha dedim" after it.
+            entry = op_prices.get(sent[-1])
+            if entry:
+                return [str(entry.get(script) or entry.get("uz-latn") or "")]
         named_now = [
             topic
             for topic, (pattern, _) in promo_images.OPERATIONS.items()
@@ -1436,10 +1464,13 @@ def plan_intake(
     # patient into a conversation before anything is offered; then the name,
     # the place, "tushunarli, bunday holatlar davolanadi", the times.
     anamnesis = "ask_since" in texts and "ask_treated" in texts
-    asked_since = bool(_said(flow, "ask_since", since))
+    # Asked already -- or answered unasked: "3 yildan beri, hech davolanmaganman".
+    asked_since = bool(_said(flow, "ask_since", since)) or any(
+        _SINCE_SAID.search(t) for t in patient_since
+    )
     asked_treated = bool(
         _said(flow, "ask_treated", since) or _said(flow, "ask_treated_sport", since)
-    )
+    ) or any(_TREATED_SAID.search(t) for t in patient_since)
 
     def treated_text() -> str:
         if sport and texts.get("ask_treated_sport"):
@@ -1625,6 +1656,13 @@ def plan_intake(
         body = f"{lead} {bubbles.MARKER} {step}" if lead else step
         return Plan(reply=body, cards=asks_price and not operation_price)
 
+    prices = flow.get("prices") or {}
+    suffix = {"uz-cyrl": "_cyr", "ru": "_ru"}.get(script, "")
+
+    def price_of(kind: str) -> tuple[str, str]:
+        entry = prices.get(kind) or prices.get("uro") or {}
+        return entry.get("price" + suffix, ""), entry.get("prepay" + suffix, "")
+
     if (
         pending in ("ask_since", "ask_treated")
         and phone_check.read(message) is None
@@ -1633,23 +1671,34 @@ def plan_intake(
         # The answer to "qachondan beri?" / "davolanganmisiz?": taken as it is,
         # and on to the next. A question meanwhile is answered by the model and
         # the same question follows -- asked twice, it moves on.
-        current = texts["ask_since"] if pending == "ask_since" else treated_text()
         following = treated_text() if pending == "ask_since" else next_step()
+        if _STOP.search(message) and not named_complaint(message):
+            # "Hozircha kerak emas": no more questions -- the model answers.
+            return None
         if asks_price:
-            # The price asked: the card answers it (the operation's card when
-            # it is an operation's price), the question follows.
-            return Plan(reply=current, cards=not operation_price)
+            # The price asked: said (the operation's in words, its card with it;
+            # the consultation's card, or in words once the card went), then on
+            # to the next question -- the one asked is not asked again.
+            op_card_sent = any(
+                "📎" in line and "paket" in line for turn in own for line in turn.splitlines()
+            )
+            if operation_price or (op_card_sent and not _CONSULTATION_WORD.search(message)):
+                lines = operation_price_lines()
+                return Plan(reply=" ".join([*lines, following]).strip())
+            consultation_card_sent = any(
+                "📎" in line and "paket" not in line for turn in own for line in turn.splitlines()
+            )
+            if consultation_card_sent:
+                price, prepay = price_of("sport" if sport_day else "uro")
+                said_price = texts["price_answer"].format(price=price, prepay=prepay)
+                return Plan(reply=f"{said_price} {following}")
+            return Plan(reply=following, cards=True)
         if question:
-            times = sum(1 for t in since if _norm(current) in _norm(t))
-            return Plan(then=current if times < 2 else following, instruction=INSTRUCTION)
+            # Answered by the model; the next step follows, the anamnesis
+            # question is not repeated (the doctor, 2026-11-11: "savolni
+            # qaytaraveryapti").
+            return Plan(then=following, instruction=INSTRUCTION)
         return Plan(reply=following)
-
-    prices = flow.get("prices") or {}
-    suffix = {"uz-cyrl": "_cyr", "ru": "_ru"}.get(script, "")
-
-    def price_of(kind: str) -> tuple[str, str]:
-        entry = prices.get(kind) or prices.get("uro") or {}
-        return entry.get("price" + suffix, ""), entry.get("prepay" + suffix, "")
 
     def offer_slots(lead: str | None = None) -> Plan:
         if evening_only:
@@ -1699,6 +1748,9 @@ def plan_intake(
             # A number straight away: the administrator rings.
             pending = "admin_busy"
             said["admin_busy"] = 1
+        elif named_complaint(message) and anamnesis:
+            # "Mayli, prostatit": the complaint, so on with its questions.
+            return Plan(reply=f"{texts['handles']} {next_step()}")
         elif said["who_choice"] < 2 and not named_complaint(message):
             return Plan(reply=texts["who_choice"])
         else:
@@ -2283,6 +2335,11 @@ def plan(
     if _EMERGENCY.search(user_message) or (
         reading is not None and reading.complaint_kind == "emergency"
     ):
+        return None
+    recent = [t["content"] for t in history or [] if t.get("role") == "user"][-2:]
+    if any(_EMERGENCY.search(t) for t in recent):
+        # "Qachon kelay?" right after an emergency: the model goes on with it,
+        # not the sequence from its greeting (negative replay, 2026-11-18).
         return None
     libido = flows.get("libido")
     if libido:

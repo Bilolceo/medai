@@ -83,20 +83,47 @@ def test_the_two_questions_come_after_the_complaint_then_name_place_and_the_time
     assert pay.endswith("sizni ertaga 09:00 ga yozib qo'yaman.")
 
 
-def test_a_question_at_a_question_is_answered_and_asked_again_once() -> None:
-    plans = _talk(["Prostatit bor", "Bu davolanadimi?", "Davolanadimi o'zi?"])
+def test_a_question_at_a_question_is_answered_and_the_next_step_follows() -> None:
+    # Never the same question twice in a row (the doctor, 2026-11-11).
+    plans = _talk(["Prostatit bor", "Bu davolanadimi?", "Dori bilanmi?"])
     first, second = plans[1], plans[2]
-    assert first is not None and first.reply is None and first.then == SINCE
-    # Asked twice already: on to the next question, not a third time.
-    assert second is not None and second.then == TREATED
+    assert first is not None and first.reply is None and first.then == TREATED
+    assert second is not None and second.then == NAME
 
 
-def test_the_price_asked_at_a_question_brings_the_card_and_the_question() -> None:
+def test_answers_given_unasked_are_not_asked() -> None:
+    replies = _replies(
+        [
+            "Assalomu alaykum, men Bobur, Namangandanman, tez tugatib qo'yaman 3 yildan beri, "
+            "hech davolanmaganman"
+        ]
+    )
+    assert replies[0] is not None and replies[0].startswith("Va alaykum") is True
+    assert SINCE not in replies[0] and TREATED not in replies[0]
+    assert "Bu masala bo'yicha doktor bilan video" in replies[0]
+
+
+def test_no_more_questions_after_a_no_thank_you() -> None:
+    plans = _talk(["Prostatit bor", "Hozircha kerak emas"])
+    assert plans[-1] is None
+
+
+def test_the_operation_price_asked_at_a_question_is_said_and_the_sequence_goes_on() -> None:
+    replies = _replies(["Protez haqida ma'lumot bering", "Narxi qancha?"])
+    assert replies[-1] == TREATED or (replies[-1] or "").endswith(TREATED)
+
+
+def test_after_an_emergency_the_sequence_stays_out() -> None:
+    plans = _talk(["Moyagim qattiq og'riyapti, shishib ketdi", "Qachon kelay?"])
+    assert plans == [None, None]
+
+
+def test_the_price_asked_at_a_question_brings_the_price_and_the_next_question() -> None:
     plans = _talk(["Prostatit bor", "Konsultatsiya narxi qancha?"])
     last = plans[-1]
-    # No price card in these facts: the price in words, then the question.
+    # No price card in these facts: the price in words, then the next question.
     assert last is not None and last.reply is not None
-    assert last.reply.endswith(SINCE) and "330 000" in last.reply
+    assert last.reply.endswith(TREATED) and "330 000" in last.reply
 
 
 def test_steroids_get_their_own_second_question() -> None:
@@ -151,3 +178,23 @@ def test_the_price_after_an_operation_was_named_is_that_operation() -> None:
     assert _cards("Narxi qancha?", ["Protez haqida ma'lumot bering"]) == ["op:falloprotez"]
     # The consultation's price asked outright: not the operation's.
     assert _cards("Konsultatsiya narxi qancha?", ["Protez haqida ma'lumot bering"]) == []
+
+
+def test_the_price_asked_after_an_operation_card_is_that_operation() -> None:
+    flows = build_settings(
+        "urolog-intake",
+        {**FACTS, "PROMO_OP_VARIKOSELE_URL": "u", "OP_PRICE_VARIKOSELE": "4 500 000 so'm"},
+    )["scripted_flows"]
+    history = [
+        {"role": "user", "content": "Varikotsele"},
+        {
+            "role": "assistant",
+            "content": f"{HANDLES} {SINCE}\n\n📎 Varikosele operatsiyasi: narx va paket",
+        },
+    ]
+    plan = scripted_flow.plan(
+        flows, script="uz-latn", user_message="narxi qancha dedim", history=history, now=NOW
+    )
+    assert plan is not None and plan.reply is not None
+    assert "4 500 000" in plan.reply and "330 000" not in plan.reply
+    assert plan.reply.endswith(TREATED)
