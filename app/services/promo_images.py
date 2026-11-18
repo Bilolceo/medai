@@ -520,18 +520,24 @@ def operations_asked(
     ):
         # "Narxi qancha?" after "protez haqida ma'lumot bering": the
         # operation named before, if any, not yet sent.
-        before = [
-            image
-            for image in images or []
-            if (rule := OPERATIONS.get(str(image.get("topic", "")))) is not None
-            and any(
-                rule[0].search(t) and (not rule[1] or _OPERATION_ONLY.search(t))
-                for t in patient_turns
-            )
-            and not any(sent_line(str(image.get("title", ""))) in turn for turn in own_turns)
-        ]
-        if before:
-            return before[-1:]
+        # The latest named, as scripted_flow says its price in words.
+        for turn in reversed(patient_turns):
+            latest = [
+                image
+                for image in images or []
+                if (rule := OPERATIONS.get(str(image.get("topic", "")))) is not None
+                and rule[0].search(turn)
+                and (not rule[1] or _OPERATION_ONLY.search(turn))
+            ]
+            if latest:
+                unsent = [
+                    image
+                    for image in latest[:1]
+                    if not any(sent_line(str(image.get("title", ""))) in t for t in own_turns)
+                ]
+                if unsent:
+                    return unsent
+                break
     if general and not named:
         # "Нечпул операция" with no operation named (the owner, 2026-11-11):
         # the one talked about, if any -- never all seven; otherwise none,

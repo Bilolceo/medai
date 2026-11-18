@@ -114,8 +114,39 @@ def test_the_operation_price_asked_at_a_question_is_said_and_the_sequence_goes_o
 
 
 def test_after_an_emergency_the_sequence_stays_out() -> None:
-    plans = _talk(["Moyagim qattiq og'riyapti, shishib ketdi", "Qachon kelay?"])
-    assert plans == [None, None]
+    history = [
+        {"role": "user", "content": "Moyagim qattiq og'riyapti, shishib ketdi"},
+        {"role": "assistant", "content": "Bu kechiktirib bo'lmaydigan holat, bugunoq keling."},
+    ]
+    plan = scripted_flow.plan(
+        FLOWS, script="uz-latn", user_message="Qachon kelay?", history=history, now=NOW
+    )
+    assert plan is None
+
+
+def test_ordinary_answers_do_not_stop_the_sequence() -> None:
+    # Code review, 2026-11-18: "hozircha" and "birdan" are answers here.
+    replies = _replies(["Prostatit bor", "Birdan boshlandi", "Hozircha davolanmaganman"])
+    assert replies[1] == TREATED
+    assert replies[2] == NAME
+
+
+def test_an_age_or_a_wish_is_not_an_anamnesis_answer() -> None:
+    replies = _replies(["Мне 30 лет, слабая эрекция"], "ru")
+    assert replies[0] is not None and replies[0].endswith("Как давно это беспокоит?")
+    replies = _replies(["Prostatitdan davolanmoqchiman", "1 yildan beri"])
+    assert replies[1] == TREATED
+
+
+def test_both_answered_at_the_first_question_goes_on_to_the_name() -> None:
+    replies = _replies(["Prostatit bor", "2 yildan beri, hech davolanmaganman"])
+    assert replies[1] == NAME
+
+
+def test_a_complaint_price_is_the_consultation_not_the_operation() -> None:
+    plans = _talk(["Ereksiya muammosi bor", "Varikotsele ham bor, narxi qancha?"])
+    last = plans[-1]
+    assert last is not None and last.reply is not None and "4 500 000" not in last.reply
 
 
 def test_the_price_asked_at_a_question_brings_the_price_and_the_next_question() -> None:
@@ -186,6 +217,8 @@ def test_the_price_asked_after_an_operation_card_is_that_operation() -> None:
         {**FACTS, "PROMO_OP_VARIKOSELE_URL": "u", "OP_PRICE_VARIKOSELE": "4 500 000 so'm"},
     )["scripted_flows"]
     history = [
+        {"role": "user", "content": "Operatsiya narxi qancha?"},
+        {"role": "assistant", "content": "Operatsiyalar: ... Qaysi biri kerak?"},
         {"role": "user", "content": "Varikotsele"},
         {
             "role": "assistant",

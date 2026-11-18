@@ -576,20 +576,25 @@ _WANTS_PERSON = re.compile(
     re.IGNORECASE,
 )
 # The anamnesis answered in the patient's own words, unasked.
+# Not an age: "30 yosh", "мне 30 лет" -- a duration says "beri", "-dan" or "назад".
 _SINCE_SAID = re.compile(
-    r"\d+\s*(?:-?\s*)(?:yil|oy|hafta|kun|йил|ой|ҳафта|кун|год|лет|месяц|недел|дн)|"
-    r"yildan|oydan|haftadan|йилдан|ойдан|ҳафтадан|qachondan\s+beri|"
-    r"(?:dan|дан)\s+beri|(?:дан)\s+бери|давно|недавно",
+    r"\d+\s*-?\s*(?:yil|oy|hafta|kun)(?:dan|lardan)?\s+beri|"
+    r"\d+\s*-?\s*(?:йил|ой|ҳафта|кун)(?:дан|лардан)?\s+бери|"
+    r"(?:yildan|oydan|haftadan|йилдан|ойдан|ҳафтадан)\s+(?:beri|бери)|"
+    r"\d+\s*(?:год|года|месяц\w*|недел\w*|дн\w*)\s+(?:назад|уже)|уже\s+\d+\s*(?:год|месяц|недел)",
     re.IGNORECASE,
 )
+# Treated or not, said in the past -- not "davolanmoqchiman" (a wish).
 _TREATED_SAID = re.compile(
-    r"davolan|dori\s*ich|ichganman|ichmaganman|ichyapman|даволан|дори\s*ич|ичганман|"
-    r"ичмаганман|лечил|принима\w*\s+(?:лекарств|таблет)",
+    r"davolan(?:ganman|maganman|dim|madim|yapman)|dori\s+ich(?:ganman|maganman|yapman)|"
+    r"даволан(?:ганман|маганман|дим|мадим|япман)|дори\s+ич(?:ганман|маганман|япман)|"
+    r"не\s+лечил|лечился|лечилась|принимал\w*\s+(?:лекарств|таблет|препарат)",
     re.IGNORECASE,
 )
+# "Hozircha kerak emas" stops the questions; "hozircha davolanmaganman" answers one.
 _STOP = re.compile(
-    r"kerak\s*emas|hozircha|keyin\s+yozaman|o['‘ʻ’`]?ylab\s+ko['‘ʻ’`]?raman|"
-    r"керак\s*эмас|ҳозирча|не\s+надо|пока\s+не|подумаю",
+    r"kerak\s*emas|keyin\s+yozaman|o['‘ʻ’`]?ylab\s+ko['‘ʻ’`]?raman|"
+    r"керак\s*эмас|кейин\s+ёзаман|не\s+надо|подумаю|пока\s+не\s+(?:надо|нужно)",
     re.IGNORECASE,
 )
 # "А консультация?" after an operation's price: the consultation's, not it.
@@ -672,6 +677,13 @@ _WHATSAPP = re.compile(r"whats\s*app|vatsap|vatsapp|ватсап|вацап|уо
 _YES = re.compile(r"^\s*(ha|xa|bor|ҳа|ха|бор|да|есть)\b", re.IGNORECASE)
 # An emergency is the model's to answer -- today, the phone, come in -- never
 # a form to fill in.
+_ASKED_SINCE = re.compile(r"qachondan\s+beri|қачондан\s+бери|как\s+давно", re.IGNORECASE)
+# The bot's own emergency line (the prompt's): "Bu kechiktirib bo'lmaydigan holat".
+_EMERGENCY_SAID = re.compile(
+    r"kechiktirib\s+bo['‘ʻ’`]?lmaydigan|кечиктириб\s+бўлмайдиган|откладывать\s+нельзя|"
+    r"нельзя\s+откладывать|неотложн",
+    re.IGNORECASE,
+)
 _EMERGENCY = re.compile(
     r"birdan|qattiq\s*og['‘ʻ’`]?ri|kuchli\s*og['‘ʻ’`]?ri|shishib|shishdi|qon\s*ket|siya\s*olma|"
     r"siyolma|isitma|harorat|chidab\s*bo['‘ʻ’`]?lma|"
@@ -1098,44 +1110,63 @@ def plan_intake(
         # which one (the owner, 2026-11-11), not the consultation price line.
         and not general_operation
     )
+
     # "Varikotsele operatsiyasi qancha?", "Falloprotez narxi?": the operation's
     # own card answers it -- never the consultation's card or price (the
     # doctor, 2026-11-17: the consultation price comes once a time is agreed).
     # "Narxi qancha?" after "protez haqida ma'lumot bering": that operation's
     # price too -- unless it is the consultation's that is asked.
     # "Varikotsele bor" is the complaint; "varikotsele operatsiyasi" the operation.
-    named_before = [
-        topic
-        for t in reversed(patient_since[:-1])
-        for topic, (pattern, needs_word) in promo_images.OPERATIONS.items()
-        if pattern.search(t) and (not needs_word or _OPERATION_SAID.search(t))
-    ]
+    def operations_named(text: str) -> list[str]:
+        return [
+            topic
+            for topic, (pattern, needs_word) in promo_images.OPERATIONS.items()
+            if pattern.search(text) and (not needs_word or _OPERATION_SAID.search(text))
+        ]
+
+    def operation_talked() -> bool:
+        """The operation itself talked about -- not a card that came with a
+        complaint (2026-11-09: "Narhi qancha" after "ereksiya" got the prosthesis)."""
+        return any(
+            _OPERATION_SAID.search(t)
+            or any(
+                pattern.search(t)
+                and not (
+                    (complaint := promo_images.COMPLAINT_CARDS.get(topic)) is not None
+                    and complaint.search(t)
+                )
+                for topic, (pattern, _) in promo_images.OPERATIONS.items()
+            )
+            # The whole conversation: "Operatsiya narxi qancha?" may come
+            # before the complaint that starts the sequence.
+            for t in [*(x["content"] for x in turns if x.get("role") == "user"), message]
+        )
+
+    def named_before() -> list[str]:
+        """The operations named in earlier messages, the latest first."""
+        return [topic for t in reversed(patient_since[:-1]) for topic in operations_named(t)]
+
     operation_price = asks_price and bool(
         _OPERATION_SAID.search(message)
-        or promo_images.OPERATION_NAMES.search(message)
-        or (named_before and not _CONSULTATION_WORD.search(message))
+        or operations_named(message)
+        or (not _CONSULTATION_WORD.search(message) and named_before())
     )
 
     def operation_price_lines() -> list[str]:
-        """The price, in words, of the operation talked about last."""
+        """The price, in words, of the operation talked about last: named now,
+        else named last before, else the card that went last -- the same one
+        the card under the reply shows (promo_images.operations_asked)."""
         op_prices = flow.get("operation_prices") or {}
-        sent = [
-            line.split("📎", 1)[1].strip()
-            for turn in own
-            for line in turn.splitlines()
-            if "📎" in line and "paket" in line
-        ]
-        if sent and not promo_images.OPERATION_NAMES.search(message):
-            # The card that went last: "narxi qancha dedim" after it.
-            entry = op_prices.get(sent[-1])
-            if entry:
-                return [str(entry.get(script) or entry.get("uz-latn") or "")]
-        named_now = [
-            topic
-            for topic, (pattern, _) in promo_images.OPERATIONS.items()
-            if pattern.search(message)
-        ]
-        topics = named_now or named_before[:1]
+        topics = operations_named(message)[:1] or named_before()[:1]
+        if not topics:
+            sent = [
+                line.split("📎", 1)[1].strip()
+                for turn in own
+                for line in turn.splitlines()
+                if "📎" in line and "paket" in line
+            ]
+            entry = op_prices.get(sent[-1]) if sent else None
+            topics = [str(entry.get("topic"))] if entry else []
         return [
             str(entry.get(script) or entry.get("uz-latn") or "")
             for entry in op_prices.values()
@@ -1671,7 +1702,8 @@ def plan_intake(
         # The answer to "qachondan beri?" / "davolanganmisiz?": taken as it is,
         # and on to the next. A question meanwhile is answered by the model and
         # the same question follows -- asked twice, it moves on.
-        following = treated_text() if pending == "ask_since" else next_step()
+        # "2 yildan beri, davolanmaganman": both answered -- next_step knows.
+        following = next_step()
         if _STOP.search(message) and not named_complaint(message):
             # "Hozircha kerak emas": no more questions -- the model answers.
             return None
@@ -1682,7 +1714,9 @@ def plan_intake(
             op_card_sent = any(
                 "📎" in line and "paket" in line for turn in own for line in turn.splitlines()
             )
-            if operation_price or (op_card_sent and not _CONSULTATION_WORD.search(message)):
+            if operation_price or (
+                op_card_sent and operation_talked() and not _CONSULTATION_WORD.search(message)
+            ):
                 lines = operation_price_lines()
                 return Plan(reply=" ".join([*lines, following]).strip())
             consultation_card_sent = any(
@@ -2101,18 +2135,7 @@ def plan_intake(
     op_prices = flow.get("operation_prices") or {}
     # The operation itself asked about before -- not a card that came with a
     # complaint (2026-11-09: "Narhi qancha" after "ereksiya" got the prosthesis).
-    operation_asked = any(
-        re.search(r"operats|operasi|amaliyot|операц|амалиёт", t, re.I)
-        or any(
-            pattern.search(t)
-            and not (
-                (complaint := promo_images.COMPLAINT_CARDS.get(topic)) is not None
-                and complaint.search(t)
-            )
-            for topic, (pattern, _) in promo_images.OPERATIONS.items()
-        )
-        for t in patient_since
-    )
+    operation_asked = operation_talked()
     if asks_price and op_cards and operation_asked and not _CONSULTATION_WORD.search(message):
         # "1- komponentli protez narxi?" again: the operation's price, in words.
         titles = [t for t in op_cards if t in op_prices]
@@ -2332,12 +2355,16 @@ def plan(
     """The scripted answer from whichever flow this conversation is in."""
     if not flows:
         return None
-    if _EMERGENCY.search(user_message) or (
-        reading is not None and reading.complaint_kind == "emergency"
-    ):
+    last_own = next(
+        (t["content"] for t in reversed(history or []) if t.get("role") == "assistant"), ""
+    )
+    alarms = [m.group(0).lower() for m in _EMERGENCY.finditer(user_message)]
+    if alarms and _ASKED_SINCE.search(str(last_own)) and set(alarms) <= {"birdan", "бирдан"}:
+        # "Birdan boshlandi" answers "qachondan beri?": how it began, not an alarm.
+        alarms = []
+    if alarms or (reading is not None and reading.complaint_kind == "emergency"):
         return None
-    recent = [t["content"] for t in history or [] if t.get("role") == "user"][-2:]
-    if any(_EMERGENCY.search(t) for t in recent):
+    if _EMERGENCY_SAID.search(str(last_own)):
         # "Qachon kelay?" right after an emergency: the model goes on with it,
         # not the sequence from its greeting (negative replay, 2026-11-18).
         return None
