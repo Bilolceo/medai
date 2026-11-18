@@ -24,6 +24,10 @@ HANDLES = "Ha, doktor shu bilan shug'ullanadi."
 SINCE = "Bu holat qachondan beri bor?"
 TREATED = "Oldin bu bo'yicha davolanganmisiz yoki biror dori ichganmisiz?"
 NAME = "Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?"
+FAR = (
+    "Klinikaga kelmoqchimisiz? Uzoqda bo'lsangiz, doktordan onlayn video konsultatsiya so'rab "
+    "beraman -- kelib o'tirishingiz shart bo'lmaydi."
+)
 UNDERSTOOD = (
     "Tushunarli. Bunday holatlar doktorda davolanadi, qabulda doktor hammasini batafsil "
     "tushuntiradi."
@@ -64,6 +68,7 @@ def test_the_two_questions_come_after_the_complaint_then_name_place_and_the_time
             "Yo'q, davolanmaganman",
             "Aziz",
             "Samarqanddanman",
+            "Onlayn bo'lsin",
             "ertaga 09:00",
         ]
     )
@@ -72,13 +77,13 @@ def test_the_two_questions_come_after_the_complaint_then_name_place_and_the_time
     assert replies[3] == NAME
     assert replies[4] == "Aziz, qayerdansiz?"
     offer = replies[5]
-    assert offer is not None and offer.startswith(UNDERSTOOD)
-    assert "video qo'ng'iroq orqali onlayn" in offer and "Qaysi biri sizga qulay?" in offer
+    assert offer == f"{UNDERSTOOD} {FAR}"
     assert "330 000" not in offer
-    booked = replies[6]
+    assert replies[6] is not None and replies[6].endswith("Qaysi biri sizga qulay?")
+    booked = replies[7]
     assert booked is not None
     book, price, pay = bubbles.parts(booked)
-    assert book.startswith("Yaxshi, ertaga 09:00 ga")
+    assert book == "Yaxshi, ertaga 09:00 ga onlayn konsultatsiyaga yozib qo'yishim mumkin."
     assert "165 000" in price and price.endswith("Qolgan qismi qabul kuni to'lanadi.")
     assert pay.endswith("sizni ertaga 09:00 ga yozib qo'yaman.")
 
@@ -100,7 +105,7 @@ def test_answers_given_unasked_are_not_asked() -> None:
     )
     assert replies[0] is not None and replies[0].startswith("Va alaykum") is True
     assert SINCE not in replies[0] and TREATED not in replies[0]
-    assert "Bu masala bo'yicha doktor bilan video" in replies[0]
+    assert replies[0].endswith(FAR)
 
 
 def test_no_more_questions_after_a_no_thank_you() -> None:
@@ -231,3 +236,68 @@ def test_the_price_asked_after_an_operation_card_is_that_operation() -> None:
     assert plan is not None and plan.reply is not None
     assert "4 500 000" in plan.reply and "330 000" not in plan.reply
     assert plan.reply.endswith(TREATED)
+
+
+# --- outside Tashkent: asked, never told "kelish shart emas" (Humoyun, 2026-11-18) ---
+
+
+def _to_place(*after: str, place: str = "Qozog'istondan") -> list[str | None]:
+    return _replies(["Ereksiya muammosi", "1 yildan beri", "yo'q", "Aziz", place, *after])
+
+
+def test_far_away_is_asked_whether_coming() -> None:
+    replies = _to_place()
+    assert replies[-1] == f"{UNDERSTOOD} {FAR}"
+    assert "kelish shart emas" not in (replies[-1] or "")
+
+
+def test_far_away_coming_is_booked_at_the_clinic() -> None:
+    replies = _to_place("Ha, kelaman", "ertaga 09:00")
+    assert replies[-2] is not None and replies[-2].endswith("Qaysi biri sizga qulay?")
+    assert replies[-1] is not None and "klinikaga qabulga" in replies[-1]
+
+
+def test_far_away_yes_is_coming() -> None:
+    replies = _to_place("Ha", "ertaga 09:00")
+    assert replies[-1] is not None and "klinikaga qabulga" in replies[-1]
+
+
+def test_far_away_no_is_online() -> None:
+    replies = _to_place("Yo'q, uzoqman", "ertaga 09:00")
+    assert replies[-2] is not None and replies[-2].endswith("Qaysi biri sizga qulay?")
+    assert replies[-1] is not None and "onlayn konsultatsiyaga" in replies[-1]
+
+
+def test_when_can_i_come_gets_the_times_not_a_no_need() -> None:
+    # The screenshot, 2026-11-18: "Qozog'istondan / Qachon kelsam bo'ladi?".
+    replies = _to_place(place="Qozog'istondan. Qachon kelsam bo'ladi?")
+    assert replies[-1] is not None
+    assert "kelish shart emas" not in replies[-1]
+    assert replies[-1].endswith("Qaysi biri sizga qulay?")
+    booked = _to_place("ertaga 09:00", place="Qozog'istondan. Qachon kelsam bo'ladi?")[-1]
+    assert booked is not None and "klinikaga qabulga" in booked
+
+
+def test_tashkent_keeps_its_choice() -> None:
+    replies = _to_place(place="Toshkent")
+    assert replies[-1] is not None and replies[-1].endswith(
+        "Klinikaga kelib qabulga yozilasizmi yoki doktor bilan video qo'ng'iroq orqali onlayn "
+        "maslahatlashasizmi?"
+    )
+
+
+def test_the_screenshot_in_cyrillic_kazakhstan_when_can_i_come() -> None:
+    replies = _replies(
+        [
+            "Эрекция муаммоси бор",
+            "1 йилдан бери",
+            "Йўқ",
+            "Азиз",
+            "Козохистондан\nКачон келсам болади?",
+            "эртага 9 да",
+        ],
+        "uz-cyrl",
+    )
+    assert replies[4] is not None and "келиш шарт эмас" not in replies[4]
+    assert replies[4].endswith("Қайси бири сизга қулай?")
+    assert replies[5] is not None and "клиникага қабулга" in replies[5]

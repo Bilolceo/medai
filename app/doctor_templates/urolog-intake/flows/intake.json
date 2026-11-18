@@ -76,7 +76,8 @@
       "ask_treated": "Oldin bu bo'yicha davolanganmisiz yoki biror dori ichganmisiz?",
       "ask_treated_sport": "Hozir biror dori yoki gormon ichyapsizmi?",
       "understood": "Tushunarli. Bunday holatlar doktorda davolanadi, qabulda doktor hammasini batafsil tushuntiradi.",
-      "understood_op": "Tushunarli. Bizda bunday operatsiyalar qilinadi, qabulda doktor hammasini batafsil tushuntiradi."
+      "understood_op": "Tushunarli. Bizda bunday operatsiyalar qilinadi, qabulda doktor hammasini batafsil tushuntiradi.",
+      "far_choice": "Klinikaga kelmoqchimisiz? Uzoqda bo'lsangiz, doktordan onlayn video konsultatsiya so'rab beraman -- kelib o'tirishingiz shart bo'lmaydi."
     },
     "uz-cyrl": {
       "greet_back": "Ва алайкум ассалом.",
@@ -151,7 +152,8 @@
       "ask_treated": "Олдин бу бўйича даволанганмисиз ёки бирор дори ичганмисиз?",
       "ask_treated_sport": "Ҳозир бирор дори ёки гормон ичяпсизми?",
       "understood": "Тушунарли. Бундай ҳолатлар докторда даволанади, қабулда доктор ҳаммасини батафсил тушунтиради.",
-      "understood_op": "Тушунарли. Бизда бундай операциялар қилинади, қабулда доктор ҳаммасини батафсил тушунтиради."
+      "understood_op": "Тушунарли. Бизда бундай операциялар қилинади, қабулда доктор ҳаммасини батафсил тушунтиради.",
+      "far_choice": "Клиникага келмоқчимисиз? Узоқда бўлсангиз, доктордан онлайн видео консультация сўраб бераман -- келиб ўтиришингиз шарт бўлмайди."
     },
     "ru": {
       "greet_back": "Здравствуйте.",
@@ -226,7 +228,8 @@
       "ask_treated": "Раньше лечились по этому поводу или принимали какие-то лекарства?",
       "ask_treated_sport": "Сейчас принимаете какие-то препараты или гормоны?",
       "understood": "Понятно. Такие состояния доктор лечит, на приёме он всё подробно объяснит.",
-      "understood_op": "Понятно. Такие операции у нас делают, на приёме доктор всё подробно объяснит."
+      "understood_op": "Понятно. Такие операции у нас делают, на приёме доктор всё подробно объяснит.",
+      "far_choice": "Хотите приехать в клинику? Если вы далеко, попрошу у доктора онлайн-консультацию по видеозвонку -- приезжать не придётся."
     }
   },
   "prices": {

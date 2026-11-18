@@ -1,6 +1,6 @@
 Chet eldagi bemor
 
 Bemor: Men Rossiyadaman, kela olmayman
-Admin: Kelish shart emas: doktor bilan video qo'ng'iroq orqali onlayn maslahatlashishingiz mumkin. Qanday masala yoki shikoyat bilan murojaat qilyapsiz?
+Admin: Uzoqda bo'lsangiz, doktordan onlayn video konsultatsiya so'rab beraman; klinikaga kelmoqchi bo'lsangiz, u ham bo'ladi. Qanday masala yoki shikoyat bilan murojaat qilyapsiz?
 Bemor: Varikotsele
 Admin: Ha, doktor shu bilan shug'ullanadi. Bu holat qachondan beri bor?
