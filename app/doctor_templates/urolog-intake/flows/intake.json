@@ -33,8 +33,8 @@
       "slot_taken": "{time} band. {slots} bo'sh vaqtlar bor. Qaysi biri qulay?",
       "no_slots": "Yaqin kunlarga onlayn konsultatsiyada bo'sh vaqt qolmadi. Administratorimiz qo'ng'iroq qilib vaqtni kelishadi. Telefon raqamingizni yozing.",
       "book_ok": "Yaxshi, {day} {time} ga {mode} yozib qo'yishim mumkin.",
-      "price_line": "{what} narxi {price}. Qabulga yozilish uchun konsultatsiyaning birinchi bosqichi uchun 50% -- {prepay} oldindan to'lanadi.",
-      "price_line_evening": "Kechki onlayn konsultatsiya ish vaqtidan tashqari bo'lgani uchun narxi {price}. Qabulga yozilish uchun 50% -- {prepay} oldindan to'lanadi.",
+      "price_line": "{what} narxi {price}. Qabulga yozilish uchun konsultatsiyaning birinchi bosqichi uchun 50% -- {prepay} oldindan to'lanadi. Qolgan qismi qabul kuni to'lanadi.",
+      "price_line_evening": "Kechki onlayn konsultatsiya ish vaqtidan tashqari bo'lgani uchun narxi {price}. Qabulga yozilish uchun 50% -- {prepay} oldindan to'lanadi. Qolgan qismi qabul kuni to'lanadi.",
       "card_line": "To'lov uchun karta: <<CARD>> (<<CARD_NAME>>). To'lab, chek rasmini va telefon raqamingizni shu yerga yuborsangiz, sizni {day} {time} ga yozib qo'yaman.",
       "paid_confirm": "Rahmat{name_part}. Chek tekshirilgach siz {day} {time} ga yozilasiz. Qabuldan 1-2 soat oldin administratorimiz qo'ng'iroq qilib tasdiqlaydi.",
       "today": "bugun",
@@ -71,7 +71,12 @@
       "protez_confirm": "Rahmat{name_part}. Doktor {when} {shown} raqamiga qo'ng'iroq qiladi, protez bo'yicha bepul gaplashib olasiz. Raqam xato bo'lsa, to'g'risini yozing.",
       "voice_reply": "Kechirasiz, ovozli xabarni eshita olmayman. Iltimos, savolingizni matn qilib yozib yuboring.",
       "ask_issue": "Qanday masala yoki shikoyat bo'yicha yozyapsiz?",
-      "protez_phone": "Telefon raqamingizni yozing, doktor shu raqamga qo'ng'iroq qiladi."
+      "protez_phone": "Telefon raqamingizni yozing, doktor shu raqamga qo'ng'iroq qiladi.",
+      "ask_since": "Bu holat qachondan beri bor?",
+      "ask_treated": "Oldin bu bo'yicha davolanganmisiz yoki biror dori ichganmisiz?",
+      "ask_treated_sport": "Hozir biror dori yoki gormon ichyapsizmi?",
+      "understood": "Tushunarli. Bunday holatlar doktorda davolanadi, qabulda doktor hammasini batafsil tushuntiradi.",
+      "understood_op": "Tushunarli. Bizda bunday operatsiyalar qilinadi, qabulda doktor hammasini batafsil tushuntiradi."
     },
     "uz-cyrl": {
       "greet_back": "Ва алайкум ассалом.",
@@ -103,8 +108,8 @@
       "slot_taken": "{time} банд. {slots} бўш вақтлар бор. Қайси бири қулай?",
       "no_slots": "Яқин кунларга онлайн консультацияда бўш вақт қолмади. Администраторимиз қўнғироқ қилиб вақтни келишади. Телефон рақамингизни ёзинг.",
       "book_ok": "Яхши, {day} {time} га {mode} ёзиб қўйишим мумкин.",
-      "price_line": "{what} нархи {price}. Қабулга ёзилиш учун консультациянинг биринчи босқичи учун 50% -- {prepay} олдиндан тўланади.",
-      "price_line_evening": "Кечки онлайн консультация иш вақтидан ташқари бўлгани учун нархи {price}. Қабулга ёзилиш учун 50% -- {prepay} олдиндан тўланади.",
+      "price_line": "{what} нархи {price}. Қабулга ёзилиш учун консультациянинг биринчи босқичи учун 50% -- {prepay} олдиндан тўланади. Қолган қисми қабул куни тўланади.",
+      "price_line_evening": "Кечки онлайн консультация иш вақтидан ташқари бўлгани учун нархи {price}. Қабулга ёзилиш учун 50% -- {prepay} олдиндан тўланади. Қолган қисми қабул куни тўланади.",
       "card_line": "Тўлов учун карта: <<CARD>> (<<CARD_NAME_CYR>>). Тўлаб, чек расмини ва телефон рақамингизни шу ерга юборсангиз, сизни {day} {time} га ёзиб қўяман.",
       "paid_confirm": "Раҳмат{name_part}. Чек текширилгач сиз {day} {time} га ёзиласиз. Қабулдан 1-2 соат олдин администраторимиз қўнғироқ қилиб тасдиқлайди.",
       "today": "бугун",
@@ -141,7 +146,12 @@
       "protez_confirm": "Раҳмат{name_part}. Доктор {when} {shown} рақамига қўнғироқ қилади, протез бўйича бепул гаплашиб оласиз. Рақам хато бўлса, тўғрисини ёзинг.",
       "voice_reply": "Кечирасиз, овозли хабарни эшита олмайман. Илтимос, саволингизни матн қилиб ёзиб юборинг.",
       "ask_issue": "Қандай масала ёки шикоят бўйича ёзяпсиз?",
-      "protez_phone": "Телефон рақамингизни ёзинг, доктор шу рақамга қўнғироқ қилади."
+      "protez_phone": "Телефон рақамингизни ёзинг, доктор шу рақамга қўнғироқ қилади.",
+      "ask_since": "Бу ҳолат қачондан бери бор?",
+      "ask_treated": "Олдин бу бўйича даволанганмисиз ёки бирор дори ичганмисиз?",
+      "ask_treated_sport": "Ҳозир бирор дори ёки гормон ичяпсизми?",
+      "understood": "Тушунарли. Бундай ҳолатлар докторда даволанади, қабулда доктор ҳаммасини батафсил тушунтиради.",
+      "understood_op": "Тушунарли. Бизда бундай операциялар қилинади, қабулда доктор ҳаммасини батафсил тушунтиради."
     },
     "ru": {
       "greet_back": "Здравствуйте.",
@@ -173,8 +183,8 @@
       "slot_taken": "{time} занято. Свободно: {slots}. Какое время удобно?",
       "no_slots": "На ближайшие дни свободного времени для онлайн-консультации нет. Администратор позвонит и договорится о времени. Напишите номер телефона.",
       "book_ok": "Хорошо, могу записать вас {day} на {time} {mode}.",
-      "price_line": "{what} стоит {price}. Для записи первый этап консультации, 50% -- {prepay}, оплачивается заранее.",
-      "price_line_evening": "Вечерняя онлайн-консультация вне рабочего времени, поэтому стоит {price}. Для записи вносится предоплата 50% -- {prepay}.",
+      "price_line": "{what} стоит {price}. Для записи первый этап консультации, 50% -- {prepay}, оплачивается заранее. Остальное оплачивается в день приёма.",
+      "price_line_evening": "Вечерняя онлайн-консультация вне рабочего времени, поэтому стоит {price}. Для записи вносится предоплата 50% -- {prepay}. Остальное оплачивается в день приёма.",
       "card_line": "Карта для оплаты: <<CARD>> (<<CARD_NAME_CYR>>). Оплатите и отправьте сюда фото чека и номер телефона -- и я запишу вас {day} на {time}.",
       "paid_confirm": "Спасибо{name_part}. После проверки чека вы будете записаны {day} на {time}. За 1-2 часа до приёма администратор позвонит и подтвердит запись.",
       "today": "сегодня",
@@ -211,7 +221,12 @@
       "protez_confirm": "Спасибо{name_part}. Доктор позвонит {when} на номер {shown}, по протезу поговорите бесплатно. Если номер неверный, напишите правильный.",
       "voice_reply": "Извините, голосовое сообщение я прослушать не могу. Пожалуйста, напишите вопрос текстом.",
       "ask_issue": "По какому вопросу или жалобе вы пишете?",
-      "protez_phone": "Напишите номер телефона, доктор позвонит на него."
+      "protez_phone": "Напишите номер телефона, доктор позвонит на него.",
+      "ask_since": "Как давно это беспокоит?",
+      "ask_treated": "Раньше лечились по этому поводу или принимали какие-то лекарства?",
+      "ask_treated_sport": "Сейчас принимаете какие-то препараты или гормоны?",
+      "understood": "Понятно. Такие состояния доктор лечит, на приёме он всё подробно объяснит.",
+      "understood_op": "Понятно. Такие операции у нас делают, на приёме доктор всё подробно объяснит."
     }
   },
   "prices": {

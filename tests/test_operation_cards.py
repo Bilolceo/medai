@@ -24,7 +24,11 @@ CARDS = SETTINGS["promo_images"]
 
 
 def _asked(message: str, own: list[str] | None = None) -> list[str]:
-    found = promo_images.operations_asked(CARDS, user_message=message, own_turns=own or [])
+    """Which operation the message is about, its price having been asked just
+    before (the doctor, 2026-11-18: an operation's card only on a price)."""
+    found = promo_images.operations_asked(
+        CARDS, user_message=message, own_turns=own or [], patient_turns=["Narxi qancha?"]
+    )
     return [str(c["topic"]) for c in found]
 
 

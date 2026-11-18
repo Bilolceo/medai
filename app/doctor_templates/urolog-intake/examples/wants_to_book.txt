@@ -1,8 +1,10 @@
-Bemor yozilmoqchi -- avval masala, keyin ism va qayerdan
+Bemor yozilmoqchi -- avval masala, keyin 2 ta savol, ism va qayerdan
 
 Bemor: Qabulga yozilsam bo'ladimi?
 Admin: Ha, shu yerning o'zida yozib qo'yaman. Qanday masala yoki shikoyat bilan murojaat qilyapsiz?
 Bemor: Prostatit bor
-Admin: Ha, doktor shu bilan shug'ullanadi. Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?
-Bemor: Bobur
-Admin: Bobur, qayerdansiz?
+Admin: Ha, doktor shu bilan shug'ullanadi. Bu holat qachondan beri bor?
+Bemor: Yarim yildan beri
+Admin: Oldin bu bo'yicha davolanganmisiz yoki biror dori ichganmisiz?
+Bemor: Antibiotik ichganman
+Admin: Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?

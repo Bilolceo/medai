@@ -512,6 +512,26 @@ def operations_asked(
         if (rule := OPERATIONS.get(str(image.get("topic", "")))) is not None
         and rule[0].search(user_message)
     ]
+    if (
+        PRICE_WORD.search(user_message)
+        and not named
+        and not _OPERATION_ONLY.search(user_message)
+        and not _CONSULTATION.search(user_message)
+    ):
+        # "Narxi qancha?" after "protez haqida ma'lumot bering": the
+        # operation named before, if any, not yet sent.
+        before = [
+            image
+            for image in images or []
+            if (rule := OPERATIONS.get(str(image.get("topic", "")))) is not None
+            and any(
+                rule[0].search(t) and (not rule[1] or _OPERATION_ONLY.search(t))
+                for t in patient_turns
+            )
+            and not any(sent_line(str(image.get("title", ""))) in turn for turn in own_turns)
+        ]
+        if before:
+            return before[-1:]
     if general and not named:
         # "Нечпул операция" with no operation named (the owner, 2026-11-11):
         # the one talked about, if any -- never all seven; otherwise none,
@@ -527,11 +547,19 @@ def operations_asked(
             for image in before
             if not any(sent_line(str(image.get("title", ""))) in turn for turn in own_turns)
         ]
+    # The doctor, 2026-11-18: an operation's card -- its price -- only when
+    # the price is asked ("narxini srazu tashlamasin, o'zi so'rasa"): not for
+    # the complaint alone, not for the operation merely named.
+    price_asked = bool(PRICE_WORD.search(user_message)) or bool(
+        patient_turns and PRICE_WORD.search(patient_turns[-1])
+    )
     found = []
     for image in images or []:
         topic = str(image.get("topic", ""))
         rule = OPERATIONS.get(topic)
         complaint = COMPLAINT_CARDS.get(topic)
+        if rule is not None and not price_asked:
+            continue
         if rule is None:
             # A card for a complaint only (steroids and hormones), sent once --
             # asked its price; otherwise it comes with the agreed time, as the

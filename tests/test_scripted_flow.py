@@ -247,3 +247,19 @@ def test_the_hour_alone_is_the_time() -> None:
     assert "15:00" in replies[-1]
     assert scripted_flow._bare_hour("19 yosh") is None
     assert scripted_flow._bare_hour("3") is not None and scripted_flow._bare_hour("3").hour == 15
+
+
+ANAMNESIS = ("ask_since", "ask_treated", "ask_treated_sport", "understood", "understood_op")
+
+
+def without_anamnesis(flows: dict) -> dict:
+    """The sequence without the doctor's two questions (2026-11-18): what
+    these tests are about is the same after them."""
+    out = {name: dict(flow) for name, flow in flows.items()}
+    intake = out.get("intake")
+    if intake:
+        intake["texts"] = {
+            script: {k: v for k, v in texts.items() if k not in ANAMNESIS}
+            for script, texts in intake["texts"].items()
+        }
+    return out

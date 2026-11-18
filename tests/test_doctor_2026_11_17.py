@@ -19,10 +19,10 @@ from app.services.appointment import CLINIC_TIMEZONE
 from app.services.doctor_template import build_settings
 from tests.conftest import Seed
 from tests.test_operation_cards import CARDS
-from tests.test_scripted_flow import FACTS
+from tests.test_scripted_flow import FACTS, without_anamnesis
 
 SETTINGS = build_settings("urolog-intake", FACTS)
-FLOWS = SETTINGS["scripted_flows"]
+FLOWS = without_anamnesis(SETTINGS["scripted_flows"])
 NOW = datetime(2026, 11, 17, 7, 30, tzinfo=CLINIC_TIMEZONE)
 SLOTS = [
     datetime(2026, 11, 17, 9, 0, tzinfo=CLINIC_TIMEZONE),

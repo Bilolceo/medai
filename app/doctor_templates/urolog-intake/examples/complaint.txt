@@ -1,8 +1,12 @@
-Shikoyat -- ism, qayerdan, qisqa umumiy ma'lumot, video qo'ng'iroq va vaqt; narx vaqtdan keyin
+Shikoyat -- 2 ta anamnez savoli, ism, qayerdan, "tushunarli", video qo'ng'iroq va vaqt; narx vaqtdan keyin
 
 Bemor: Tez bo'shanish muammosi bor
-Admin: Ha, doktor shu bilan shug'ullanadi. Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?
+Admin: Ha, doktor shu bilan shug'ullanadi. Bu holat qachondan beri bor?
+Bemor: 2 yildan beri
+Admin: Oldin bu bo'yicha davolanganmisiz yoki biror dori ichganmisiz?
+Bemor: Yo'q, davolanmaganman
+Admin: Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?
 Bemor: Akmal
 Admin: Akmal, qayerdansiz?
 Bemor: Samarqanddanman
-Admin: Tez bo'shanish tug'ma yoki orttirilgan bo'lishi mumkin, ko'pincha serotonin yoki asab sezuvchanligi bilan bog'liq bo'ladi. Aniq sababini va qaysi tahlillar kerakligini doktor siz bilan suhbatlashib aytadi. ||| Bu masala bo'yicha doktor bilan video qo'ng'iroq orqali onlayn maslahatlashishingiz mumkin, klinikaga kelish shart emas. Ertaga 09:00 va 10:30 da bo'sh vaqtlar bor. Qaysi biri sizga qulay?
+Admin: Tushunarli. Bunday holatlar doktorda davolanadi, qabulda doktor hammasini batafsil tushuntiradi. Bu masala bo'yicha doktor bilan video qo'ng'iroq orqali onlayn maslahatlashishingiz mumkin, klinikaga kelish shart emas. Ertaga 09:00 va 10:30 da bo'sh vaqtlar bor. Qaysi biri sizga qulay?

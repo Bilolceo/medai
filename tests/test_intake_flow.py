@@ -9,9 +9,9 @@ from typing import Any
 from app.services import bubbles, scripted_flow
 from app.services.appointment import CLINIC_TIMEZONE
 from app.services.doctor_template import build_settings
-from tests.test_scripted_flow import FACTS
+from tests.test_scripted_flow import FACTS, without_anamnesis
 
-FLOWS = build_settings("urolog-intake", FACTS)["scripted_flows"]
+FLOWS = without_anamnesis(build_settings("urolog-intake", FACTS)["scripted_flows"])
 NOW = datetime(2026, 11, 3, 11, 0, tzinfo=CLINIC_TIMEZONE)
 
 
@@ -380,7 +380,8 @@ def test_outside_tashkent_the_patient_books_online_and_pays_half() -> None:
     assert book == "Yaxshi, ertaga 10:00 ga onlayn konsultatsiyaga yozib qo'yishim mumkin."
     assert price == (
         "Kunduzgi onlayn konsultatsiya narxi 330 000 so'm. Qabulga yozilish uchun "
-        "konsultatsiyaning birinchi bosqichi uchun 50% -- 165 000 so'm oldindan to'lanadi."
+        "konsultatsiyaning birinchi bosqichi uchun 50% -- 165 000 so'm oldindan to'lanadi. "
+        "Qolgan qismi qabul kuni to'lanadi."
     )
     assert card.startswith("To'lov uchun karta: 9860 1501 1048 3446")
     assert card.endswith("sizni ertaga 10:00 ga yozib qo'yaman.")
@@ -959,7 +960,7 @@ def test_the_price_after_a_complaint_card_is_the_consultations() -> None:
 
 
 SPORT_FACTS = {**FACTS, "SPORT_PRICE": "500 000 so'm", "SPORT_PREPAY": "250 000 so'm"}
-SPORT_FLOWS = build_settings("urolog-intake", SPORT_FACTS)["scripted_flows"]
+SPORT_FLOWS = without_anamnesis(build_settings("urolog-intake", SPORT_FACTS)["scripted_flows"])
 
 
 def _sport_book(messages: list[str]) -> list[str]:

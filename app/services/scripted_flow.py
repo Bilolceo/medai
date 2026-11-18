@@ -1084,9 +1084,35 @@ def plan_intake(
     # "Varikotsele operatsiyasi qancha?", "Falloprotez narxi?": the operation's
     # own card answers it -- never the consultation's card or price (the
     # doctor, 2026-11-17: the consultation price comes once a time is agreed).
+    # "Narxi qancha?" after "protez haqida ma'lumot bering": that operation's
+    # price too -- unless it is the consultation's that is asked.
+    # "Varikotsele bor" is the complaint; "varikotsele operatsiyasi" the operation.
+    named_before = [
+        topic
+        for t in reversed(patient_since[:-1])
+        for topic, (pattern, needs_word) in promo_images.OPERATIONS.items()
+        if pattern.search(t) and (not needs_word or _OPERATION_SAID.search(t))
+    ]
     operation_price = asks_price and bool(
-        _OPERATION_SAID.search(message) or promo_images.OPERATION_NAMES.search(message)
+        _OPERATION_SAID.search(message)
+        or promo_images.OPERATION_NAMES.search(message)
+        or (named_before and not _CONSULTATION_WORD.search(message))
     )
+
+    def operation_price_lines() -> list[str]:
+        """The price, in words, of the operation talked about last."""
+        op_prices = flow.get("operation_prices") or {}
+        named_now = [
+            topic
+            for topic, (pattern, _) in promo_images.OPERATIONS.items()
+            if pattern.search(message)
+        ]
+        topics = named_now or named_before[:1]
+        return [
+            str(entry.get(script) or entry.get("uz-latn") or "")
+            for entry in op_prices.values()
+            if entry.get("topic") in topics
+        ]
 
     def reask(question_text: str, note: str = "") -> Plan:
         """The model answers what was asked; then the step's question -- in the
@@ -1275,6 +1301,15 @@ def plan_intake(
         # The answer to "Sizga qanday yordam bera olamiz?" is read as a first
         # message: a complaint, a question, a wish -- the greeting is done.
         pending = None
+    # The anamnesis questions are answered right after they are asked: the
+    # bot's last line says which (the step order above is not chronological).
+    last_line = since[-1:] if since else []
+    if "ask_since" in texts and (
+        _said(flow, "ask_treated", last_line) or _said(flow, "ask_treated_sport", last_line)
+    ):
+        pending = "ask_treated"
+    elif "ask_since" in texts and _said(flow, "ask_since", last_line):
+        pending = "ask_since"
 
     def named_complaint(text: str) -> bool:
         if sport_words.search(text) or promo_images.OPERATION_NAMES.search(text):
@@ -1396,6 +1431,46 @@ def plan_intake(
             step = choice(place, abroad_said())
         return str(step)
 
+    # The doctor, 2026-11-18: after the complaint two short questions about it
+    # ("qachondan beri?", "davolanganmisiz, qanday dori?") -- to draw the
+    # patient into a conversation before anything is offered; then the name,
+    # the place, "tushunarli, bunday holatlar davolanadi", the times.
+    anamnesis = "ask_since" in texts and "ask_treated" in texts
+    asked_since = bool(_said(flow, "ask_since", since))
+    asked_treated = bool(
+        _said(flow, "ask_treated", since) or _said(flow, "ask_treated_sport", since)
+    )
+
+    def treated_text() -> str:
+        if sport and texts.get("ask_treated_sport"):
+            return str(texts["ask_treated_sport"])
+        return str(texts["ask_treated"])
+
+    def understood() -> str:
+        operation = any(
+            promo_images.OPERATION_NAMES.search(t) or _OPERATION_SAID.search(t)
+            for t in patient_since
+        )
+        return str(texts.get("understood_op" if operation else "understood") or "")
+
+    def next_step(place: str | None = None, abroad: bool = False) -> str:
+        """After the complaint: the two questions, the name, the place, then
+        "tushunarli" and the offer with the times."""
+        if anamnesis and complaint_known() and not asked_since:
+            return str(texts["ask_since"])
+        if anamnesis and complaint_known() and not asked_treated:
+            return treated_text()
+        named = given_name()
+        place = place or known_place()
+        if not named and not said["ask_name"] and not name_part():
+            return str(texts["ask_name"])
+        if not place:
+            return str(texts["ask_place_named"].format(name=named) if named else texts["ask_place"])
+        if not complaint_known():
+            return str(texts["ask_topic"])
+        lead = understood() if anamnesis else ""
+        return f"{lead} {choice(place, abroad or abroad_said())}".strip()
+
     def contact_reply(wish: str) -> str:
         if wish == "admin":
             return str(texts["admin_busy"])
@@ -1406,6 +1481,10 @@ def plan_intake(
     def after_place(place: str, abroad: bool = False) -> Plan:
         if not complaint_known():
             return Plan(reply=texts["ask_topic"])
+        if anamnesis:
+            # "Tushunarli, bunday holatlar davolanadi", then the offer and the
+            # times (the doctor, 2026-11-18) -- no model text in between.
+            return Plan(reply=next_step(place, abroad))
         # A little about the complaint first, in general terms, then the
         # video call and the time (the doctor, 2026-11-17).
         return Plan(then=next_after_complaint(place, abroad), instruction=INSTRUCTION_INFO)
@@ -1531,17 +1610,39 @@ def plan_intake(
             return Plan(reply=f"{lead} {bubbles.MARKER} {body}" if lead else body)
         named = given_name()
         place = known_place()
-        if named and place:
+        if anamnesis:
+            # The complaint: "qachondan beri?" first (the doctor, 2026-11-18).
+            step = f"{texts['handles']} {next_step()}"
+        elif named and place:
             # "Salom men Bobur, Rossiyadaman, ereksiya muammosi": straight to the choice.
             step = f"{texts['handles']} {next_after_complaint(place)}"
         elif named:
             step = f"{texts['handles']} {texts['ask_place_named'].format(name=named)}"
         else:
             step = f"{texts['handles']} {texts['ask_name']}"
-        if question and not asks_price and not (named and place):
+        if question and not asks_price and not (named and place and not anamnesis):
             return Plan(prefix=lead, then=step, instruction=INSTRUCTION)
         body = f"{lead} {bubbles.MARKER} {step}" if lead else step
         return Plan(reply=body, cards=asks_price and not operation_price)
+
+    if (
+        pending in ("ask_since", "ask_treated")
+        and phone_check.read(message) is None
+        and not contact_wish(message)
+    ):
+        # The answer to "qachondan beri?" / "davolanganmisiz?": taken as it is,
+        # and on to the next. A question meanwhile is answered by the model and
+        # the same question follows -- asked twice, it moves on.
+        current = texts["ask_since"] if pending == "ask_since" else treated_text()
+        following = treated_text() if pending == "ask_since" else next_step()
+        if asks_price:
+            # The price asked: the card answers it (the operation's card when
+            # it is an operation's price), the question follows.
+            return Plan(reply=current, cards=not operation_price)
+        if question:
+            times = sum(1 for t in since if _norm(current) in _norm(t))
+            return Plan(then=current if times < 2 else following, instruction=INSTRUCTION)
+        return Plan(reply=following)
 
     prices = flow.get("prices") or {}
     suffix = {"uz-cyrl": "_cyr", "ru": "_ru"}.get(script, "")
@@ -1905,6 +2006,8 @@ def plan_intake(
     if pending == "ask_topic" and not question and (not u.refuses or named_complaint(message)):
         # "Ereksiya yo'q" is the complaint, not a no.
         place = answer_after("ask_place", "ask_place_named") or known_place()
+        if anamnesis:
+            return Plan(reply=f"{texts['handles']} {next_step(place)}")
         return Plan(
             prefix=texts["handles"],
             then=next_after_complaint(place),
@@ -1912,7 +2015,7 @@ def plan_intake(
         )
     if pending == "ask_name" and not u.name and named_complaint(message) and not question:
         # "Prostatit" in answer to "Ismingiz nima?": the complaint came late.
-        return Plan(reply=f"{texts['handles']} {texts['ask_name']}")
+        return Plan(reply=f"{texts['handles']} {next_step() if anamnesis else texts['ask_name']}")
 
     # A number, whenever it comes -- or a correction of it -- is checked and
     # moves straight on to the time and the call.
@@ -2015,8 +2118,12 @@ def plan_intake(
             "offer_slots": choice_again(),
             "ask_phone": texts["ask_phone_again"],
             "ask_time": texts["ask_time"],
+            "protez_call": texts.get("protez_phone", ""),
         }.get(pending, texts["ask_phone_again"])
-        return Plan(reply=again, cards=not operation_price)
+        if operation_price:
+            # The operation's price in words; its card goes with it.
+            return Plan(reply=" ".join([*operation_price_lines(), str(again)]).strip())
+        return Plan(reply=again, cards=True)
 
     if early is not None and pending == "ask_time" and phone_check.read(message) is not None:
         return early
@@ -2126,7 +2233,8 @@ def plan_intake(
             return reask(texts["ask_place"])
         if named_complaint(message) and not known_place():
             # "Prostatit bor" in answer to "qayerdansiz?": taken, the place asked again.
-            return Plan(reply=f"{texts['handles']} {texts['ask_place']}")
+            step = next_step() if anamnesis else texts["ask_place"]
+            return Plan(reply=f"{texts['handles']} {step}")
         return after_place(message, abroad=abroad_said())
     if pending in ("ask_phone", "admin_busy"):
         if said["ask_phone"] >= 2:
