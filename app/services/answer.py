@@ -611,9 +611,16 @@ def _with_operation_cards(
     script: str,
 ) -> str:
     """The operation package cards the patient asked for by name, under the
-    reply (app.services.promo_images.operations_asked)."""
+    reply (app.services.promo_images.operations_asked) -- or, when the patient
+    says the picture did not show, the last card again."""
     own = [str(t["content"]) for t in history or [] if t.get("role") == "assistant"]
     patient = [str(t["content"]) for t in history or [] if t.get("role") == "user"]
+    again = promo_images.resend_last(
+        settings.get("promo_images"), user_message=user_message, own_turns=own, reply=reply
+    )
+    if again is not None:
+        logger.info("promo_image_resent", extra={"title": again.get("title")})
+        return f"{reply} [[IMAGE:{again['url']}|{again.get('title', '')}]]"
     cards = promo_images.operations_asked(
         settings.get("promo_images"),
         user_message=user_message,

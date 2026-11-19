@@ -740,6 +740,9 @@ _HESITATE = re.compile(
     re.IGNORECASE,
 )
 _PAID = re.compile(
+    # "Chek" alone, the photo coming next: the receipt, asked for -- never "chek
+    # qabul qilindi" before it came (the owner's test, 2026-11-19).
+    r"^\s*(?:chek|чек|check)\s*[.!]?\s*$|"
     r"to['‘ʻ’`]?ladim|to['‘ʻ’`]?lov\s+qildim|o['‘ʻ’`]?tkazdim|tashladim|тўладим|ўтказдим|"
     r"оплатил|перевел|перевёл|отправил",
     re.IGNORECASE,

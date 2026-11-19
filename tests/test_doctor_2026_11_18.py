@@ -443,3 +443,37 @@ def test_one_cyrillic_letter_does_not_switch_the_alphabet() -> None:
 def test_the_evening_offer_names_no_price_before_the_time() -> None:
     for texts in FLOWS["intake"]["texts"].values():
         assert "990" not in texts["evening_ok"].format(price="990 000 so'm")
+
+
+# --- the owner's test, 2026-11-19 ------------------------------------------------
+
+
+def test_the_card_that_did_not_show_is_sent_again() -> None:
+    day = {"topic": "day", "title": "Kunduzgi konsultatsiya: narx va tartib", "url": "d"}
+    own = ["Konsultatsiya narxi va tartibi rasmda.\n\n📎 Kunduzgi konsultatsiya: narx va tartib"]
+    again = promo_images.resend_last(
+        [day],
+        user_message="Бошкаттан юборинг корнмаяпти",
+        own_turns=own,
+        reply="Расмни қайта юбордим.",
+    )
+    assert again == day
+    assert (
+        promo_images.resend_last([day], user_message="rahmat", own_turns=own, reply="Mayli.")
+        is None
+    )
+
+
+def test_chek_alone_asks_for_the_receipt_not_says_it_came() -> None:
+    assert scripted_flow._PAID.search("Чек")
+    assert not scripted_flow._PAID.search("chekni keyin yuboraman")
+
+
+def test_cyrillic_uzbek_without_uzbek_letters_is_uzbek() -> None:
+    from app.services.language import reply_script
+
+    assert (
+        reply_script("Нечга келсам болади? Йоки онлаен консультацияни нечга килсак болади")
+        == "uz-cyrl"
+    )
+    assert reply_script("Сколько стоит консультация?") == "ru"

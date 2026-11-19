@@ -590,6 +590,36 @@ def operations_asked(
     return found
 
 
+# "Boshqattan yuboring, ko'rinmayapti" -- no "rasm" in it, still the picture
+# (the owner's test, 2026-11-19: "Rasmni qayta yubordim" with no picture).
+_RESEND = re.compile(
+    r"ko['‘ʻ’`]?rinma|korinma|кўринма|куринма|корнма|кoрнма|"
+    r"qayta\s+yubor|boshqa?t+?dan\s+yubor|бошка?т+а?н\s+юбор|бошқа?т+а?н\s+юбор|қайта\s+юбор|"
+    r"кайта\s+юбор|не\s+вид|не\s+открыва|не\s+загруз|ещ[её]\s+раз\s+отправ",
+    re.IGNORECASE,
+)
+
+
+def resend_last(
+    images: Sequence[Mapping[str, Any]] | None,
+    *,
+    user_message: str,
+    own_turns: Sequence[str],
+    reply: str,
+) -> Mapping[str, Any] | None:
+    """The last card sent, again, when the patient says it did not show and
+    this reply carries no picture of its own."""
+    if not images or MARKER.search(reply) or not _RESEND.search(user_message):
+        return None
+    for turn in reversed(own_turns[-4:]):
+        titles = [line.split("📎", 1)[1].strip() for line in turn.splitlines() if "📎" in line]
+        for title in reversed(titles):
+            image = next((i for i in images if str(i.get("title", "")) == title), None)
+            if image is not None:
+                return image
+    return None
+
+
 def attach_operations(
     reply: str,
     cards: Sequence[Mapping[str, Any]],
