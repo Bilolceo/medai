@@ -1253,19 +1253,21 @@ async def handle_patient_media(
                 session, channel_id=uuid.UUID(channel_id), user_id=uuid.UUID(user_id)
             ):
                 return
+            verdict = None
             try:
-                await patient_media.acknowledge(
+                verdict = await patient_media.acknowledge(
                     session,
                     ctx["redis"],
                     channel_id=uuid.UUID(channel_id),
                     conversation_id=uuid.UUID(conversation_id),
                     recipient_external_id=sender_external_id,
+                    media=media,
                 )
             except Exception:  # noqa: BLE001 - the doctor must still be told
                 await session.rollback()
                 logger.exception("patient_media_ack_failed")
             await _notify_doctor_of_media(
-                session, tenant_uuid, user_id, media, uuid.UUID(conversation_id)
+                session, tenant_uuid, user_id, media, uuid.UUID(conversation_id), verdict
             )
             logger.info(
                 "patient_media_handled", extra={"tenant_id": tenant_id, "count": len(media)}
@@ -1316,6 +1318,7 @@ async def _notify_doctor_of_media(
     user_id: str,
     media: Any,
     conversation_id: uuid.UUID | None = None,
+    verdict: Any = None,
 ) -> None:
     try:
         patient = await session.get(User, uuid.UUID(user_id))
@@ -1328,7 +1331,7 @@ async def _notify_doctor_of_media(
             else None
         )
         await doctor_telegram.notify_patient_media(
-            session, tenant_id, media, patient_media.caption(patient, len(media), offer)
+            session, tenant_id, media, patient_media.caption(patient, len(media), offer, verdict)
         )
     except Exception:  # noqa: BLE001
         logger.exception("patient_media_notify_failed")

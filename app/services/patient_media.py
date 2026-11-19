@@ -19,6 +19,7 @@ pretended to have looked would be worse than none.
 import logging
 import re
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from html.parser import HTMLParser
@@ -36,7 +37,7 @@ from app.models.patient_media import MediaKind, PatientMedia
 from app.models.user import User
 from app.repositories.channel import ChannelRepository
 from app.repositories.message import MessageRepository
-from app.services import message_labels
+from app.services import message_labels, receipt_check
 from app.services.conversation import record_outbound_message, reply_context_for
 from app.services.delivery import send_reply
 from app.services.language import reply_script
@@ -78,7 +79,28 @@ RECEIPT_ACKNOWLEDGEMENTS = {
         "администратор позвонит. Если ещё не написали номер телефона, напишите его."
     ),
 }
+# A photo after the card that is plainly not a receipt (receipt_check): asked
+# for the receipt -- never "chekingiz keldi" for a photo of a car.
+NOT_A_RECEIPT = {
+    "uz-latn": (
+        "Bu rasm to'lov chekiga o'xshamayapti. Iltimos, to'lov chekini -- to'lov ilovasidagi "
+        "skrinshotni -- shu yerga yuboring."
+    ),
+    "uz-cyrl": (
+        "Бу расм тўлов чекига ўхшамаяпти. Илтимос, тўлов чекини -- тўлов иловасидаги "
+        "скриншотни -- шу ерга юборинг."
+    ),
+    "ru": "Это не похоже на чек об оплате. Пожалуйста, пришлите сюда скриншот чека из приложения.",
+}
 _CARD = re.compile(r"\b\d{4}\s?\d{4}\s?\d{4}\s?\d{4}\b")
+
+
+def card_last4(offer: str | None) -> str | None:
+    """The last four digits of the card the clinic gave, from its message."""
+    found = _CARD.search(offer or "")
+    return re.sub(r"\D", "", found.group(0))[-4:] if found else None
+
+
 _RECEIPT_WINDOW = timedelta(days=3)
 
 
@@ -673,16 +695,29 @@ async def acknowledge(
     channel_id: uuid.UUID,
     conversation_id: uuid.UUID,
     recipient_external_id: str,
-) -> None:
-    """Tell the patient somebody will look, once per burst."""
+    media: Sequence[PatientMedia] = (),
+) -> "receipt_check.Verdict | None":
+    """Tell the patient somebody will look, once per burst. A photo after the
+    card is looked at first (receipt_check); the verdict is returned for the
+    clinic's own message about it."""
     first = await redis.set(
         f"patient_media_ack:{conversation_id}", "1", ex=ACK_WINDOW_SECONDS, nx=True
     )
     if not first:
-        return
+        return None
     script = await patient_script(session, conversation_id)
     paying = await awaiting_payment(session, conversation_id)
-    text = (RECEIPT_ACKNOWLEDGEMENTS if paying else ACKNOWLEDGEMENTS)[script]
+    verdict = None
+    image = next((m for m in media if m.content and m.kind == MediaKind.IMAGE), None)
+    if paying and image is not None:
+        verdict = await receipt_check.check(image.content or b"", image.content_type or "")
+    if verdict is not None and verdict.receipt is False:
+        text = NOT_A_RECEIPT[script]
+        # The next photo -- the real receipt -- is looked at too, not folded
+        # into this burst.
+        await redis.delete(f"patient_media_ack:{conversation_id}")
+    else:
+        text = (RECEIPT_ACKNOWLEDGEMENTS if paying else ACKNOWLEDGEMENTS)[script]
     delivered = await send_reply(
         session,
         channel_id=channel_id,
@@ -701,9 +736,15 @@ async def acknowledge(
             sender=MessageSender.BOT,
         )
     await session.commit()
+    return verdict
 
 
-def caption(patient: User | None, count: int, receipt_for: str | None = None) -> str:
+def caption(
+    patient: User | None,
+    count: int,
+    receipt_for: str | None = None,
+    verdict: "receipt_check.Verdict | None" = None,
+) -> str:
     who = "Bemor"
     if patient is not None:
         if patient.name and patient.username:
@@ -716,8 +757,13 @@ def caption(patient: User | None, count: int, receipt_for: str | None = None) ->
     base = get_settings().public_base_url
     link = f"\n🖥 Dashboard → Rasm yuborganlar: {base.rstrip('/')}/admin/" if base else ""
     if receipt_for:
+        ai = (
+            "\n" + receipt_check.note(verdict, expected_last4=card_last4(receipt_for))
+            if verdict is not None
+            else ""
+        )
         return (
-            f"💳 TO'LOV CHEKI -- tekshiring\n👤 {who}\n🗓 {_receipt_note(receipt_for)}\n"
+            f"💳 TO'LOV CHEKI -- tekshiring\n👤 {who}\n🗓 {_receipt_note(receipt_for)}{ai}\n"
             f"✅ To'lov to'g'ri bo'lsa, bemorga yozilganini tasdiqlang.{link}"
         )
     return f"📷 Bemor tomonidan {photos} yuborildi\n👤 {who}{link}"

@@ -316,6 +316,10 @@ class Settings(BaseSettings):
     )
     qwen_model: str = Field(default="Qwen/Qwen3-235B-A22B-Instruct-2507", alias="QWEN_MODEL")
     openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
+    # A photo sent after the card is looked at by the model -- a receipt or
+    # not (app.services.receipt_check). Off unless set: each look is a paid
+    # call, and a test run or a clinic without card payments never wants one.
+    receipt_check: bool = Field(default=False, alias="RECEIPT_CHECK")
 
     @field_validator(
         "provision_ig_account_id",
