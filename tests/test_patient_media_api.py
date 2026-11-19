@@ -836,3 +836,57 @@ async def test_the_dashboard_page_is_never_shown_from_a_stale_cache(
     policy = response.headers["content-security-policy"]
     assert "frame-src https://www.instagram.com;" in policy
     assert "frame-ancestors 'none'" in policy
+
+
+# --- "To'lov cheklari": the photos sent after the card ---------------------------
+
+
+async def _media_in(
+    session: AsyncSession, seed: Seed, conversation_id: uuid.UUID | None, at: datetime
+) -> uuid.UUID:
+    media = PatientMedia(
+        tenant_id=seed.tenant_a.id,
+        user_id=seed.a.user.id,
+        conversation_id=conversation_id,
+        source_url="https://lookaside.fbsbx.com/x",
+        content=PNG,
+        content_type="image/png",
+        size_bytes=len(PNG),
+    )
+    session.add(media)
+    await session.flush()
+    media.created_at = at
+    await session.flush()
+    return media.id
+
+
+async def test_the_receipts_screen_shows_only_photos_sent_after_the_card(
+    client: httpx.AsyncClient, db_session: AsyncSession, seed: Seed, front_desk: Any
+) -> None:
+    from app.models.message import Message, MessageSender
+
+    conversation = seed.a.conversation
+    now = datetime.now(UTC)
+    card = Message(
+        conversation_id=conversation.id,
+        sender=MessageSender.BOT,
+        content="To'lov uchun karta: 9860 1501 1048 3446 (Sultonbek Norkuziev).",
+        channel="instagram",
+    )
+    db_session.add(card)
+    await db_session.flush()
+    card.created_at = now - timedelta(hours=2)
+    await db_session.flush()
+
+    before = await _media_in(db_session, seed, conversation.id, now - timedelta(hours=5))
+    receipt = await _media_in(db_session, seed, conversation.id, now - timedelta(hours=1))
+    too_late = await _media_in(db_session, seed, conversation.id, now + timedelta(days=4))
+    elsewhere = await _media_in(db_session, seed, None, now - timedelta(hours=1))
+    _login(client, front_desk)
+
+    shown = (await client.get("/api/admin/media", params={"receipts": True})).json()
+    ids = {item["id"] for patient in shown for item in patient["items"]}
+    assert ids == {str(receipt)}
+    every = (await client.get("/api/admin/media")).json()
+    all_ids = {item["id"] for patient in every for item in patient["items"]}
+    assert {str(before), str(receipt), str(too_late), str(elsewhere)} <= all_ids

@@ -1,4 +1,5 @@
-"""The "Rasm yuborganlar" screen: patients who sent photos, and the photos.
+"""The "Rasm yuborganlar" screen: patients who sent photos, and the photos --
+and "To'lov cheklari", the same for the payment receipts alone.
 
 Grouped by patient rather than listed photo by photo, because that is how
 they are handled: somebody opens a patient, looks at everything they sent,
@@ -6,7 +7,7 @@ and marks them seen. A patient with anything unseen sorts to the top.
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, Field
@@ -19,6 +20,7 @@ from app.api.admin.deps import require_patient_access, verify_csrf_header
 from app.api.admin.schemas import AttachmentOut
 from app.core.db import get_db_session
 from app.core.tenant_context import get_current_tenant
+from app.models.message import Message, MessageSender
 from app.models.operator import Operator
 from app.models.patient_media import MediaKind, PatientMedia, PatientMediaStatus
 from app.models.user import User
@@ -51,9 +53,43 @@ class StatusUpdate(BaseModel):
     status: PatientMediaStatus
 
 
+# A receipt: a photo sent within three days after the clinic gave the card
+# number in that conversation -- the same rule the patient is answered by
+# (app.services.patient_media.awaiting_payment).
+_RECEIPT_WINDOW = timedelta(days=3)
+
+
+async def _receipt_ids(session: AsyncSession, media: list[PatientMedia]) -> set[uuid.UUID]:
+    conversations = {m.conversation_id for m in media if m.conversation_id is not None}
+    if not conversations:
+        return set()
+    cards = (
+        await session.execute(
+            select(Message.conversation_id, Message.created_at).where(
+                Message.conversation_id.in_(conversations),
+                Message.sender != MessageSender.PATIENT,
+                Message.content.op("~")(r"[0-9]{4} ?[0-9]{4} ?[0-9]{4} ?[0-9]{4}"),
+            )
+        )
+    ).all()
+    given: dict[uuid.UUID, list[datetime]] = {}
+    for conversation_id, created_at in cards:
+        given.setdefault(conversation_id, []).append(created_at)
+    return {
+        m.id
+        for m in media
+        if m.conversation_id is not None
+        and any(
+            card <= m.created_at <= card + _RECEIPT_WINDOW
+            for card in given.get(m.conversation_id, [])
+        )
+    }
+
+
 @router.get("", response_model=list[MediaPatientOut])
 async def list_patients(
     only_unseen: bool = Query(default=False),
+    receipts: bool = Query(default=False),
     q: str | None = Query(default=None, max_length=100),
     operator: Operator = Depends(require_patient_access),
     session: AsyncSession = Depends(get_db_session),
@@ -72,6 +108,11 @@ async def list_patients(
             .limit(2000)
         )
     ).all()
+
+    if receipts:
+        # "To'lov cheklari": only the photos sent after the card was given.
+        wanted = await _receipt_ids(session, [media for media, _ in rows])
+        rows = [row for row in rows if row[0].id in wanted]
 
     grouped: dict[uuid.UUID, MediaPatientOut] = {}
     for media, user in rows:

@@ -263,7 +263,7 @@
   input[type="checkbox"], input[type="radio"] { width: 16px; height: 16px; min-height: 0; padding: 0; accent-color: var(--accent); box-shadow: none; cursor: pointer; }
   input[type="file"] { padding: 6px; cursor: pointer; }
   input[type="file"]::file-selector-button { font: inherit; font-size: var(--fs-sm); font-weight: 600; height: var(--ctl-sm); padding: 0 12px; margin-right: 12px; border: 1px solid var(--rule-strong); border-radius: var(--r-sm); background: var(--surface-sunk); color: var(--ink); cursor: pointer; }
-  #chatSearch, #mediaSearch, #leadSearch { padding-left: 40px; border-radius: var(--r-pill); background: var(--panel-solid) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364788c' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat 15px center; }
+  #chatSearch, #mediaSearch, #leadSearch, #receiptSearch { padding-left: 40px; border-radius: var(--r-pill); background: var(--panel-solid) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364788c' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat 15px center; }
   label { display: block; font-size: var(--fs-sm); font-weight: 600; color: var(--ink-2); margin-bottom: 6px; }
   label.check { display: inline-flex; align-items: center; gap: 8px; margin: 0; font-size: var(--fs-sm); font-weight: 600; color: var(--ink-2); cursor: pointer; height: var(--ctl); padding: 0 14px; border: 1px solid var(--rule-strong); border-radius: var(--r-pill); background: var(--panel-solid); box-shadow: var(--shadow-xs); white-space: nowrap; }
   label.check:hover { border-color: var(--ink-4); }
@@ -1008,7 +1008,7 @@
   input, select, textarea { border: 1px solid var(--rule-strong); border-radius: var(--r-sm); box-shadow: none; }
   input:hover, select:hover, textarea:hover { border-color: var(--ink-4); }
   input:focus, select:focus, textarea:focus { border-color: var(--brand-600); box-shadow: 0 0 0 4px var(--focus); }
-  #chatSearch, #mediaSearch, #leadSearch { border-radius: var(--r-pill); }
+  #chatSearch, #mediaSearch, #leadSearch, #receiptSearch { border-radius: var(--r-pill); }
   :focus-visible { outline: 0; box-shadow: 0 0 0 4px var(--focus); }
   label { color: var(--ink-2); }
 
@@ -1189,6 +1189,7 @@
     <div class="nav-group">Bemorlar</div>
     <button data-tab="leads" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg><span class="nav-label">Nomerlar</span><span class="tab-badge" id="leadsBadge" hidden></span></button>
     <button data-tab="media" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="9.5" r="1.8"/><path d="m21 15-5-5L5 20"/></svg><span class="nav-label">Rasmlar</span><span class="tab-badge" id="mediaBadge" hidden></span></button>
+    <button data-tab="receipts" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2.5h12v19l-3-2-3 2-3-2-3 2z"/><path d="M9 7.5h6M9 11.5h6M9 15.5h4"/></svg><span class="nav-label">To'lov cheklari</span></button>
     <div class="nav-group">Klinika</div>
     <button data-tab="doctors" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3v5a4 4 0 0 0 8 0V3M10 12v2a5 5 0 0 0 10 0v-2"/><circle cx="20" cy="10" r="2"/></svg><span class="nav-label">Shifokorlar</span></button>
     <button data-tab="faq" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 19a2 2 0 0 0 2 2h13M9 7h6"/></svg><span class="nav-label">Bilim bazasi</span></button>
@@ -1375,6 +1376,16 @@
       <button type="button" class="act primary" id="mediaAllSeen" hidden>✓ Hammasini ko'rildi</button>
     </div>
     <div class="media-list" id="mediaList"></div>
+  </section>
+
+  <section id="tab-receipts" hidden>
+    <div class="toolbar toolbar-bare">
+      <input type="search" id="receiptSearch" class="tb-search" placeholder="Ism, @username yoki telefon" aria-label="Qidirish">
+      <span class="tb-spacer"></span>
+      <span class="media-summary" id="receiptSummary"></span>
+    </div>
+    <p class="muted" style="margin:0 0 12px">Karta raqami berilgandan keyin 3 kun ichida bemor yuborgan rasmlar. Bot to'lovni tekshirmaydi: summani va kartani shu yerda solishtiring.</p>
+    <div class="media-list" id="receiptList"></div>
   </section>
 
   <div class="lightbox" id="lightbox" hidden role="dialog" aria-modal="true" aria-label="Rasm">
@@ -3577,6 +3588,7 @@ function applyPermissions() {
   // on both, so it is not shown the doors.
   document.querySelector('#tabs button[data-tab="report"]').hidden = !canManage();
   document.querySelector('#tabs button[data-tab="media"]').hidden = !canManage();
+  document.querySelector('#tabs button[data-tab="receipts"]').hidden = !canManage();
   document.getElementById("newAppt").hidden = !canManage();
   for (const id of ["doctorForm", "faqForm", "settingsForm", "assistantForm", "fileForm"]) {
     const form = document.getElementById(id);
@@ -3846,6 +3858,52 @@ function renderMedia() {
         p.unseen ? el("button", { class: "act primary", onclick: () => markPatientSeen(p) }, "✓ Ko'rildi") : null));
   }));
 }
+
+// "To'lov cheklari": the photos sent after the card -- the same cards and the
+// same lightbox as the photo screen, receipts only, newest first.
+let RECEIPTS = [];
+
+async function loadReceipts() {
+  const params = new URLSearchParams({ receipts: "true" });
+  const q = document.getElementById("receiptSearch").value.trim();
+  if (q) params.set("q", q);
+  RECEIPTS = await api("/media?" + params.toString());
+  renderReceipts();
+}
+
+function renderReceipts() {
+  const list = document.getElementById("receiptList");
+  const total = RECEIPTS.reduce((n, p) => n + p.total, 0);
+  document.getElementById("receiptSummary").textContent =
+    RECEIPTS.length ? `${RECEIPTS.length} bemor · ${total} ta chek` : "";
+  if (!RECEIPTS.length) {
+    list.replaceChildren(emptyState("image", "Hozircha to'lov cheki yo'q",
+      "Bemor karta raqamidan keyin chek yuborsa, shu yerda paydo bo'ladi"));
+    return;
+  }
+  list.replaceChildren(...RECEIPTS.map((p) => {
+    const shown = p.items.slice(0, 6);
+    const hidden = p.items.length - shown.length;
+    const sub = [p.username ? "@" + p.username : null, p.phone].filter(Boolean).join(" · ");
+    return el("article", { class: "media-card" + (p.unseen ? " unseen" : "") },
+      el("div", { class: "media-head" },
+        el("div", { class: "avatar" }, initials(p)),
+        el("div", { class: "media-who" }, el("b", {}, patientTitle(p)), el("span", {}, sub || "Instagram bemori")),
+        p.unseen ? el("span", { class: "pill bad" }, `${p.unseen} yangi`) : el("span", { class: "pill ok" }, "✓ ko'rilgan")),
+      el("div", { class: "media-thumbs" },
+        shown.map((item, index) => mediaThumb(p, item, index, index === shown.length - 1 && hidden > 0 ? hidden : 0))),
+      el("div", { class: "media-foot" },
+        el("span", { class: "muted" }, `${p.total} ta chek · ${relativeWhen(p.last_at)}`),
+        p.conversation_id ? el("button", { class: "act", onclick: () => openPatientChat(p.conversation_id) }, icon("chat"), "Suhbat") : null,
+        p.unseen ? el("button", { class: "act primary", onclick: () => markPatientSeen(p).then(loadReceipts) }, "✓ Ko'rildi") : null));
+  }));
+}
+
+let RECEIPT_SEARCH_TIMER = null;
+document.getElementById("receiptSearch").addEventListener("input", () => {
+  clearTimeout(RECEIPT_SEARCH_TIMER);
+  RECEIPT_SEARCH_TIMER = setTimeout(() => loadReceipts().catch((e) => toast(e.message, true)), 300);
+});
 
 async function markPatientSeen(p) {
   try {
@@ -4453,6 +4511,7 @@ const LOADERS = {
   today: () => Promise.all([loadStats(), loadAppointments(), loadDoctors(), loadViews()]),
   chats: loadChats,
   media: loadMedia,
+  receipts: loadReceipts,
   report: loadReport,
   leads: loadLeads,
   doctors: loadDoctors,
@@ -4615,6 +4674,7 @@ document.getElementById("staffForm").addEventListener("submit", async (e) => {
     report: "Bemorlar, qabullar va murojaatlar tahlili",
     leads: "Qo'ng'iroq kutayotgan bemorlar",
     media: "Bemorlar yuborgan rasmlar",
+    receipts: "Bemorlar yuborgan to'lov cheklari",
     doctors: "Shifokorlar ro'yxati va ish vaqti",
     faq: "Savol-javoblar, qoidalar, fayllar va bot ko'rsatmasi",
     suggest: "Suhbatlardan chiqqan takliflar",
