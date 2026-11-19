@@ -477,3 +477,36 @@ def test_cyrillic_uzbek_without_uzbek_letters_is_uzbek() -> None:
         == "uz-cyrl"
     )
     assert reply_script("Сколько стоит консультация?") == "ru"
+
+
+# --- local run, 2026-11-19 (no OpenAI) -----------------------------------------
+
+
+def test_how_long_it_has_been_is_not_when_to_ring() -> None:
+    assert scripted_flow._when("3 yil") is None
+    assert scripted_flow._when("yarim yildan beri") is None
+    assert scripted_flow._when("ertaga 11 da") == "ertaga 11 da"
+
+
+def test_when_can_i_come_at_the_times_step_gets_the_times() -> None:
+    plans = _talk(["Ereksiya", "1 yil", "yo'q", "Aziz", "Toshkent", "Nechga kelsam bo'ladi?"])
+    last = plans[-1]
+    assert last is not None and last.reply is not None and "bo'sh vaqtlar bor" in last.reply
+
+
+def test_the_card_asked_again_after_the_booking() -> None:
+    plans = _talk(
+        [
+            "Ereksiya",
+            "1 yil",
+            "yo'q",
+            "Aziz",
+            "Samarqand",
+            "onlayn",
+            "ertaga 09:00",
+            "raqam yuboring pulini tashlab qo'yaman",
+        ]
+    )
+    last = plans[-1]
+    assert last is not None and last.reply is not None
+    assert last.reply.startswith("To'lov uchun karta:") and "ertaga 09:00" in last.reply

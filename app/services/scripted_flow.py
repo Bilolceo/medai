@@ -795,6 +795,18 @@ _CALL_ME = re.compile(
 _NOT_TIME = re.compile(r"raqam|рақам|номер|telefon|телефон|ism|исм", re.IGNORECASE)
 
 
+_DURATION = re.compile(
+    r"\b(?:yil|oy|hafta|yildan|oydan|haftadan|йил|ой|ҳафта|йилдан|ойдан|год|года|лет|месяц\w*|"
+    r"недел\w*)\b|beri\b|бери\b",
+    re.IGNORECASE,
+)
+_WHEN_ASKED = re.compile(
+    r"nech(?:a|ch)?ga\b|nechida|soat\s+nech|qachon|нечга|неччига|нечида|соат\s+неч|қачон|качон|"
+    r"когда|во\s+сколько",
+    re.IGNORECASE,
+)
+
+
 def _when(text: str) -> str | None:
     """What the patient said about the time -- "ertaga 10 da", "tushdan
     keyin" -- out of a message that may also carry the number, the name and
@@ -807,6 +819,10 @@ def _when(text: str) -> str | None:
         if not part or not _TIME_WORDS.search(part):
             continue
         if _COMPLAINT.search(part) or _NOT_TIME.search(part) or _GREETING.search(part):
+            continue
+        if _DURATION.search(part) and parse_time(part) is None:
+            # "3 yil", "yarim yildan beri": how long it has been, not when to
+            # ring (local test, 2026-11-19: "Doktor 3 yil ... qo'ng'iroq qiladi").
             continue
         pieces.append(part)
     return ", ".join(pieces) or None
@@ -2120,6 +2136,27 @@ def plan_intake(
                 phone_check.BAD_CODE: "phone_bad_code",
             }[found.kind]
             return Plan(reply=texts[key].format(shown=found.shown))
+        if (
+            found is None
+            and (_CARD_NUMBER.search(message) or _PAYMENT.search(message))
+            and not (_PAID.search(message))
+        ):
+            # "Raqam yuboring, pulini tashlayman": the card again, said once more.
+            offer = next((t for t in reversed(since) if _said(flow, "book_ok", [t])), "")
+            clock = re.search(r"\b(\d{1,2}:\d{2})\b", offer)
+            day_names = sorted(
+                [texts["today"], texts["tomorrow"], *_WEEKDAYS["uz-latn"], *_WEEKDAYS["uz-cyrl"]]
+                + _WEEKDAYS["ru"],
+                key=len,
+                reverse=True,
+            )
+            day = next(
+                (n for n in day_names if re.search(re.escape(n), offer, re.IGNORECASE)),
+                texts["tomorrow"],
+            )
+            return Plan(
+                reply=texts["card_line"].format(day=day, time=clock.group(1) if clock else "")
+            )
         if found is None and not _PAID.search(message):
             return None
         if found is None:
@@ -2207,6 +2244,16 @@ def plan_intake(
         # "Kecha qilib bera oladilarmi?" -- the evening, not yesterday
         # (2026-11-09): the evening hours and their price.
         return Plan(reply=texts["evening_ok"].format(price=price_of("evening")[0]))
+    if (
+        pending in ("offer_slots", "online_choice")
+        and parse_time(message) is None
+        and _WHEN_ASKED.search(message)
+        and not asks_price
+        and not _WANTS_CALL.search(message)
+        and not evening_only
+    ):
+        # "Nechga kelsam bo'ladi?": the free times (the owner's test, 2026-11-19).
+        return offer_slots()
     if (
         pending in ("offer_slots", "online_choice")
         and (parse_time(message) is None or (_LATER.search(message) and _is_question(message)))
