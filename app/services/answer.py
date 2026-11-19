@@ -436,7 +436,10 @@ async def generate_answer(
     # not spent on reading.
     reading = None
     done = scripted_flow.finished(flows, history)
-    wants_slots = bool(flows and flows.get("intake")) and not done
+    # Always, not only while the intake is open: a patient booked this
+    # morning who starts again in the afternoon -- the same conversation --
+    # was told "bo'sh vaqt qolmadi" with the book half empty (live, 2026-11-19).
+    wants_slots = bool(flows and flows.get("intake"))
     slots_job = asyncio.ensure_future(_online_slots(session, now_local)) if wants_slots else None
     if flows and llm_provider is None and not done:
         last_own = next(

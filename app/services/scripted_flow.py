@@ -276,7 +276,11 @@ _TASHKENT = re.compile(r"to[sš]h?kent|tashkent|тошкент|ташкент|to
 _NOT_NAMES = re.compile(
     r"^(?:men|menda|mening|menga|meni|bizda|biz|salom|assalom\w*|asalom\w*|ha|xa|yo['‘ʻ’`]?q|"
     r"doktor|aka|uka|bro|xohish\w*|hohish\w*|ok|rahmat|мен|менда|менинг|салом|ассалом\w*|"
-    r"ҳа|ха|йўқ|доктор|ака|ука|хоҳиш\w*|хохиш\w*|я|у|меня|здравствуйте|привет|да|нет)$",
+    r"ҳа|ха|йўқ|доктор|ака|ука|хоҳиш\w*|хохиш\w*|я|у|меня|здравствуйте|привет|да|нет|"
+    # Not a name either: "Ахмоқ бот" was greeted as "Ахмоқ, қаердансиз?"
+    # (negative run, 2026-11-19).
+    r"ahmoq|axmoq|tentak|jinni|bot|robot|ахмоқ|ахмок|тентак|жинни|бот|робот|дурак|идиот|"
+    r"тупой)$",
     re.IGNORECASE,
 )
 
@@ -891,6 +895,8 @@ def _understand(message: str, reading: Any, *, asked_name: bool) -> _Understood:
             and len(first_line.split()) <= 2
             and _NAME_WORD.match(word)
             and not _GREETING.search(word)
+            and not _NOT_NAMES.match(word)
+            and not any(_NOT_NAMES.match(w.strip(".,!?")) for w in first_line.split())
             # "Нечпул нархи" asks the price; "Нечпул" is no name.
             and not promo_images.PRICE_WORD.search(first_line)
         ):
@@ -914,7 +920,10 @@ def _understand(message: str, reading: Any, *, asked_name: bool) -> _Understood:
         )
     name = reading.name
     if name and (
-        _ABROAD.search(name) or _COMPLAINT.search(name) or promo_images.PRICE_WORD.search(name)
+        _ABROAD.search(name)
+        or _COMPLAINT.search(name)
+        or promo_images.PRICE_WORD.search(name)
+        or any(_NOT_NAMES.match(w.strip(".,!?")) for w in name.split())
     ):
         name = None
     lines = message.strip().splitlines()
@@ -1103,6 +1112,40 @@ def plan_intake(
     if _WOMAN.search(message) or _said(flow, "gynaecology", own):
         return None
     u = _understand(message, reading, asked_name=bool(_said(flow, "ask_name", [last_own])))
+    # A patient who comes back to the same chat and starts again with a
+    # greeting -- booked this morning, "Assalomu alaykum" in the afternoon
+    # (live, 2026-11-19) -- starts a new sequence. The earlier one's steps
+    # were taken as said: the bot skipped the name, asked "klinikaga yoki
+    # onlayn?" twice and offered no times. Only a greeting starts it again: a
+    # question after the booking ("bu onlayn konsultatsiyami?") is about the
+    # booking, and the model answers it.
+    # Only after the earlier sequence ended: "Assalomu alaykum" answering
+    # "ismingiz nima?" is not a new start.
+    closed = [
+        i
+        for i, turn in enumerate(turns)
+        if turn.get("role") == "assistant"
+        and any(
+            _said(flow, key, [turn["content"]])
+            for key in ("paid_confirm", "confirm", "hesitate_thanks", "protez_confirm")
+        )
+    ]
+    restarts = [
+        i
+        for i, turn in enumerate(turns)
+        if closed
+        and i > closed[0]
+        and turn.get("role") == "user"
+        and _greeting_only(turn["content"])
+    ]
+    if closed and _greeting_only(message):
+        restarts.append(len(turns))
+    if restarts:
+        # The steps are counted from here on; the introduction
+        # (``introduced``, above) is not said twice.
+        turns = turns[restarts[-1] :]
+        own = [turn["content"] for turn in turns if turn.get("role") == "assistant"]
+        last_own = own[-1] if own else ""
     # Where the sequence began: the patient's first complaint by pattern, or
     # -- for one only the model understood -- the turn before the bot first
     # said "Ha, doktor shu bilan shug'ullanadi".
@@ -1161,8 +1204,18 @@ def plan_intake(
         + _said(flow, "offer_evening", since)
         + _said(flow, "evening_ok", since)
     )
-    if (
+    found_now = phone_check.read(message)
+    # "+998 90 111 22 33" right after "Chek tekshirilgach ... yozilasiz": the
+    # number corrected -- confirmed again with it, the clinic told the new one
+    # (negative run, 2026-11-19: the model got it, the call-back kept the old).
+    paid_fix = bool(
         said["paid_confirm"]
+        and _said(flow, "paid_confirm", since[-1:])
+        and found_now is not None
+        and found_now.kind in (phone_check.UZ, phone_check.FOREIGN)
+    )
+    if (
+        (said["paid_confirm"] and not paid_fix)
         or _said(flow, "hesitate_thanks", since)
         or _said(flow, "protez_confirm", since)
     ):
@@ -1491,6 +1544,8 @@ def plan_intake(
         if last_step is not None:
             pending = last_step
 
+    if paid_fix:
+        pending = "book_ok"
     if pending in ("ask_help", "ask_issue"):
         # The answer to "Sizga qanday yordam bera olamiz?" is read as a first
         # message: a complaint, a question, a wish -- the greeting is done.
@@ -2291,6 +2346,15 @@ def plan_intake(
                     others = [s for s in (slots or [])]
                     if not others:
                         return Plan(reply=texts["no_slots"])
+                    asked_day = _named_day(message, now)
+                    if asked_day is not None and not any(s.date() == asked_day for s in others):
+                        # "Yakshanba 10:00": the clinic is closed that day --
+                        # not "10:00 band" (negative run, 2026-11-19).
+                        text = texts["day_full"].format(
+                            day=_label(texts, asked_day, now),
+                            slots=_slot_words(texts, others, now),
+                        )
+                        return Plan(reply=text[:1].upper() + text[1:])
                     text = texts["slot_taken"].format(
                         time=f"{at:%H:%M}", slots=_slot_words(texts, others, now)
                     )

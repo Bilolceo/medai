@@ -510,3 +510,76 @@ def test_the_card_asked_again_after_the_booking() -> None:
     last = plans[-1]
     assert last is not None and last.reply is not None
     assert last.reply.startswith("To'lov uchun karta:") and "ertaga 09:00" in last.reply
+
+
+# --- live med.uz.ai chat and the negative run, 2026-11-19 ---------------------
+
+_BOOKED = [
+    "Assalomu alaykum",
+    "Ereksiya",
+    "1 yil",
+    "yo'q",
+    "Akbar",
+    "Xivadan",
+    "onlayn",
+    "ertaga 09:00",
+    "to'ladim",
+    "+998 94 571 99 69",
+]
+
+
+def test_a_patient_booked_this_morning_who_greets_again_starts_again() -> None:
+    replies = _replies(
+        [
+            *_BOOKED,
+            "Assalomu alaykum",
+            "Ereksiya bo'lmayapti",
+            "5 yil",
+            "yo'q",
+            "Serik",
+            "Toshkent",
+            "O'zim kelaman\nNechida kelsam bo'ladi?",
+        ]
+    )
+    assert replies[9] is not None and "yozilasiz" in replies[9]
+    assert replies[10] is not None and "Sizga qanday yordam" in replies[10]
+    assert "Men doktor" not in replies[10]
+    assert replies[11] is not None and "qachondan beri" in replies[11]
+    assert replies[13] is not None and "Ismingiz" in replies[13]
+    assert replies[14] is not None and "qayerdansiz" in replies[14].lower()
+    assert replies[16] is not None and "bo'sh vaqtlar bor" in replies[16]
+
+
+def test_a_question_after_the_booking_does_not_start_again() -> None:
+    plans = _talk([*_BOOKED, "Bu onlayn konsultatsiyami yoki borishim kerakmi?"])
+    assert plans[-1] is None
+
+
+def test_the_number_corrected_after_the_booking_is_confirmed_again() -> None:
+    plans = _talk([*_BOOKED, "+998 90 111 22 33"])
+    last = plans[-1]
+    assert last is not None and last.reply is not None
+    assert "yozilasiz" in last.reply and "CALLBACK:+998 90 111 22 33" in last.reply
+
+
+def test_an_insult_is_no_name() -> None:
+    plans = _talk(["Salom", "Ereksiya", "1 yil", "yo'q", "Ahmoq bot"])
+    last = plans[-1]
+    assert last is None or last.reply is None or "Ahmoq" not in last.reply
+
+
+def test_a_closed_day_is_said_closed_not_the_hour_taken() -> None:
+    replies = _replies(
+        [
+            "Salom",
+            "Bepushtlik",
+            "3 yil",
+            "yo'q",
+            "Dilshod",
+            "Toshkent",
+            "klinikaga kelaman",
+            "yakshanba 10:00",
+        ]
+    )
+    assert replies[-1] is not None and "band" not in replies[-1]
+    assert "bo'sh vaqt qolmagan" in replies[-1]
