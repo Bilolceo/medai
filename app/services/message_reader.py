@@ -75,7 +75,9 @@ number (e.g. "ertaga 10 da", "tushdan keyin", "16:00 da", "qachon bo'lsa ham"), 
  "age": their age as a number if given, or null,
  "question": the question they ask that needs an answer, or null,
  "asks_price": true if they ask the price or cost -- also when they ask to \
-send an operation's details ("implantni tashlab bering", "narxlarini yozing"),
+send an operation's details ("implantni tashlab bering", "narxlarini yozing"), \
+and when the message only names the service whose price the patient asked \
+in their previous message ("Шуни нархини айтинг" then "Денервация"),
  "wants_evening": true if they want the evening, after work, or an hour \
 after 16:00,
  "refuses": true if they decline (no, not now, I will write myself, I won't \

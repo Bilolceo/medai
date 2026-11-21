@@ -227,6 +227,37 @@ async def test_the_bots_own_echo_leaves_it_answering(
         assert conversation.is_bot_enabled is True
 
 
+async def test_the_bots_own_echo_after_a_restart_leaves_the_new_conversation_answering(
+    db_session: AsyncSession,
+    seed: Seed,
+    as_tenant: Callable[[uuid.UUID], AbstractContextManager[None]],
+) -> None:
+    """Live, 2026-11-21: "restart" on the dashboard a moment after the reply;
+    the reply's echo came to the new conversation and paused the bot there."""
+    from app.services.conversation import record_outbound_message
+
+    with as_tenant(seed.tenant_a.id):
+        await record_outbound_message(
+            db_session,
+            conversation_id=seed.a.conversation.id,
+            channel_type="instagram",
+            text="Ha, doktor shu bilan shug'ullanadi. Klinikaga o'zingiz kelmoqchimisiz?",
+        )
+        old = await db_session.get(Conversation, seed.a.conversation.id)
+        assert old is not None
+        old.status = "closed"
+        fresh = Conversation(tenant_id=seed.tenant_a.id, user_id=seed.a.user.id, status="open")
+        db_session.add(fresh)
+        await db_session.flush()
+        await _echo(
+            db_session,
+            seed,
+            "Ha, doktor shu bilan shug'ullanadi. Klinikaga o'zingiz kelmoqchimisiz?",
+        )
+        await db_session.refresh(fresh)
+        assert fresh.is_bot_enabled is True
+
+
 async def test_the_echoes_of_a_reply_sent_as_bubbles_and_a_card_leave_it_answering(
     db_session: AsyncSession,
     seed: Seed,

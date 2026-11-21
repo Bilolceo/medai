@@ -1020,11 +1020,17 @@ async def note_clinic_reply(
             if conversation is None:
                 return
             since = datetime.now(UTC) - timedelta(minutes=10)
+            # Every conversation of this patient, not the open one alone: the
+            # dashboard's "restart" a moment after the assistant's reply opens
+            # a new one before that reply's echo is looked at -- which was
+            # then taken for a person and paused the assistant (live, 2026-11-21).
             recent = list(
                 (
                     await session.execute(
-                        select(Message.content).where(
-                            Message.conversation_id == conversation.id,
+                        select(Message.content)
+                        .join(Conversation, Conversation.id == Message.conversation_id)
+                        .where(
+                            Conversation.user_id == user.id,
                             Message.sender != MessageSender.PATIENT,
                             Message.created_at >= since,
                         )

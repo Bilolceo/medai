@@ -653,3 +653,82 @@ def test_an_operation_only_the_model_understood_is_priced_as_that_operation() ->
     assert "330 000" in (plain.reply or "")
     assert "330 000" not in (read.reply or "") and not read.cards
     assert read.reply == named.reply
+
+
+# --- live med.uz.ai chat, 2026-11-21: prices asked mid-sequence ---
+
+_FAR_CHAT = [
+    ("user", "Ассалом алейкум"),
+    (
+        "assistant",
+        "Ва алайкум ассалом. Мен доктор Султонбекнинг администраториман, исмим Дилдора.\n\nСизга қандай ёрдам бера оламиз?",  # noqa: E501
+    ),
+    ("user", "Варик нархи"),
+    (
+        "assistant",
+        "Ҳа, доктор шу билан шуғулланади. Бу ҳолат қачондан бери бор?\n\n📎 Varikosele operatsiyasi: narx va paket",  # noqa: E501
+    ),
+    ("user", "Канака услугалариз бор озз"),
+    (
+        "assistant",
+        "Бу қабулда уролог-андролог масалалари кўрилади.\n\nОлдин бу бўйича даволанганмисиз ёки бирор дори ичганмисиз?",  # noqa: E501
+    ),
+    ("user", "Йок"),
+    ("assistant", "Исмингиз нима, сизга қандай мурожаат қилсам бўлади?"),
+    ("user", "Сардор"),
+    ("assistant", "Сардор, қаердансиз?"),
+    ("user", "Сирдаредан"),
+    (
+        "assistant",
+        "Тушунарли. Бизда бундай операциялар қилинади, қабулда доктор ҳаммасини батафсил тушунтиради. Узоқда бўлсангиз, доктордан онлайн видео консультация сўраб бераман, келиб ўтиришингиз шарт бўлмайди. Клиникага ўзингиз келмоқчимисиз?",  # noqa: E501
+    ),
+]
+
+
+def _far_history() -> list[dict[str, str]]:
+    return [{"role": r, "content": c} for r, c in _FAR_CHAT]
+
+
+def test_the_price_asked_at_the_clinic_question_is_answered() -> None:
+    history = _far_history()
+    assert "Клиникага ўзингиз келмоқчимисиз" in history[-1]["content"]
+    plan = scripted_flow.plan(
+        FLOWS,
+        script="uz-cyrl",
+        user_message="Тез бошаниш даволаш нечпул",
+        history=history,
+        now=NOW,
+        reading=_read(asks_price=True, complaint_kind="urology"),
+    )
+    assert plan is not None and plan.reply is not None
+    # The price: its card, not the same question again.
+    assert plan.cards or "330 000" in plan.reply
+    assert plan.reply != history[-1]["content"]
+
+
+def test_an_operation_named_after_its_price_was_asked_is_priced() -> None:
+    history = _far_history()
+    plan = scripted_flow.plan(
+        FLOWS,
+        script="uz-cyrl",
+        user_message="Денервация",
+        history=history,
+        now=NOW,
+        reading=_read(asks_price=True, complaint_kind="urology", operations=["op:denervatsiya"]),
+    )
+    assert plan is not None and plan.reply is not None
+    assert plan.reply != history[-1]["content"]
+
+
+def test_an_unnamed_operation_priced_mid_sequence_asks_which() -> None:
+    history = _far_history()[:6]
+    plan = scripted_flow.plan(
+        FLOWS,
+        script="uz-cyrl",
+        user_message="Энг киммат операция нечпул",
+        history=history,
+        now=NOW,
+        reading=_read(asks_price=True, operation_unnamed=True),
+    )
+    assert plan is not None and plan.reply is not None
+    assert "Қайси бири" in plan.reply or "Qaysi biri" in plan.reply

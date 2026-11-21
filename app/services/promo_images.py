@@ -78,8 +78,14 @@ def choose(
     own_turns: Sequence[str],
     reply: str,
     hour: int | None = None,
+    reading: Any = None,
 ) -> Mapping[str, Any] | None:
     """The card to send with this reply, or None.
+
+    ``reading`` -- the model's (app.services.message_reader): when given,
+    whether the price is asked and whether it is an operation's is its word,
+    not the patterns' (live, 2026-11-21: "операция" two messages back kept
+    the consultation's card from "Тез бошаниш даволаш нечпул").
 
     ``hour`` is the clinic's local hour now: a patient wanting a visit after
     the day's hours is offered the evening one, since that is the only one
@@ -96,8 +102,13 @@ def choose(
     # daytime consultation is still there for them (live test, 2026-11-05).
     del hour
     evening_wish = bool(_EVENING.search(user_message))
+    price_asked = (
+        bool(reading.asks_price)
+        if reading is not None
+        else price_guard.asks_price(user_message, list(patient_turns))
+    )
     wants = (
-        price_guard.asks_price(user_message, list(patient_turns))
+        price_asked
         or asked_topic_last
         or (evening_wish and bool(_WANTS_VISIT.search(user_message)))
     )
@@ -107,11 +118,12 @@ def choose(
     # answers (operations_asked), never the consultation's -- whose price
     # comes once a time is agreed (the doctor, 2026-11-17).
     # The answer to "qaysi masala bo'yicha?" is the consultation's topic.
-    if (
-        not asked_topic_last
-        and any(OPERATION_NAMES.search(t) or _OPERATION_ONLY.search(t) for t in recent)
-        and not _CONSULTATION.search(user_message)
-    ):
+    operation_asked = (
+        bool(reading.operations or reading.operation_unnamed)
+        if reading is not None
+        else any(OPERATION_NAMES.search(t) or _OPERATION_ONLY.search(t) for t in recent)
+    )
+    if not asked_topic_last and operation_asked and not _CONSULTATION.search(user_message):
         return None
     if evening_wish or any(_EVENING.search(text) for text in recent):
         topic = "evening"
@@ -120,7 +132,10 @@ def choose(
         topic = "evening"
     elif any(_UROLOGY.search(text) for text in everything) or _POINTS_AT_PICTURE.search(reply):
         topic = "day"
-    elif asked_topic_last and price_guard.asks_price(user_message, list(patient_turns)):
+    elif reading is not None and reading.asks_price and reading.complaint_kind != "none":
+        # The model read a urological matter priced: the doctor's own card.
+        topic = "day"
+    elif asked_topic_last and price_asked:
         # Asked which matter, and answered with the price question again: the
         # doctor is a urologist-andrologist, so his ordinary card it is.
         topic = "day"

@@ -1278,6 +1278,9 @@ def plan_intake(
         # ("Имплант куйиш не и пул" -- golden set, 2026-11-21).
         and bool(
             reader_ops
+            # "Шуни нарзини этвлринг": no pattern knows the typo; only a bare
+            # name after a card is held back (image replay, 2026-11-11).
+            or (reading is not None and not u.name and len(message.split()) > 1)
             or _ASKS_PRICE.search(message)
             or PRICE_WORD.search(message)
             or _is_question(message)
@@ -1329,7 +1332,11 @@ def plan_intake(
     operation_price = asks_price and bool(
         _OPERATION_SAID.search(message)
         or named_now
-        or (not _CONSULTATION_WORD.search(message) and named_before())
+        # The model read the message with the turns before it: no operation
+        # from it is none -- "Тез бошаниш даволаш нечпул" after "Варик нархи"
+        # is not the varicocele's price (live, 2026-11-21). The patterns alone
+        # still take the one named before.
+        or (reading is None and not _CONSULTATION_WORD.search(message) and named_before())
     )
 
     def operation_price_lines() -> list[str]:
@@ -1873,6 +1880,17 @@ def plan_intake(
             return None
         return Plan(reply=texts["protez_phone"])
 
+    if (
+        pending is not None
+        and general_operation
+        and u.asks_price
+        and "op_which" in texts
+        and reading is not None
+        and reading.operation_unnamed
+    ):
+        # "Энг киммат операция нечпул" mid-sequence: which operation -- not
+        # "the price is in the picture" with no picture (live, 2026-11-21).
+        return Plan(reply=str(texts["op_which"]))
     if only_operation_price and pending is None:
         # Which operation is the complaint itself: named, it starts the
         # sequence (the name comes after it, the doctor, 2026-11-17).
@@ -2156,6 +2174,10 @@ def plan_intake(
         pending == "online_choice"
         and named_complaint(message)
         and not question
+        # "Тез бошаниш даволаш нечпул" after the offer: the price is asked,
+        # answered below -- not taken for the complaint alone (live, 2026-11-21).
+        and not asks_price
+        and not operation_price
         and not _WANTS_VISIT.search(message)
         and not _WANTS_ONLINE.search(message)
         and parse_time(message) is None
@@ -2396,7 +2418,9 @@ def plan_intake(
             )
 
     no_number = phone_check.read(message) is None
-    if pending == "online_choice" and not question and no_number:
+    # The price asked at the choice is answered below, with the choice again
+    # (live, 2026-11-21: "Тез бошаниш даволаш нечпул" got the question alone).
+    if pending == "online_choice" and not question and no_number and not asks_price:
         if _WANTS_CALL.search(message):
             return Plan(reply=texts["ask_phone"])
         if far_last and away(message):
@@ -2473,11 +2497,22 @@ def plan_intake(
     # The operation itself asked about before -- not a card that came with a
     # complaint (2026-11-09: "Narhi qancha" after "ereksiya" got the prosthesis).
     operation_asked = operation_talked()
-    if asks_price and op_cards and operation_asked and not _CONSULTATION_WORD.search(message):
+    # The model read which operation this price is for, in context: that
+    # one, or none at all -- never every card sent so far (live, 2026-11-21:
+    # "Денервация" got the prosthesis and the varicocele prices).
+    by_reader = reading is not None
+    if (
+        asks_price
+        and (reader_ops if by_reader else (op_cards and operation_asked))
+        and not _CONSULTATION_WORD.search(message)
+    ):
         # "1- komponentli protez narxi?" again: the operation's price, in words.
-        titles = [t for t in op_cards if t in op_prices]
+        if by_reader:
+            titles = [t for t, e in op_prices.items() if e.get("topic") in reader_ops]
+        else:
+            titles = [t for t in op_cards if t in op_prices]
         patient_all = [t["content"] for t in turns if t.get("role") == "user"] + [message]
-        for turn in reversed(patient_all):
+        for turn in [] if by_reader else reversed(patient_all):
             # The operation talked about last, not every card sent (2026-11-09).
             latest = [
                 t for t in titles if promo_images.talks_about(op_prices[t].get("topic", ""), turn)
