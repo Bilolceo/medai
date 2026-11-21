@@ -30,7 +30,10 @@ from app.core.faq_seeding import resolve_faq_tenant_id  # noqa: E402
 from app.core.tenant_context import reset_current_tenant, set_current_tenant  # noqa: E402
 from app.rag.embeddings import EMBEDDING_DIMENSIONS, EmbeddingProvider  # noqa: E402
 from app.rag.llm import ChatMessage, LLMProvider  # noqa: E402
-from app.services import answer, message_reader, promo_images  # noqa: E402
+from app.services import agent, answer, message_reader, promo_images  # noqa: E402
+
+if "--agent" in sys.argv:  # AGENT_ON: the clinic as if its settings named the profile
+    agent.profile_of = lambda settings: "sultonbek"  # type: ignore[assignment]
 
 HERE = Path(__file__).resolve().parent / "golden"
 OPS = set(message_reader.OPERATIONS)
@@ -170,7 +173,7 @@ async def run(mode: str, only: set[str], save: bool) -> None:
                     )
                     reading = readings.get("last")
                 bad = []
-                if mode in ("reader", "full"):
+                if mode == "reader" or (mode == "full" and "--agent" not in sys.argv):
                     bad += score_reading(reading, case["expect"])
                 cards = _cards(reply or "", topics)
                 if mode in ("patterns", "full"):

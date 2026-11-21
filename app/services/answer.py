@@ -22,13 +22,20 @@ from app.core.config import Settings, get_settings
 from app.core.tenant_context import get_current_tenant
 from app.models.tenant import Tenant
 from app.rag.embeddings import EmbeddingProvider
-from app.rag.llm import ChatMessage, LLMProvider, get_llm_provider, get_reader_llm_provider
+from app.rag.llm import (
+    ChatMessage,
+    LLMProvider,
+    get_agent_llm_provider,
+    get_llm_provider,
+    get_reader_llm_provider,
+)
 from app.rag.retrieval import retrieve_knowledge
 from app.repositories.appointment import AppointmentRepository
 from app.repositories.doctor import DoctorRepository
 from app.repositories.knowledge_base import KnowledgeBaseMatch
 from app.repositories.knowledge_document import ChunkMatch
 from app.services import (
+    agent,
     booking_offer,
     bubbles,
     medical_safety,
@@ -378,6 +385,41 @@ async def generate_answer(
     tenant_id = get_current_tenant()
     tenant = await session.get(Tenant, tenant_id)
 
+    # A clinic with an agent profile: the model writes the reply from the
+    # doctor's rules and services (app.services.agent) -- no scripted flow.
+    agent_settings = tenant.settings if tenant is not None else {}
+    profile = agent.profile_of(agent_settings)
+    if profile is not None:
+        now_local = datetime.now(UTC).astimezone(CLINIC_TIMEZONE)
+        images = agent_settings.get("promo_images") or []
+        decided = await agent.decide(
+            llm_provider or get_agent_llm_provider(),
+            profile=profile,
+            user_message=user_message,
+            history=history,
+            now_local=now_local,
+            slots=await _online_slots(session, now_local),
+            images=images,
+            script=conversation_script(history, user_message),
+        )
+        if decided is not None:
+            reply = agent.render(
+                decided,
+                images=images,
+                clinic_phone_numbers=str(
+                    agent_settings.get("clinic_phone_numbers")
+                    or resolved_settings.clinic_phone_numbers
+                    or ""
+                ),
+                patient_texts=[
+                    *(str(t["content"]) for t in history or [] if t.get("role") == "user"),
+                    user_message,
+                ],
+            )
+            logger.info("agent_reply", extra={"reply": reply[:300], "cards": decided.cards})
+            return reply
+        logger.warning("agent_no_answer")
+
     knowledge = await retrieve_knowledge(
         session, user_message, embedding_provider=embedding_provider
     )
@@ -484,6 +526,7 @@ async def generate_answer(
                 own_turns=[t["content"] for t in history or [] if t.get("role") == "assistant"],
                 reply="rasmda",
                 hour=now_local.hour,
+                reading=reading,
             )
             if card is not None:
                 reply = promo_images.attach_scripted(reply, card, script)
@@ -594,6 +637,7 @@ async def generate_answer(
             own_turns=own_turns,
             reply=reply,
             hour=datetime.now(UTC).astimezone(CLINIC_TIMEZONE).hour,
+            reading=reading,
         )
     )
     if card is not None:

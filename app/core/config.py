@@ -257,6 +257,9 @@ class Settings(BaseSettings):
     # can move the model under a deployment with no change on our side, which
     # makes yesterday's behaviour impossible to reproduce.
     openai_model: str = Field(default="gpt-5-mini", alias="OPENAI_MODEL")
+    # The agent's own model (app.services.agent), when it should differ from
+    # OPENAI_MODEL -- the reply is the whole of the agent's work.
+    agent_model: str | None = Field(default=None, alias="AGENT_MODEL")
     # How long a reasoning model thinks before it answers. A patient in a chat
     # waits for every second of it: on gpt-5-mini the default took 7-12 s per
     # reply and "minimal" about 2 s for the same prompt. Ignored by models

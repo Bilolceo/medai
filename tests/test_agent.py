@@ -1,0 +1,166 @@
+"""The agent (app.services.agent): the model's answer, and the guards around it."""
+
+import json
+from datetime import datetime
+from typing import Any
+
+from app.rag.llm import ChatMessage, LLMProvider
+from app.services import agent, callbacks, handoff, promo_images
+from app.services.appointment import CLINIC_TIMEZONE
+
+NOW = datetime(2026, 11, 21, 14, 0, tzinfo=CLINIC_TIMEZONE)
+SLOTS = [datetime(2026, 11, 23, h, 0, tzinfo=CLINIC_TIMEZONE) for h in (9, 10, 11)]
+IMAGES = [
+    {"topic": "day", "url": "https://x/day.jpg", "title": "Kunduzgi konsultatsiya: narx va tartib"},
+    {"topic": "op:falloprotez", "url": "https://x/fp.jpg", "title": "Falloprotez: narx va paket"},
+    {
+        "topic": "op:denervatsiya",
+        "url": "https://x/dn.jpg",
+        "title": "Selektiv denervatsiya: narx va paket",
+    },
+]
+
+
+class Scripted(LLMProvider):
+    """Answers in turn; records what it was asked."""
+
+    def __init__(self, *answers: dict[str, Any] | str) -> None:
+        self.answers = list(answers)
+        self.systems: list[str] = []
+        self.seen: list[list[ChatMessage]] = []
+
+    async def generate(self, system_prompt: str, messages: list[ChatMessage]) -> str:
+        self.systems.append(system_prompt)
+        self.seen.append(messages)
+        answer = self.answers.pop(0)
+        return answer if isinstance(answer, str) else json.dumps(answer, ensure_ascii=False)
+
+
+async def _decide(provider: LLMProvider, message: str, history: list[Any] | None = None) -> Any:
+    return await agent.decide(
+        provider,
+        profile="sultonbek",
+        user_message=message,
+        history=history,
+        now_local=NOW,
+        slots=SLOTS,
+        images=IMAGES,
+        script="uz-latn",
+    )
+
+
+def test_the_profile_is_named_by_the_settings_and_must_exist() -> None:
+    assert agent.profile_of({"agent_profile": "sultonbek"}) == "sultonbek"
+    assert agent.profile_of({"agent_profile": "../etc"}) is None
+    assert agent.profile_of({"agent_profile": "nobody"}) is None
+    assert agent.profile_of({}) is None
+
+
+def test_the_prompt_carries_the_rules_services_book_and_script() -> None:
+    prompt = agent.system_prompt("sultonbek", now_local=NOW, slots=SLOTS, cards_sent=["day"])
+    assert "Qachondan beri" in prompt or "qachondan beri" in prompt
+    assert "30 000 000 so'm" in prompt
+    assert "Today is full" in prompt and "09:00" in prompt
+    assert "CARDS SENT in this conversation\nday" in prompt
+
+
+def test_each_card_knows_its_own_price() -> None:
+    prices = agent.card_prices("sultonbek")
+    assert prices[30_000_000] == "op:falloprotez"
+    assert prices[330_000] == "day"
+    assert prices[9_000_000] == "op:denervatsiya"
+
+
+async def test_an_operation_price_said_brings_its_card_even_if_forgotten() -> None:
+    model = Scripted(
+        {"messages": ["Falloprotez narxi 30 000 000 so'm."], "cards": [], "lead": None}
+    )
+    answer = await _decide(model, "inplant narxi qancha")
+    assert answer is not None and answer.cards == ["op:falloprotez"]
+    assert "THE PATIENT WRITES IN: Uzbek in LATIN" in model.systems[0]
+
+
+async def test_a_made_up_sum_is_corrected_once() -> None:
+    model = Scripted(
+        {"messages": ["Narxi 25 000 000 so'm."], "cards": []},
+        {"messages": ["Falloprotez narxi 30 000 000 so'm."], "cards": ["op:falloprotez"]},
+    )
+    answer = await _decide(model, "protez narxi")
+    assert answer is not None and answer.messages == ["Falloprotez narxi 30 000 000 so'm."]
+    assert "25 000 000" in str(model.seen[1][-1]["content"])
+
+
+async def test_a_sum_in_words_is_corrected_too() -> None:
+    model = Scripted(
+        {"messages": ["Narxi o'ttiz million so'm."]},
+        {"messages": ["Narxi 30 000 000 so'm."]},
+    )
+    answer = await _decide(model, "protez narxi")
+    assert answer is not None and answer.messages == ["Narxi 30 000 000 so'm."]
+
+
+async def test_a_sum_still_wrong_after_the_correction_is_not_sent() -> None:
+    model = Scripted(
+        {"messages": ["Narxi 25 000 000 so'm.", "Qachondan beri bor?"]},
+        {"messages": ["Narxi 26 000 000 so'm.", "Qachondan beri bor?"]},
+    )
+    answer = await _decide(model, "protez narxi")
+    assert answer is not None and answer.messages == ["Qachondan beri bor?"]
+
+
+async def test_a_card_already_sent_or_unknown_is_dropped() -> None:
+    history = [
+        {"role": "user", "content": "konsultatsiya narxi"},
+        {
+            "role": "assistant",
+            "content": "Narxi rasmda.\n\n📎 Kunduzgi konsultatsiya: narx va tartib",
+        },
+    ]
+    model = Scripted({"messages": ["Yana bir bor."], "cards": ["day", "op:heart"]})
+    answer = await _decide(model, "qancha edi", history)
+    assert answer is not None and answer.cards == []
+    assert "CARDS SENT in this conversation\nday" in model.systems[0]
+
+
+async def test_not_json_is_asked_again_then_given_up() -> None:
+    assert await _decide(Scripted("salom", "hali ham matn"), "salom") is None
+    answer = await _decide(Scripted("salom", {"messages": ["Va alaykum assalom."]}), "salom")
+    assert answer is not None and answer.messages == ["Va alaykum assalom."]
+
+
+def test_the_reply_carries_bubbles_cards_and_the_lead() -> None:
+    answer = agent.Answer(
+        messages=["Rahmat, Aziz.", "Chek tekshirilgach yozilasiz."],
+        cards=["op:falloprotez"],
+        lead={
+            "phone": "+998 90 123 45 67",
+            "note": "ONLAYN dushanba 09:00",
+            "when": "dushanba 09:00",
+        },
+    )
+    reply = agent.render(
+        answer,
+        images=IMAGES,
+        clinic_phone_numbers="+998 77 690 60 06",
+        patient_texts=["+998 90 123 45 67"],
+    )
+    text, lead = callbacks.extract(reply)
+    text, flagged = handoff.extract(text)
+    assert lead is not None and lead.phone == "+998901234567" and lead.when == "dushanba 09:00"
+    assert not flagged
+    assert "|||" in text
+    assert [m.group("title") for m in promo_images.MARKER.finditer(text)] == [
+        "Falloprotez: narx va paket"
+    ]
+
+
+def test_the_patients_own_number_is_said_back_and_a_stranger_is_not() -> None:
+    answer = agent.Answer(messages=["+998 93 555 44 33 ga qo'ng'iroq qilamiz. +998 90 000 00 01"])
+    reply = agent.render(
+        answer,
+        images=IMAGES,
+        clinic_phone_numbers="+998 77 690 60 06",
+        patient_texts=["raqamim +998 93 555 44 33"],
+    )
+    assert "+998 93 555 44 33" in reply
+    assert "+998 90 000 00 01" not in reply

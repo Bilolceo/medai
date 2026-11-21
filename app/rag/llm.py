@@ -66,6 +66,26 @@ class OpenAILLMProvider(LLMProvider):
             raise ValueError("OpenAI chat completion returned no text content")
         return content
 
+    async def generate_json(self, system_prompt: str, messages: list[ChatMessage]) -> str:
+        """The same, held to a JSON object (app.services.agent reads it)."""
+        payload = cast(
+            "list[ChatCompletionMessageParam]",
+            [{"role": "system", "content": system_prompt}, *messages],
+        )
+        extra: dict[str, Any] = {}
+        if self._reasoning_effort and self._model.startswith(("gpt-5", "o1", "o3", "o4")):
+            extra["reasoning_effort"] = self._reasoning_effort
+        response = await self._client.chat.completions.create(
+            model=self._model,
+            messages=payload,
+            response_format={"type": "json_object"},
+            **extra,
+        )
+        content: str | None = response.choices[0].message.content
+        if content is None:
+            raise ValueError("OpenAI chat completion returned no text content")
+        return content
+
 
 # Hugging Face's Inference Providers router, which speaks the OpenAI chat
 # completions API. Reached through AsyncOpenAI with the base URL swapped
@@ -118,6 +138,15 @@ def _select_llm_provider(settings: Settings) -> LLMProvider:
 @lru_cache
 def get_llm_provider() -> LLMProvider:
     return _select_llm_provider(get_settings())
+
+
+@lru_cache
+def get_agent_llm_provider() -> LLMProvider:
+    """For the agent (app.services.agent): AGENT_MODEL if set."""
+    settings = get_settings()
+    if settings.agent_model:
+        settings = settings.model_copy(update={"openai_model": settings.agent_model})
+    return _select_llm_provider(settings)
 
 
 @lru_cache
