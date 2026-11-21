@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Any
 
 from app.rag.llm import ChatMessage, LLMProvider
-from app.services import bubbles, phone_guard, price_guard, promo_images
+from app.services import bubbles, phone_check, phone_guard, price_guard, promo_images
 
 logger = logging.getLogger(__name__)
 
@@ -193,6 +193,67 @@ _SCRIPT_NAMES = {
 
 # "**op:falloprotez — Penile prosthesis …: 30 000 000 so'm**": which card a
 # sum belongs to, read from the services text itself.
+# Signs that cannot wait: two of them, or one of the gravest. The model is
+# told what to say; this is the net under it -- an emergency is never left to
+# a weak answer (a local model once echoed the patient's own words back).
+_ALARM = re.compile(
+    r"birdan|qattiq\s*og['‘ʻ’`]?ri|kuchli\s*og['‘ʻ’`]?ri|shishib|shishdi|qon\s*ket|siya\s*olma|"
+    r"siyolma|isitma|harorat|chidab\s*bo['‘ʻ’`]?lma|"
+    r"бирдан|қаттиқ\s*оғри|кучли\s*оғри|шишди|шишиб|қон\s*кет|сия\s*олма|иситма|ҳарорат|"
+    r"внезапн|сильн\w*\s*бол|кровотеч|не\s*могу\s*помочит|температур|опух",
+    re.IGNORECASE,
+)
+_GRAVE = re.compile(
+    r"qon\s*ket|siya\s*olma|siyolma|қон\s*кет|сия\s*олма|кровотеч|не\s*могу\s*помочит",
+    re.IGNORECASE,
+)
+_EMERGENCY_SAID = re.compile(
+    r"kechiktirib\s+bo['‘ʻ’`]?lmaydigan|кечиктириб\s+бўлмайдиган|откладывать|неотложн|bugunoq|бугуноқ",
+    re.IGNORECASE,
+)
+
+
+# "Pulimni qaytaring", "aldadinglar", "верните деньги": a complaint about the
+# clinic -- a person takes it, whatever the model thought.
+_COMPLAINT_ABOUT_US = re.compile(
+    r"pul\w*\s+qaytar|aldad|aldov|firibgar|shikoyat\s+qil(aman|amiz)|sudga|"
+    r"пул\w*\s+қайтар|пул\w*\s+кайтар|алдад|фирибгар|"
+    r"верните\s+деньг|обман|мошенни|жалоб|в\s+суд",
+    re.IGNORECASE,
+)
+
+
+def is_emergency(message: str) -> bool:
+    alarms = {m.group(0).lower() for m in _ALARM.finditer(message)}
+    return bool(_GRAVE.search(message)) or len(alarms) >= 2
+
+
+@lru_cache
+def emergency_lines(profile: str) -> dict[str, str]:
+    path = PROFILES / profile / "emergency.json"
+    return json.loads(path.read_text()) if path.is_file() else {}
+
+
+def _same(a: str, b: str) -> bool:
+    return re.sub(r"\W+", " ", a).strip().lower() == re.sub(r"\W+", " ", b).strip().lower()
+
+
+def _repeats(answer: "Answer", own: Sequence[str]) -> bool:
+    """The whole reply word for word the bot's last one: stuck in a loop."""
+    if not own:
+        return False
+    last = promo_images.MARKER.sub("", own[-1]).split("📎")[0]
+    return _same(" ".join(answer.messages), last)
+
+
+def _echoes(answer: "Answer", message: str) -> bool:
+    """A message that only repeats the patient's own words back."""
+    said = re.sub(r"\W+", " ", message).strip().lower()
+    return len(said) > 8 and any(
+        re.sub(r"\W+", " ", m).strip().lower() == said for m in answer.messages
+    )
+
+
 @lru_cache
 def card_prices(profile: str) -> dict[int, str]:
     """Each card's own price as a number -> the card: the first sum of each
@@ -238,6 +299,20 @@ async def decide(
     ]
     raw = await _ask(provider, system, conversation)
     answer = parse(raw)
+    if answer is not None and (_echoes(answer, user_message) or _repeats(answer, own)):
+        logger.warning("agent_echoed_or_repeated")
+        raw = await _ask(
+            provider,
+            system
+            + "\n\nYour draft repeated the patient's words or your own last reply word for word."
+            " Answer what the patient just wrote and move the conversation forward.",
+            conversation,
+        )
+        answer = parse(raw)
+        if answer is not None and (_echoes(answer, user_message) or _repeats(answer, own)):
+            # Stuck twice: not sent -- the caller answers this one another way.
+            logger.warning("agent_stuck")
+            return None
     if answer is None:
         logger.warning("agent_unparsed", extra={"raw": raw[:300]})
         raw = await _ask(provider, system + "\n\nAnswer with the JSON object only.", conversation)
@@ -278,6 +353,31 @@ async def decide(
         card = priced.get(int(value))
         if card is not None and card not in answer.cards:
             answer.cards.append(card)
+    if is_emergency(user_message) and not any(_EMERGENCY_SAID.search(m) for m in answer.messages):
+        line = emergency_lines(profile).get(script or "uz-latn") or emergency_lines(profile).get(
+            "uz-latn"
+        )
+        if line:
+            logger.warning("agent_emergency_net")
+            answer.messages = [line]
+            answer.cards = []
+            answer.handoff = True
+    # An operation's card goes with a price: asked by the patient, or said in
+    # the reply. "Varikotsele operatsiyasini qilasizlarmi?" gets no card.
+    patient = [str(t["content"]) for t in history or [] if t.get("role") == "user"]
+    price_asked = price_guard.asks_price(user_message, patient[-1:]) or bool(
+        price_guard.amounts(" ".join(answer.messages))
+    )
+    if not price_asked:
+        answer.cards = [c for c in answer.cards if not c.startswith("op:")]
+    # A lead only with a whole number: "+998 90 12" is asked again, not sent on.
+    if answer.lead is not None:
+        number = phone_check.read(answer.lead.get("phone", ""))
+        if number is None or number.kind not in (phone_check.UZ, phone_check.FOREIGN):
+            logger.warning("agent_lead_bad_number")
+            answer.lead = None
+    if _COMPLAINT_ABOUT_US.search(user_message):
+        answer.handoff = True
     known = {str(i.get("topic")) for i in images}
     answer.cards = [c for c in dict.fromkeys(answer.cards) if c in known and c not in cards_sent][
         :2

@@ -35,6 +35,9 @@ from app.services import agent, answer, message_reader, promo_images  # noqa: E4
 if "--agent" in sys.argv:  # AGENT_ON: the clinic as if its settings named the profile
     agent.profile_of = lambda settings: "sultonbek"  # type: ignore[assignment]
 
+from evals.local_llm import install  # noqa: E402
+
+LOCAL = install()
 HERE = Path(__file__).resolve().parent / "golden"
 OPS = set(message_reader.OPERATIONS)
 
@@ -167,7 +170,7 @@ async def run(mode: str, only: set[str], save: bool) -> None:
                     reply = await answer.generate_answer(
                         session,
                         case["message"],
-                        embedding_provider=NoEmbed() if mode == "patterns" else None,
+                        embedding_provider=NoEmbed() if mode == "patterns" or LOCAL else None,
                         llm_provider=NoModel() if mode == "patterns" else None,
                         history=history,
                     )

@@ -392,16 +392,22 @@ async def generate_answer(
     if profile is not None:
         now_local = datetime.now(UTC).astimezone(CLINIC_TIMEZONE)
         images = agent_settings.get("promo_images") or []
-        decided = await agent.decide(
-            llm_provider or get_agent_llm_provider(),
-            profile=profile,
-            user_message=user_message,
-            history=history,
-            now_local=now_local,
-            slots=await _online_slots(session, now_local),
-            images=images,
-            script=conversation_script(history, user_message),
-        )
+        try:
+            decided = await agent.decide(
+                llm_provider or get_agent_llm_provider(),
+                profile=profile,
+                user_message=user_message,
+                history=history,
+                now_local=now_local,
+                slots=await _online_slots(session, now_local),
+                images=images,
+                script=conversation_script(history, user_message),
+            )
+        except Exception:  # noqa: BLE001 - the patient still gets an answer
+            # OpenAI down, out of credit, a timeout: the scripted flow answers
+            # this one, and the log says so.
+            logger.exception("agent_failed")
+            decided = None
         if decided is not None:
             reply = agent.render(
                 decided,

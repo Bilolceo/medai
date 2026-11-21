@@ -164,3 +164,80 @@ def test_the_patients_own_number_is_said_back_and_a_stranger_is_not() -> None:
     )
     assert "+998 93 555 44 33" in reply
     assert "+998 90 000 00 01" not in reply
+
+
+async def test_an_emergency_the_model_missed_gets_the_doctors_line() -> None:
+    model = Scripted(
+        {"messages": ["Moyagim birdan qattiq og'rib shishib ketdi"]},
+        {"messages": ["Qachondan beri?"]},
+    )
+    answer = await _decide(model, "Moyagim birdan qattiq og'rib shishib ketdi, isitmam bor")
+    assert answer is not None and answer.handoff
+    assert answer.messages[0].startswith("Bu kechiktirib bo'lmaydigan holat")
+
+
+async def test_an_emergency_answered_well_is_left_alone() -> None:
+    line = "Bu kechiktirib bo'lmaydigan holat, bugunoq keling. Qayerdasiz?"
+    answer = await _decide(
+        Scripted({"messages": [line]}), "Siya olmayapman, qorin qattiq og'riyapti"
+    )
+    assert answer is not None and answer.messages == [line]
+
+
+def test_one_sign_is_no_emergency() -> None:
+    assert not agent.is_emergency("Birdan boshlandi")
+    assert agent.is_emergency("qon ketyapti")
+    assert agent.is_emergency("shishib ketdi, isitma bor")
+
+
+async def test_an_echo_of_the_patient_is_asked_again() -> None:
+    model = Scripted({"messages": ["Inplant narxi qancha"]}, {"messages": ["30 000 000 so'm."]})
+    answer = await _decide(model, "Inplant narxi qancha")
+    assert answer is not None and answer.messages == ["30 000 000 so'm."]
+
+
+async def test_the_same_reply_twice_is_asked_again() -> None:
+    history = [
+        {"role": "user", "content": "Ereksiya muammosi bor"},
+        {"role": "assistant", "content": "Bu holat qachondan beri bor?"},
+    ]
+    model = Scripted(
+        {"messages": ["Bu holat qachondan beri bor?"]}, {"messages": ["Davolanganmisiz?"]}
+    )
+    answer = await _decide(model, "2 yil", history)
+    assert answer is not None and answer.messages == ["Davolanganmisiz?"]
+
+
+async def test_an_operation_card_needs_a_price_asked_or_said() -> None:
+    model = Scripted({"messages": ["Ha, qilinadi."], "cards": ["op:denervatsiya"]})
+    answer = await _decide(model, "Tez bo'shanishga operatsiya qilasizlarmi?")
+    assert answer is not None and answer.cards == []
+    model = Scripted({"messages": ["Narxi rasmda."], "cards": ["op:denervatsiya"]})
+    answer = await _decide(model, "denervatsiya narxi qancha")
+    assert answer is not None and answer.cards == ["op:denervatsiya"]
+
+
+async def test_a_lead_with_half_a_number_is_not_sent() -> None:
+    model = Scripted(
+        {"messages": ["Raqam to'liq emas."], "lead": {"phone": "+998 90 12", "note": "x"}}
+    )
+    answer = await _decide(model, "+998 90 12")
+    assert answer is not None and answer.lead is None
+
+
+async def test_a_complaint_about_the_clinic_goes_to_a_person() -> None:
+    model = Scripted({"messages": ["Tushunarli, tekshiramiz."]})
+    answer = await _decide(model, "Pulimni qaytaring, aldadinglar!")
+    assert answer is not None and answer.handoff
+
+
+async def test_stuck_twice_on_the_same_reply_gives_up() -> None:
+    history = [
+        {"role": "user", "content": "Varikotsele bor"},
+        {"role": "assistant", "content": "Bu holat qachondan beri bor?"},
+    ]
+    model = Scripted(
+        {"messages": ["Bu holat qachondan beri bor?"]},
+        {"messages": ["Bu holat qachondan beri bor?"]},
+    )
+    assert await _decide(model, "1 yil", history) is None
