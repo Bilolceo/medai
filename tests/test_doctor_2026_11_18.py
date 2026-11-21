@@ -4,6 +4,7 @@ dori?" -- to draw the patient in; then the name, the place, "tushunarli,
 bunday holatlar davolanadi", the times; the price once a time is chosen, half
 now and the rest on the day; an operation's price only when it is asked."""
 
+import json
 from datetime import datetime, time
 from typing import Any
 
@@ -586,3 +587,69 @@ def test_a_closed_day_is_said_closed_not_the_hour_taken() -> None:
     )
     assert replies[-1] is not None and "band" not in replies[-1]
     assert "bo'sh vaqt qolmagan" in replies[-1]
+
+
+# --- the operation the model read, however spelt (the owner, 2026-11-21) ---
+
+
+def _read(**fields: Any) -> Any:
+    from app.services import message_reader
+
+    return message_reader.parse(json.dumps(fields))
+
+
+def test_the_reader_keeps_only_the_doctors_operations() -> None:
+    reading = _read(operations=["op:falloprotez", "op:heart", 5, "op:falloprotez"])
+    assert reading is not None and reading.operations == ("op:falloprotez",)
+    assert _read(operations="op:falloprotez").operations == ()
+
+
+def test_an_operation_only_the_model_understood_brings_its_card() -> None:
+    # No pattern knows these words; the model said which operation.
+    message = "jinsiy a'zoga moslama qo'ydirish necha pul turadi"
+    assert _cards(message) == []
+    found = promo_images.operations_asked(
+        CARDS, user_message=message, own_turns=[], named_now=["op:falloprotez"]
+    )
+    assert [c["topic"] for c in found] == ["op:falloprotez"]
+
+
+def test_an_operation_only_the_model_understood_is_priced_as_that_operation() -> None:
+    flows = build_settings(
+        "urolog-intake",
+        {**FACTS, "PROMO_OP_FALLOPROTEZ_URL": "u", "OP_PRICE_FALLOPROTEZ": "25 000 000 so'm"},
+    )["scripted_flows"]
+    history = [
+        {"role": "user", "content": "assalomu alekum"},
+        {"role": "assistant", "content": "Va alaykum assalom. Sizga qanday yordam bera olamiz?"},
+    ]
+    message = "moslama qo'ydirish necha pul turadi?"
+    plain = scripted_flow.plan(
+        flows,
+        script="uz-latn",
+        user_message=message,
+        history=history,
+        now=NOW,
+        reading=_read(asks_price=True, complaint_kind="urology"),
+    )
+    read = scripted_flow.plan(
+        flows,
+        script="uz-latn",
+        user_message=message,
+        history=history,
+        now=NOW,
+        reading=_read(asks_price=True, complaint_kind="urology", operations=["op:falloprotez"]),
+    )
+    named = scripted_flow.plan(
+        flows,
+        script="uz-latn",
+        user_message="Falloprotez narxi qancha?",
+        history=history,
+        now=NOW,
+        reading=_read(asks_price=True, complaint_kind="urology"),
+    )
+    assert plain is not None and read is not None and named is not None
+    # Without the model's word: the consultation price. With it: as if named.
+    assert "330 000" in (plain.reply or "")
+    assert "330 000" not in (read.reply or "") and not read.cards
+    assert read.reply == named.reply

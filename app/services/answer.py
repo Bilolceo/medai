@@ -487,7 +487,7 @@ async def generate_answer(
             )
             if card is not None:
                 reply = promo_images.attach_scripted(reply, card, script)
-        reply = _with_operation_cards(reply, stored, user_message, history, script)
+        reply = _with_operation_cards(reply, stored, user_message, history, script, reading=reading)
         logger.info("scripted_flow_reply", extra={"reply": reply[:200]})
         return reply
     if scripted is not None and scripted.instruction:
@@ -602,7 +602,12 @@ async def generate_answer(
             else promo_images.attach(reply, card, script, own_turns)
         )
     return _with_operation_cards(
-        reply, tenant.settings if tenant is not None else {}, user_message, history, script
+        reply,
+        tenant.settings if tenant is not None else {},
+        user_message,
+        history,
+        script,
+        reading=reading,
     )
 
 
@@ -612,6 +617,8 @@ def _with_operation_cards(
     user_message: str,
     history: Sequence[ChatMessage] | None,
     script: str,
+    *,
+    reading: Any = None,
 ) -> str:
     """The operation package cards the patient asked for by name, under the
     reply (app.services.promo_images.operations_asked) -- or, when the patient
@@ -630,6 +637,7 @@ def _with_operation_cards(
         own_turns=own,
         patient_turns=patient,
         reply=reply,
+        named_now=reading.operations if reading is not None else (),
     )
     if not cards:
         return reply

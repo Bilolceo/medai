@@ -477,6 +477,7 @@ def operations_asked(
     own_turns: Sequence[str],
     patient_turns: Sequence[str] = (),
     reply: str = "",
+    named_now: Sequence[str] = (),
 ) -> list[Mapping[str, Any]]:
     """The operation cards this message asks for, not sent before -- by name,
     or all of them for "operatsiya narxlari qancha?" naming none. "Rasm qani?"
@@ -484,13 +485,25 @@ def operations_asked(
     the picture, sends the ones named so far (all of them, none named)."""
     general = bool(_OPERATION_ONLY.search(user_message)) and bool(PRICE_WORD.search(user_message))
     talked = [*patient_turns, user_message]
+    # ``named_now``: the operations the model read in this message, however
+    # spelt ("inplant" -- the owner, 2026-11-21); the patterns still count too.
 
-    operations_talked = any(
-        _OPERATION_ONLY.search(t)
-        or OPERATION_NAMES.search(t)
-        or any(c.search(t) for c in COMPLAINT_CARDS.values())
-        for t in talked
-    ) or any(_SAYS_PICTURE.search(t) for t in own_turns)
+    def names(topic: str, text: str) -> bool:
+        rule = OPERATIONS.get(topic)
+        return (rule is not None and bool(rule[0].search(text))) or (
+            text is user_message and topic in named_now
+        )
+
+    operations_talked = (
+        bool(named_now)
+        or any(
+            _OPERATION_ONLY.search(t)
+            or OPERATION_NAMES.search(t)
+            or any(c.search(t) for c in COMPLAINT_CARDS.values())
+            for t in talked
+        )
+        or any(_SAYS_PICTURE.search(t) for t in own_turns)
+    )
     if (_ASKS_PICTURE.search(user_message) and operations_talked) or _SAYS_PICTURE.search(reply):
         earlier = [
             image
@@ -514,12 +527,7 @@ def operations_asked(
             return earlier or pool
         if unsent or not general or earlier:
             return unsent
-    named = [
-        image
-        for image in images or []
-        if (rule := OPERATIONS.get(str(image.get("topic", "")))) is not None
-        and rule[0].search(user_message)
-    ]
+    named = [image for image in images or [] if names(str(image.get("topic", "")), user_message)]
     if (
         PRICE_WORD.search(user_message)
         and not named
@@ -587,7 +595,9 @@ def operations_asked(
                 found.append(image)
             continue
         pattern, needs_word = rule
-        if not (complaint is not None and complaint.search(user_message)):
+        if topic in named_now:
+            pass
+        elif not (complaint is not None and complaint.search(user_message)):
             if not pattern.search(user_message) and not (general and not named):
                 continue
             if needs_word and not _OPERATION_WORD.search(user_message):

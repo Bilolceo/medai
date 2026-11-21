@@ -1247,8 +1247,12 @@ def plan_intake(
         complaint = ""
     reason = " ".join(complaint.split()[:12]) or texts["default_reason"]
     question = u.question
+    # The operations the model read in the message, however it was spelt
+    # ("inplant narxini qancha?" -- the owner, 2026-11-21).
+    reader_ops = list(reading.operations) if reading is not None else []
     general_operation = bool(
-        _OPERATION_SAID.search(message)
+        not reader_ops
+        and _OPERATION_SAID.search(message)
         and not promo_images.OPERATION_NAMES.search(message)
         and not any(c.search(message) for c in promo_images.COMPLAINT_CARDS.values())
         # "Operatsiya qancha?" after "varikotsele": that operation, not "which
@@ -1292,7 +1296,7 @@ def plan_intake(
     def operation_talked() -> bool:
         """The operation itself talked about -- not a card that came with a
         complaint (2026-11-09: "Narhi qancha" after "ereksiya" got the prosthesis)."""
-        return any(
+        return bool(reader_ops) or any(
             _OPERATION_SAID.search(t)
             or any(
                 pattern.search(t)
@@ -1307,13 +1311,15 @@ def plan_intake(
             for t in [*(x["content"] for x in turns if x.get("role") == "user"), message]
         )
 
+    named_now = list(dict.fromkeys([*operations_named(message), *reader_ops]))
+
     def named_before() -> list[str]:
         """The operations named in earlier messages, the latest first."""
         return [topic for t in reversed(patient_since[:-1]) for topic in operations_named(t)]
 
     operation_price = asks_price and bool(
         _OPERATION_SAID.search(message)
-        or operations_named(message)
+        or named_now
         or (not _CONSULTATION_WORD.search(message) and named_before())
     )
 
@@ -1322,7 +1328,7 @@ def plan_intake(
         else named last before, else the card that went last -- the same one
         the card under the reply shows (promo_images.operations_asked)."""
         op_prices = flow.get("operation_prices") or {}
-        topics = operations_named(message)[:1] or named_before()[:1]
+        topics = named_now[:1] or named_before()[:1]
         if not topics:
             sent = [
                 line.split("📎", 1)[1].strip()

@@ -23,6 +23,19 @@ from app.rag.llm import ChatMessage, LLMProvider
 logger = logging.getLogger(__name__)
 
 KINDS = ("none", "urology", "libido_only", "sport", "emergency")
+# The doctor's operations, each with its own price card
+# (app.services.promo_images.OPERATIONS). Patients name them every way --
+# "inplant", "protez qo'ydirish", "jinsiy a'zoni uzaytirish" -- so the model
+# says which one is meant, not a list of spellings (the owner, 2026-11-21).
+OPERATIONS = (
+    "op:varikosele",
+    "op:skrotoplastika",
+    "op:ligamentotomiya",
+    "op:kompleks",
+    "op:falloprotez",
+    "op:micro-tese",
+    "op:denervatsiya",
+)
 
 _PROMPT = """\
 You read one message a patient wrote to a urologist-andrologist's Instagram \
@@ -69,7 +82,18 @@ give my number),
  "who_are_you": true if they ask who they are talking to or whether this is \
 a bot,
  "messenger": "telegram" | "whatsapp" | null if they name one,
- "yes": true if the message is a bare yes / agreement
+ "yes": true if the message is a bare yes / agreement,
+ "operations": the doctor's operations the CURRENT message asks about or \
+refers to (also by "o'sha operatsiya", "narxi qancha?" right after one was \
+talked about), any of: "op:varikosele" (varicocele surgery), \
+"op:skrotoplastika" (scrotoplasty, scrotum plastic surgery), \
+"op:ligamentotomiya" (penis lengthening, ligamentotomy), "op:kompleks" \
+(complex penis enlargement: lengthening and thickening), "op:falloprotez" \
+(penile prosthesis or implant: falloprotez, protez, implant, inplant), \
+"op:micro-tese" (micro-TESE, sperm extraction for azoospermia), \
+"op:denervatsiya" (selective denervation, surgery for premature \
+ejaculation) -- or [] when no operation is meant; a complaint alone \
+("erektsiya yo'q") is not an operation
 }"""
 
 
@@ -92,6 +116,7 @@ class Reading:
     who_are_you: bool = False
     messenger: str | None = None
     yes: bool = False
+    operations: tuple[str, ...] = ()
     raw: dict[str, Any] = field(default_factory=dict, compare=False)
 
 
@@ -137,6 +162,17 @@ def parse(payload: str) -> Reading | None:
         who_are_you=data.get("who_are_you") is True,
         messenger=messenger.lower() if messenger else None,
         yes=data.get("yes") is True,
+        operations=(
+            tuple(
+                dict.fromkeys(
+                    op
+                    for op in data.get("operations") or []
+                    if isinstance(op, str) and op in OPERATIONS
+                )
+            )
+            if isinstance(data.get("operations"), list)
+            else ()
+        ),
         raw=data,
     )
 
