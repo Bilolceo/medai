@@ -74,7 +74,8 @@ number (e.g. "ertaga 10 da", "tushdan keyin", "16:00 da", "qachon bo'lsa ham"), 
 ("soat 2" in the day is 14:00, "kechki 8" is 20:00), or null,
  "age": their age as a number if given, or null,
  "question": the question they ask that needs an answer, or null,
- "asks_price": true if they ask the price or cost,
+ "asks_price": true if they ask the price or cost -- also when they ask to \
+send an operation's details ("implantni tashlab bering", "narxlarini yozing"),
  "wants_evening": true if they want the evening, after work, or an hour \
 after 16:00,
  "refuses": true if they decline (no, not now, I will write myself, I won't \
@@ -89,11 +90,22 @@ talked about), any of: "op:varikosele" (varicocele surgery), \
 "op:skrotoplastika" (scrotoplasty, scrotum plastic surgery), \
 "op:ligamentotomiya" (penis lengthening, ligamentotomy), "op:kompleks" \
 (complex penis enlargement: lengthening and thickening), "op:falloprotez" \
-(penile prosthesis or implant: falloprotez, protez, implant, inplant), \
+(penile prosthesis or implant: falloprotez, protez, implant, inplant; \
+"1 komponentli", "3 komponentli", "однокомпонентный" are its kinds, so a \
+bare "1 komponent narxi" asks it), \
 "op:micro-tese" (micro-TESE, sperm extraction for azoospermia), \
 "op:denervatsiya" (selective denervation, surgery for premature \
 ejaculation) -- or [] when no operation is meant; a complaint alone \
-("erektsiya yo'q") is not an operation
+("erektsiya yo'q") is not an operation,
+ "operation_unnamed": true ONLY if they ask about an operation (its price, \
+how it is done) and nothing in the message or before tells which one \
+("operatsiya narxi qancha?"). What it does is enough to tell: "katta qilish", \
+"kattalashtirish", "uzaytirish", "qalinlashtirish" is enlargement \
+(op:ligamentotomiya, op:kompleks), "implantatsiya" is op:falloprotez -- \
+those are named, not unnamed,
+ "off_topic": true if the message is not a patient's matter: selling or \
+buying an organ, sperm or blood, an advertisement, a brand or business offer, \
+a link or invitation, spam
 }"""
 
 
@@ -117,6 +129,8 @@ class Reading:
     messenger: str | None = None
     yes: bool = False
     operations: tuple[str, ...] = ()
+    operation_unnamed: bool = False
+    off_topic: bool = False
     raw: dict[str, Any] = field(default_factory=dict, compare=False)
 
 
@@ -173,6 +187,8 @@ def parse(payload: str) -> Reading | None:
             if isinstance(data.get("operations"), list)
             else ()
         ),
+        operation_unnamed=data.get("operation_unnamed") is True,
+        off_topic=data.get("off_topic") is True,
         raw=data,
     )
 

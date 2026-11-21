@@ -475,7 +475,7 @@ async def generate_answer(
                 reply = promo_images.attach_scripted(
                     reply, card, script, caption=scripted.card_caption
                 )
-        if scripted.cards:
+        if scripted.cards and not (reading is not None and reading.off_topic):
             patient_said = [t["content"] for t in history or [] if t.get("role") == "user"]
             card = promo_images.choose(
                 stored.get("promo_images"),
@@ -584,7 +584,9 @@ async def generate_answer(
     in_sequence = scripted is not None and bool(scripted.then)
     card = (
         None
-        if in_sequence and not price_guard.asks_price(user_message, patient_turns)
+        if (in_sequence and not price_guard.asks_price(user_message, patient_turns))
+        # Spam, an organ for sale, a brand's offer: no price card (golden set).
+        or (reading is not None and reading.off_topic)
         else promo_images.choose(
             tenant.settings.get("promo_images") if tenant is not None else None,
             user_message=user_message,
@@ -638,6 +640,7 @@ def _with_operation_cards(
         patient_turns=patient,
         reply=reply,
         named_now=reading.operations if reading is not None else (),
+        price_now=reading is not None and reading.asks_price,
     )
     if not cards:
         return reply

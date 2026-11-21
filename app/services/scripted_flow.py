@@ -1250,7 +1250,9 @@ def plan_intake(
     # The operations the model read in the message, however it was spelt
     # ("inplant narxini qancha?" -- the owner, 2026-11-21).
     reader_ops = list(reading.operations) if reading is not None else []
-    general_operation = bool(
+    general_operation = (
+        reading is not None and reading.operation_unnamed and not reader_ops
+    ) or bool(
         not reader_ops
         and _OPERATION_SAID.search(message)
         and not promo_images.OPERATION_NAMES.search(message)
@@ -1272,7 +1274,14 @@ def plan_intake(
         u.asks_price
         # "Bilol" after a price card is a name, whatever the reader thought
         # (image replay, 2026-11-11): a price question has a price word or asks.
-        and bool(_ASKS_PRICE.search(message) or PRICE_WORD.search(message) or _is_question(message))
+        # The model's word is enough when it names the operation asked
+        # ("Имплант куйиш не и пул" -- golden set, 2026-11-21).
+        and bool(
+            reader_ops
+            or _ASKS_PRICE.search(message)
+            or PRICE_WORD.search(message)
+            or _is_question(message)
+        )
         and not _NOT_OUR_PRICE.search(message)
         and not _NOT_A_PRICE.search(message)
         # "Operatsiya narxi qancha?" with no operation named: the model asks

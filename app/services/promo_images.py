@@ -478,6 +478,7 @@ def operations_asked(
     patient_turns: Sequence[str] = (),
     reply: str = "",
     named_now: Sequence[str] = (),
+    price_now: bool = False,
 ) -> list[Mapping[str, Any]]:
     """The operation cards this message asks for, not sent before -- by name,
     or all of them for "operatsiya narxlari qancha?" naming none. "Rasm qani?"
@@ -572,8 +573,12 @@ def operations_asked(
     # The doctor, 2026-11-18: an operation's card -- its price -- only when
     # the price is asked ("narxini srazu tashlamasin, o'zi so'rasa"): not for
     # the complaint alone, not for the operation merely named.
-    price_asked = bool(PRICE_WORD.search(user_message)) or bool(
-        patient_turns and PRICE_WORD.search(patient_turns[-1])
+    # ``price_now``: the model read a price asked ("канчага битади",
+    # "не и пул", "tashlab bering" -- no pattern for each).
+    price_asked = (
+        (price_now and bool(named_now))
+        or bool(PRICE_WORD.search(user_message))
+        or bool(patient_turns and PRICE_WORD.search(patient_turns[-1]))
     )
     found = []
     for image in images or []:

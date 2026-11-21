@@ -117,6 +117,7 @@ async def run(mode: str, only: set[str], save: bool) -> None:
         cases = [c for c in cases if c["id"] in only]
     real = Counting(answer.get_llm_provider()) if mode != "patterns" else None
     if real is not None:
+        answer.get_llm_provider = lambda: real  # type: ignore[assignment]
         reader = Counting(answer.get_reader_llm_provider())
         answer.get_reader_llm_provider = lambda: reader  # type: ignore[assignment]
     readings: dict[str, Any] = {}
@@ -152,7 +153,13 @@ async def run(mode: str, only: set[str], save: bool) -> None:
                         ),
                         None,
                     )
-                    reading = await spy(reader, case["message"], last_bot)
+                    # As app.services.answer passes it: the turns before the last.
+                    earlier = [
+                        f"{'Patient' if t['role'] == 'user' else 'Administrator'}: "
+                        + t["content"][:300]
+                        for t in case["history"][-5:-1]
+                    ]
+                    reading = await spy(reader, case["message"], last_bot, earlier=earlier)
                 else:
                     reply = await answer.generate_answer(
                         session,
