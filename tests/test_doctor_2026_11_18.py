@@ -208,6 +208,9 @@ def test_the_price_asked_brings_the_operation_card() -> None:
     assert _cards("Varikotsele operatsiyasi necha pul?") == ["op:varikosele"]
     # "Operatsiya narxi?" then "falloprotez": the price was the question before.
     assert _cards("Falloprotez", ["Operatsiya narxi qancha?"]) == ["op:falloprotez"]
+    # The owner, 2026-11-21: "inplant narxini qancha ?" got the consultation card.
+    for text in ("inplant narxini qancha ?", "Implant narxi", "Имплант нархи қанча?"):
+        assert _cards(text, ["assalomu alekum"]) == ["op:falloprotez"], text
 
 
 def test_the_price_after_an_operation_was_named_is_that_operation() -> None:

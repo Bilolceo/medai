@@ -342,7 +342,15 @@ OPERATIONS: dict[str, tuple[re.Pattern[str], bool]] = {
         ),
         False,
     ),
-    "op:falloprotez": (re.compile(r"fall?oprotez|protez|фаллопротез|протез", re.IGNORECASE), False),
+    "op:falloprotez": (
+        re.compile(
+            # "inplant narxini qancha?" (the owner, 2026-11-21): a penile
+            # implant is the prosthesis -- patients rarely say "protez".
+            r"fall?oprotez|protez|фаллопротез|протез|[ie][nm]pl[ae]nt|и[нм]плант",
+            re.IGNORECASE,
+        ),
+        False,
+    ),
     "op:micro-tese": (
         re.compile(r"m[ia]kro\W?tese|\btese\b|микро\W?тезе|\bтезе\b", re.IGNORECASE),
         False,
