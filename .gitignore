@@ -40,3 +40,6 @@ Thumbs.db
 
 # Stray output from `railway config pull` when the TypeScript SDK is absent.
 .railway-config-pull-*/
+
+# The golden set: real patient messages (anonymised) -- kept off git.
+evals/golden/
