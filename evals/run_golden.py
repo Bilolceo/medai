@@ -35,9 +35,11 @@ from app.services import agent, answer, message_reader, promo_images  # noqa: E4
 if "--agent" in sys.argv:  # AGENT_ON: the clinic as if its settings named the profile
     agent.profile_of = lambda settings: "sultonbek"  # type: ignore[assignment]
 
+from evals import usage  # noqa: E402
 from evals.local_llm import install  # noqa: E402
 
 LOCAL = install()
+usage.install()
 HERE = Path(__file__).resolve().parent / "golden"
 OPS = set(message_reader.OPERATIONS)
 
@@ -147,6 +149,9 @@ async def run(mode: str, only: set[str], save: bool) -> None:
                 for i in settings.get("promo_images") or []
             }
             for case in cases:
+                if usage.BUDGET_USD and usage.Usage.usd() >= usage.BUDGET_USD:
+                    print(f"!!! BYUDJET TUGADI: {usage.Usage.line()}")
+                    break
                 readings.pop("last", None)
                 history = case["history"] or None
                 reading = reply = None
@@ -201,6 +206,7 @@ async def run(mode: str, only: set[str], save: bool) -> None:
                 )
         finally:
             reset_current_tenant(token)
+    print(usage.Usage.line())
     passed = sum(r["ok"] for r in results)
     print(
         f"\n{mode}: {passed}/{len(results)} passed ({100 * passed // max(1, len(results))}%), "

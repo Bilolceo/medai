@@ -31,7 +31,8 @@ from pathlib import Path
 from typing import Any
 
 from app.rag.llm import ChatMessage, LLMProvider
-from app.services import bubbles, phone_check, phone_guard, price_guard, promo_images
+from app.services import bubbles, language, phone_check, phone_guard, price_guard, promo_images
+from app.services.doctor_template import to_cyrillic
 
 logger = logging.getLogger(__name__)
 
@@ -234,13 +235,27 @@ def emergency_lines(profile: str) -> dict[str, str]:
     return json.loads(path.read_text()) if path.is_file() else {}
 
 
+# A word with Latin letters slipped into Cyrillic ("Oldин").
+_MIXED_WORD = re.compile(
+    r"\b\w*[a-zA-Z]\w*[а-яёўқғҳА-ЯЁЎҚҒҲ]\w*\b|\b\w*[а-яёўқғҳА-ЯЁЎҚҒҲ]\w*[a-zA-Z]\w*\b"
+)
+
+
+def _tidy_cyrillic(text: str) -> str:
+    """Mixed-alphabet words made Cyrillic, and the model's habitual slip in
+    the introduction ("администраторииман", "администратори ман")."""
+    text = _MIXED_WORD.sub(lambda m: to_cyrillic(m.group(0)), text)
+    return re.sub(r"администратор+(?:и+\s*|\s+)?ман\b", "администраториман", text)
+
+
 def _same(a: str, b: str) -> bool:
     return re.sub(r"\W+", " ", a).strip().lower() == re.sub(r"\W+", " ", b).strip().lower()
 
 
-def _repeats(answer: "Answer", own: Sequence[str]) -> bool:
-    """The whole reply word for word the bot's last one: stuck in a loop."""
-    if not own:
+def _repeats(answer: "Answer", own: Sequence[str], asked_again: bool = False) -> bool:
+    """The whole reply word for word the bot's last one: stuck in a loop --
+    unless the patient asked the very same thing again."""
+    if not own or asked_again:
         return False
     last = promo_images.MARKER.sub("", own[-1]).split("📎")[0]
     return _same(" ".join(answer.messages), last)
@@ -297,9 +312,11 @@ async def decide(
         *(history or []),
         ChatMessage(role="user", content=user_message),
     ]
+    patient_before = [str(t["content"]) for t in history or [] if t.get("role") == "user"]
+    asked_again = bool(patient_before) and _same(patient_before[-1], user_message)
     raw = await _ask(provider, system, conversation)
     answer = parse(raw)
-    if answer is not None and (_echoes(answer, user_message) or _repeats(answer, own)):
+    if answer is not None and (_echoes(answer, user_message) or _repeats(answer, own, asked_again)):
         logger.warning("agent_echoed_or_repeated")
         raw = await _ask(
             provider,
@@ -309,7 +326,9 @@ async def decide(
             conversation,
         )
         answer = parse(raw)
-        if answer is not None and (_echoes(answer, user_message) or _repeats(answer, own)):
+        if answer is not None and (
+            _echoes(answer, user_message) or _repeats(answer, own, asked_again)
+        ):
             # Stuck twice: not sent -- the caller answers this one another way.
             logger.warning("agent_stuck")
             return None
@@ -319,6 +338,28 @@ async def decide(
         answer = parse(raw)
         if answer is None:
             return None
+
+    # The patient's alphabet: a reply in the other one is written again, once.
+    wrote = language.clear_script(" ".join(answer.messages))
+    if (
+        script in _SCRIPT_NAMES
+        and wrote
+        and wrote != script
+        and {script, wrote} != {"uz-cyrl", "ru"}
+    ):
+        logger.warning("agent_wrong_script", extra={"want": script, "got": wrote})
+        again = parse(
+            await _ask(
+                provider,
+                system + f"\n\nWrite the whole answer in {_SCRIPT_NAMES[script]}.",
+                conversation,
+            )
+        )
+        if again is not None and language.clear_script(" ".join(again.messages)) in (None, script):
+            answer = again
+    if script == "ru":
+        answer.messages = [re.sub(r"(?i)\bso['‘ʻ’`]m\b|\bсўм\b", "сум", m) for m in answer.messages]
+    answer.messages = [_tidy_cyrillic(m) for m in answer.messages]
 
     rules, services = load_profile(profile)
     allowed = [rules, services]

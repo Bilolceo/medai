@@ -241,3 +241,39 @@ async def test_stuck_twice_on_the_same_reply_gives_up() -> None:
         {"messages": ["Bu holat qachondan beri bor?"]},
     )
     assert await _decide(model, "1 yil", history) is None
+
+
+def test_latin_letters_in_a_cyrillic_word_are_made_cyrillic() -> None:
+    assert agent._tidy_cyrillic("Oldин бу бўйича") == "Олдин бу бўйича"
+    for slip in ("администраторииман", "администраторман", "администратори ман"):
+        assert agent._tidy_cyrillic(f"Мен {slip}") == "Мен администраториман"
+    assert agent._tidy_cyrillic("Oldin bu bo'yicha") == "Oldin bu bo'yicha"
+
+
+async def test_the_same_question_asked_again_may_get_the_same_answer() -> None:
+    history = [
+        {"role": "user", "content": "konsultatsiya narxi qancha"},
+        {"role": "assistant", "content": "Narxi 330 000 so'm."},
+    ]
+    answer = await _decide(
+        Scripted({"messages": ["Narxi 330 000 so'm."]}), "konsultatsiya narxi qancha", history
+    )
+    assert answer is not None and answer.messages == ["Narxi 330 000 so'm."]
+
+
+async def test_a_reply_in_the_wrong_alphabet_is_written_again() -> None:
+    model = Scripted(
+        {"messages": ["Bu holat qachondan beri bor?"]},
+        {"messages": ["Бу ҳолат қачондан бери бор?"]},
+    )
+    answer = await agent.decide(
+        model,
+        profile="sultonbek",
+        user_message="Тез бўшаниш бор",
+        history=None,
+        now_local=NOW,
+        slots=SLOTS,
+        images=IMAGES,
+        script="uz-cyrl",
+    )
+    assert answer is not None and answer.messages == ["Бу ҳолат қачондан бери бор?"]
