@@ -242,10 +242,55 @@ _MIXED_WORD = re.compile(
 
 
 def _tidy_cyrillic(text: str) -> str:
-    """Mixed-alphabet words made Cyrillic, and the model's habitual slip in
-    the introduction ("администраторииман", "администратори ман")."""
+    """Mixed-alphabet words made Cyrillic, and the model's habitual slips:
+    the introduction ("администраторииман", "администратори ман") and
+    "-tsiya" letter by letter ("консультатсия", "консултация")."""
     text = _MIXED_WORD.sub(lambda m: to_cyrillic(m.group(0)), text)
+    text = re.sub(r"(?<=[а-яўқғҳ])тсия", "ция", text)
+    text = re.sub(r"(?i)\b(конс)ултац", r"\1ультац", text)
     return re.sub(r"администратор+(?:и+\s*|\s+)?ман\b", "администраториман", text)
+
+
+# The model writing the card into the text ("📎 op:denervatsiya"): the card
+# goes as a picture, its id or caption never as words.
+_CARD_IN_TEXT = re.compile(r"(?m)^[ \t]*📎.*$|\bop:[\w-]+")
+
+
+def _without_card_text(message: str) -> str:
+    return re.sub(r"\n{3,}", "\n\n", _CARD_IN_TEXT.sub("", message)).strip()
+
+
+_CARD_NUMBER = re.compile(r"\b\d{4} ?\d{4} ?\d{4} ?\d{4}\b")
+_ASKS_RECEIPT = re.compile(r"(?i)\bchek(?!l)|\bчек(?!л)")
+_CARD_LINE = {
+    "uz-latn": "To'lov uchun karta: {card}",
+    "uz-cyrl": "Тўлов учун карта: {card}",
+    "ru": "Карта для оплаты: {card}",
+}
+
+
+@lru_cache
+def payment_card(profile: str) -> str | None:
+    """The clinic's card as the rules give it: "9860 ... (Name)"."""
+    found = re.search(r"karta: (\d{4} \d{4} \d{4} \d{4}(?: \([^)]+\))?)", load_profile(profile)[0])
+    return found.group(1) if found else None
+
+
+def _with_card(answer: "Answer", profile: str, own: Sequence[str], script: str | None) -> None:
+    """A receipt asked for with no card to pay to: the card line is put in.
+    2026-11-22: the second booking said "to'lab, chek yuboring" without the
+    card, and the receipt that came was taken for a result."""
+    card = payment_card(profile)
+    if card is None:
+        return
+    text = " ".join(answer.messages)
+    if not _ASKS_RECEIPT.search(text) or _CARD_NUMBER.search(text):
+        return
+    if any(_CARD_NUMBER.search(m) for m in own[-3:]):
+        return
+    line = _CARD_LINE.get(script or "uz-latn", _CARD_LINE["uz-latn"]).format(card=card)
+    at = next(i for i, m in enumerate(answer.messages) if _ASKS_RECEIPT.search(m))
+    answer.messages.insert(at, line)
 
 
 def _same(a: str, b: str) -> bool:
@@ -359,7 +404,11 @@ async def decide(
             answer = again
     if script == "ru":
         answer.messages = [re.sub(r"(?i)\bso['‘ʻ’`]m\b|\bсўм\b", "сум", m) for m in answer.messages]
-    answer.messages = [_tidy_cyrillic(m) for m in answer.messages]
+    answer.messages = [
+        m for m in (_without_card_text(_tidy_cyrillic(m)) for m in answer.messages) if m
+    ]
+    if not answer.messages:
+        return None
 
     rules, services = load_profile(profile)
     allowed = [rules, services]
@@ -419,6 +468,7 @@ async def decide(
             answer.lead = None
     if _COMPLAINT_ABOUT_US.search(user_message):
         answer.handoff = True
+    _with_card(answer, profile, own, script)
     known = {str(i.get("topic")) for i in images}
     answer.cards = [c for c in dict.fromkeys(answer.cards) if c in known and c not in cards_sent][
         :2

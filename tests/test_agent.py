@@ -277,3 +277,51 @@ async def test_a_reply_in_the_wrong_alphabet_is_written_again() -> None:
         script="uz-cyrl",
     )
     assert answer is not None and answer.messages == ["Бу ҳолат қачондан бери бор?"]
+
+
+async def test_a_card_written_into_the_text_is_taken_out() -> None:
+    model = Scripted(
+        {
+            "messages": ["Narxi 9 000 000 so'm.\n\n📎 op:denervatsiya\n\nAvval konsultatsiya."],
+            "cards": ["op:denervatsiya"],
+        }
+    )
+    answer = await _decide(model, "denervatsiya narxi qancha")
+    assert answer is not None
+    assert answer.messages == ["Narxi 9 000 000 so'm.\n\nAvval konsultatsiya."]
+    assert answer.cards == ["op:denervatsiya"]
+
+
+async def test_a_receipt_asked_for_without_the_card_gets_the_card_line() -> None:
+    """2026-11-22: the time changed, "to'lab, chek yuboring" came without the card."""
+    history = [
+        {"role": "user", "content": "kunduzi kelsam bo'ladimi"},
+        {"role": "assistant", "content": "Ertaga 09:00 yoki 10:00 da bo'sh vaqt bor."},
+    ]
+    model = Scripted(
+        {
+            "messages": [
+                "Yaxshi, ertaga 10:00 ga yozib qo'yishim mumkin.",
+                "To'lab, chek rasmini va telefon raqamingizni yuboring.",
+            ]
+        }
+    )
+    answer = await _decide(model, "10 00", history)
+    assert answer is not None
+    assert answer.messages[1] == "To'lov uchun karta: 9860 1501 1048 3446 (Sultonbek Norkuziev)"
+    assert answer.messages[2].startswith("To'lab, chek")
+
+
+async def test_the_card_line_is_not_repeated_right_after_it_was_given() -> None:
+    history = [
+        {"role": "user", "content": "10:00"},
+        {"role": "assistant", "content": "To'lov uchun karta: 9860 1501 1048 3446."},
+    ]
+    model = Scripted({"messages": ["Ha, chek rasmini yuboring."]})
+    answer = await _decide(model, "chekni tashlaymi?", history)
+    assert answer is not None and answer.messages == ["Ha, chek rasmini yuboring."]
+
+
+def test_tsiya_is_written_the_cyrillic_way() -> None:
+    assert agent._tidy_cyrillic("аввал консультатсия") == "аввал консультация"
+    assert agent._tidy_cyrillic("аввал консултация") == "аввал консультация"

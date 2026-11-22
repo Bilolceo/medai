@@ -40,7 +40,7 @@ from app.repositories.message import MessageRepository
 from app.services import message_labels, receipt_check
 from app.services.conversation import record_outbound_message, reply_context_for
 from app.services.delivery import send_reply
-from app.services.language import reply_script
+from app.services.language import clear_script, reply_script
 
 logger = logging.getLogger(__name__)
 
@@ -106,8 +106,10 @@ _RECEIPT_WINDOW = timedelta(days=3)
 
 async def awaiting_payment(session: AsyncSession, conversation_id: uuid.UUID) -> str | None:
     """The clinic's message that gave the card, if it is among the clinic's
-    last three messages of the past three days and no receipt has been
-    acknowledged since -- a photo now is the receipt. None otherwise."""
+    last twelve messages of the past three days and no receipt has been
+    acknowledged since (2026-11-22: with only the last three looked at, two
+    questions about the visit after the card made the receipt "a result") -- a photo now
+    is the receipt. None otherwise."""
     from sqlalchemy import select
 
     from app.models.message import Message
@@ -123,7 +125,7 @@ async def awaiting_payment(session: AsyncSession, conversation_id: uuid.UUID) ->
                     Message.created_at >= since,
                 )
                 .order_by(Message.created_at.desc())
-                .limit(3)
+                .limit(12)
             )
         )
         .scalars()
@@ -624,10 +626,17 @@ def open_link(media: PatientMedia) -> str | None:
 
 async def patient_script(session: AsyncSession, conversation_id: uuid.UUID) -> str:
     """Which alphabet to acknowledge in: the one the patient last wrote in."""
+    fallback = None
     for message in reversed(await MessageRepository(session).list_recent(conversation_id, 20)):
         if message.sender == MessageSender.PATIENT and not message_labels.is_label(message.content):
-            return reply_script(message.content)
-    return "uz-latn"
+            # "10 00", "ok", a name: too short to tell -- the patient's last
+            # plain words decide (2026-11-22: "10 00" after Cyrillic turned
+            # the acknowledgement Latin).
+            clear = clear_script(message.content)
+            if clear is not None:
+                return clear
+            fallback = fallback or reply_script(message.content)
+    return fallback or "uz-latn"
 
 
 async def store(

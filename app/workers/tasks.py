@@ -1361,6 +1361,21 @@ async def _said_today(
     return any(handoff.same_message(content, line) for content in sent for line in lines)
 
 
+async def _clinic_spoke_today(session: AsyncSession, conversation_id: uuid.UUID) -> bool:
+    """Whether the clinic has written in this conversation in the last day."""
+    since = datetime.now(UTC) - timedelta(hours=24)
+    found = await session.execute(
+        select(Message.id)
+        .where(
+            Message.conversation_id == conversation_id,
+            Message.sender != MessageSender.PATIENT,
+            Message.created_at >= since,
+        )
+        .limit(1)
+    )
+    return found.first() is not None
+
+
 async def answer_attachment(
     ctx: dict[str, Any],
     tenant_id: str,
@@ -1432,9 +1447,18 @@ async def answer_attachment(
             if await _said_today(session, conversation_uuid, ATTACHMENT_GREETINGS.values()):
                 logger.info("attachment_greeting_skipped_repeat")
                 return
-            text = ATTACHMENT_GREETINGS[
-                await patient_media.patient_script(session, conversation_uuid)
-            ]
+            script = await patient_media.patient_script(session, conversation_uuid)
+            if await _clinic_spoke_today(session, conversation_uuid):
+                # Mid-conversation, "Assalomu alaykum" is the clinic greeting
+                # somebody it was talking to a minute ago (2026-11-22: a video
+                # sent while booking). A video or a file is said to have come;
+                # a reel or a sticker needs no answer.
+                if not for_a_person:
+                    logger.info("attachment_greeting_skipped_mid_conversation")
+                    return
+                text = ATTACHMENT_RECEIVED[kind][script]
+            else:
+                text = ATTACHMENT_GREETINGS[script]
             delivered = await send_reply(
                 session,
                 channel_id=uuid.UUID(channel_id),
@@ -1596,6 +1620,20 @@ async def _patient_typed_since(
 # open it, so it greets the patient and invites the question -- the way an
 # operator would, plainly: no "bemalol", no "how may I help you" (the owner,
 # 2026-10-16: write like operators talk, without courtesies).
+# A video or a file sent in the middle of a conversation: it came, and the
+# doctor answers it here.
+ATTACHMENT_RECEIVED = {
+    message_labels.VIDEO: {
+        "uz-latn": "Videongiz keldi. Doktor ko'rib, shu yerda javob beradi.",
+        "uz-cyrl": "Видеонгиз келди. Доктор кўриб, шу ерда жавоб беради.",
+        "ru": "Видео получили. Врач посмотрит и ответит здесь.",
+    },
+    message_labels.FILE: {
+        "uz-latn": "Faylingiz keldi. Doktor ko'rib, shu yerda javob beradi.",
+        "uz-cyrl": "Файлингиз келди. Доктор кўриб, шу ерда жавоб беради.",
+        "ru": "Файл получили. Врач посмотрит и ответит здесь.",
+    },
+}
 ATTACHMENT_GREETINGS = {
     "uz-latn": "Assalomu alaykum. Savolingiz bo'lsa yozing.",
     "uz-cyrl": "Ассалому алайкум. Саволингиз бўлса ёзинг.",

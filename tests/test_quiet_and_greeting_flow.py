@@ -19,6 +19,7 @@ from app.repositories.message import MessageRepository
 from app.services import message_labels, voice_notes
 from app.workers.tasks import (
     ATTACHMENT_GREETINGS,
+    ATTACHMENT_RECEIVED,
     RESEND_REQUESTS,
     answer_attachment,
     answer_voice_note,
@@ -648,3 +649,42 @@ async def test_nobody_asks_for_a_resend_where_staff_have_taken_over(
     await db_session.flush()
 
     assert await _attachment(db_session, seed, message_labels.EPHEMERAL) == []
+
+
+async def test_a_video_mid_conversation_is_said_to_have_come_not_greeted(
+    db_session: AsyncSession, seed: Seed, as_tenant: AsTenant
+) -> None:
+    """2026-11-22: a video while booking got "Assalomu alaykum", in Latin."""
+    await _conversation(
+        db_session,
+        seed,
+        as_tenant,
+        [
+            ("patient", "Кундуз куни нечага келсам бўлади"),
+            ("bot", "Эртага 10:00 да бўш вақт бор."),
+            ("patient", "10 00"),
+            ("patient", message_labels.TEXT[message_labels.VIDEO]),
+        ],
+    )
+
+    sent = await _attachment(db_session, seed, message_labels.VIDEO)
+
+    assert [text for _, _, text in sent] == [ATTACHMENT_RECEIVED[message_labels.VIDEO]["uz-cyrl"]]
+
+
+async def test_a_reel_mid_conversation_is_not_greeted(
+    db_session: AsyncSession, seed: Seed, as_tenant: AsTenant
+) -> None:
+    await _conversation(
+        db_session,
+        seed,
+        as_tenant,
+        [
+            ("patient", "Narxi qancha"),
+            ("bot", "330 000 so'm."),
+            ("patient", message_labels.TEXT[message_labels.SHARE]),
+        ],
+        hours_ago=1,
+    )
+
+    assert await _attachment(db_session, seed, message_labels.SHARE) == []

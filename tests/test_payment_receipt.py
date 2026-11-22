@@ -55,3 +55,61 @@ async def test_a_photo_after_the_receipt_was_acknowledged_is_not_a_receipt(
         )
         await db_session.flush()
         assert await patient_media.awaiting_payment(db_session, conversation.id) is None
+
+
+async def test_the_receipt_is_still_awaited_after_a_few_questions_about_the_visit(
+    db_session, seed, as_tenant
+) -> None:
+    """2026-11-22, med.uz.ai: the card, then "online or come in?", another
+    time, a video -- four clinic messages later the receipt came and was
+    taken for a result."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.models.message import Message
+
+    conversation = seed.a.conversation
+    start = datetime.now(UTC) - timedelta(hours=1)
+    later = [
+        "19:00 da -- onlayn.",
+        "Ertaga 09:00, 09:30 yoki 10:00 da bo'sh vaqt bor.",
+        "Yaxshi, ertaga 10:00 ga yozib qo'yishim mumkin.",
+        "Videongiz keldi. Doktor ko'rib, shu yerda javob beradi.",
+    ]
+    with as_tenant(seed.tenant_a.id):
+        for position, content in enumerate([OFFER, *later]):
+            db_session.add(
+                Message(
+                    conversation_id=conversation.id,
+                    sender="assistant",
+                    content=content,
+                    channel="instagram",
+                    created_at=start + timedelta(minutes=position),
+                )
+            )
+        await db_session.flush()
+        assert await patient_media.awaiting_payment(db_session, conversation.id) == OFFER
+
+
+async def test_the_acknowledgement_is_in_the_alphabet_of_the_patients_words(
+    db_session, seed, as_tenant
+) -> None:
+    """ "10 00" after Cyrillic is no reason to answer in Latin."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.models.message import Message
+
+    conversation = seed.a.conversation
+    start = datetime.now(UTC) - timedelta(minutes=30)
+    with as_tenant(seed.tenant_a.id):
+        for position, content in enumerate(["Кундуз куни нечага келсам бўлади", "10 00"]):
+            db_session.add(
+                Message(
+                    conversation_id=conversation.id,
+                    sender="patient",
+                    content=content,
+                    channel="instagram",
+                    created_at=start + timedelta(minutes=position),
+                )
+            )
+        await db_session.flush()
+        assert await patient_media.patient_script(db_session, conversation.id) == "uz-cyrl"
