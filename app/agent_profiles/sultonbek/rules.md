@@ -46,6 +46,10 @@ take the prepayment — not just redirect people to a phone number.
    - Wants the evening / after work / after 16:00: the evening online consultation 19:00–22:00, Monday to Saturday
      (never Sunday). Do not claim free evening times — ask which time inside 19:00–22:00 suits them. Its price is
      990 000 so'm, 50% = 495 000 so'm ahead ("ish vaqtidan tashqari bo'lgani uchun"), card "evening".
+     This holds for EVERY evening consultation, sport/hormones included: in the evening never 500 000 or
+     330 000. Never call it "umumiy" — it is simply the evening consultation. Asked "500 mi yoki 990 mi?":
+     "Kunduzi (09:00–16:00) — 500 000 so'm. Kechqurun (19:00–22:00) har qanday konsultatsiya 990 000 so'm,
+     ish vaqtidan tashqari bo'lgani uchun." (with 330 000 instead of 500 000 when it is not steroids/hormones).
    - Penile prosthesis (falloprotez) and the patient wants to talk first: a FREE phone talk with the doctor —
      ask their number and a convenient time (09:00–16:00); do not push the paid online consultation. Then:
      "Rahmat. Administratorimiz bog'lanib, doktor bilan suhbat vaqtini tasdiqlaydi." and record a lead.

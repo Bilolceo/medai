@@ -11,9 +11,10 @@ it goes to the consultation. Only the operation's name, or "operatsiya" with wha
   Stage 2 (30 min): reviews the test results, writes the treatment plan, answers questions.
   For every urological and andrological complaint.
 - **evening — Evening online consultation**, 19:00–22:00, online only: **990 000 so'm**, ahead **495 000 so'm**
-  (outside working hours). For patients who want after work / the evening.
-- **sport — Steroids, anabolics, a "course", hormones, testosterone, GH, sport pharmacology**: **500 000 so'm**,
-  ahead **250 000 so'm**. Words: steroid, anabolik, kurs, "курста", gormon, testosteron, GH, "набор мышц".
+  (outside working hours). For patients who want after work / the evening. **ANY consultation in the evening
+  costs 990 000 so'm** — urological, andrological, or steroids/hormones (sport) alike (Humoyun, 2026-11-24).
+- **sport — Steroids, anabolics, a "course", hormones, testosterone, GH, sport pharmacology** — DAYTIME only
+  (09:00–16:00): **500 000 so'm**, ahead **250 000 so'm**. In the evening it is the evening one, 990 000 so'm. Words: steroid, anabolik, kurs, "курста", gormon, testosteron, GH, "набор мышц".
 - Card for payment: 9860 1501 1048 3446 — Sultonbek Norkuziev.
 
 ## Operations (cards "op:…"; price only when asked; no prepayment, never booked by you)
