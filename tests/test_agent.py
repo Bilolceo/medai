@@ -325,3 +325,35 @@ async def test_the_card_line_is_not_repeated_right_after_it_was_given() -> None:
 def test_tsiya_is_written_the_cyrillic_way() -> None:
     assert agent._tidy_cyrillic("аввал консультатсия") == "аввал консультация"
     assert agent._tidy_cyrillic("аввал консултация") == "аввал консультация"
+
+
+async def test_the_name_given_earlier_is_not_asked_again() -> None:
+    """2026-11-24, the doctor: "yana savolim bor" after the card, and the
+    name Ayub gave earlier was asked again."""
+    history = [
+        {"role": "assistant", "content": "Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?"},
+        {"role": "user", "content": "ayub"},
+        {"role": "assistant", "content": "Ayub, qayerdansiz?"},
+        {"role": "user", "content": "jizzahdan"},
+        {"role": "assistant", "content": "To'lov uchun karta: 9860 1501 1048 3446."},
+    ]
+    model = Scripted(
+        {"messages": ["Buni ko'rikda doktor baholaydi.", "Ismingiz nima?"]},
+        {"messages": ["Buni ko'rikda doktor baholaydi.", "Ayub, chekni kutamiz."]},
+    )
+    answer = await _decide(model, "testosteron olsam bo'ladimi", history)
+    assert answer is not None and answer.messages[1] == "Ayub, chekni kutamiz."
+    assert "already told" in model.systems[1]
+
+
+async def test_a_known_question_asked_twice_is_cut_out() -> None:
+    history = [
+        {"role": "assistant", "content": "Ayub, qayerdansiz?"},
+        {"role": "user", "content": "jizzahdan"},
+    ]
+    model = Scripted(
+        {"messages": ["Tushunarli. Qayerdansiz?"]},
+        {"messages": ["Yaxshi. Qayerdansiz?"]},
+    )
+    answer = await _decide(model, "ha", history)
+    assert answer is not None and answer.messages == ["Tushunarli."]

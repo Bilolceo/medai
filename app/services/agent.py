@@ -306,6 +306,39 @@ def _repeats(answer: "Answer", own: Sequence[str], asked_again: bool = False) ->
     return _same(" ".join(answer.messages), last)
 
 
+# The intake questions: once answered, never asked again in the conversation
+# (2026-11-24, the doctor: "yana savolim bor" after the card, and the name
+# Ayub had given ten minutes before was asked again).
+_INTAKE = {
+    "name": re.compile(r"(?i)ismingiz|исмингиз|как вас зовут|ваше имя"),
+    "place": re.compile(r"(?i)qayerdansiz|қаердансиз|қаерликсиз|откуда вы"),
+    "since": re.compile(r"(?i)qachondan beri|қачондан бери|как давно"),
+    "treated": re.compile(r"(?i)davolanganmisiz|даволанганмисиз|лечились"),
+}
+
+
+def _asked_again(answer: "Answer", history: Sequence[ChatMessage] | None) -> list[str]:
+    """Intake questions in the answer that the bot asked earlier and the
+    patient has answered since."""
+    turns = list(history or [])
+    answered = set()
+    for i, turn in enumerate(turns):
+        if turn.get("role") != "assistant":
+            continue
+        replied = any(t.get("role") == "user" for t in turns[i + 1 :])
+        for key, pattern in _INTAKE.items():
+            if replied and pattern.search(str(turn["content"])):
+                answered.add(key)
+    said = " ".join(answer.messages)
+    return [k for k in answered if _INTAKE[k].search(said)]
+
+
+def _drop_questions(message: str, keys: Sequence[str]) -> str:
+    sentences = re.split(r"(?<=[.!?])\s+", message)
+    kept = [x for x in sentences if not any(_INTAKE[k].search(x) for k in keys)]
+    return " ".join(kept).strip()
+
+
 def _echoes(answer: "Answer", message: str) -> bool:
     """A message that only repeats the patient's own words back."""
     said = re.sub(r"\W+", " ", message).strip().lower()
@@ -383,6 +416,29 @@ async def decide(
         answer = parse(raw)
         if answer is None:
             return None
+
+    again_asked = _asked_again(answer, history)
+    if again_asked:
+        logger.warning("agent_asked_known", extra={"asked": again_asked})
+        retry = parse(
+            await _ask(
+                provider,
+                system
+                + "\n\nYour draft asked again what the patient already told in this conversation ("
+                + ", ".join(again_asked)
+                + "). Read the conversation: use what they said, answer their new message, and ask"
+                " only the next step still missing.",
+                conversation,
+            )
+        )
+        if retry is not None and not _asked_again(retry, history):
+            answer = retry
+        else:
+            answer.messages = [
+                m for m in (_drop_questions(m, again_asked) for m in answer.messages) if m
+            ]
+            if not answer.messages:
+                return None
 
     # The patient's alphabet: a reply in the other one is written again, once.
     wrote = language.clear_script(" ".join(answer.messages))
