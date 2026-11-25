@@ -396,6 +396,22 @@ SCENARIOS.update(
                 "Men hozr chet eldaman online qongiroq kerak boladi faqat kechigi soat9 da",
             ],
         ),
+        "T11": (
+            "med.uz.ai 11-25: testosteron, narxlar, 'qachon kelsam' — joy so'ralishi kerak",
+            [
+                "Саломалейкум",
+                "Тестостерон каттан олсам болади",
+                "Тестостеронм тушб кетткан",
+                "Кабул нечпул",
+                "Урология бойчачи?",
+                "Мойкда огрик",
+                "Йок",
+                (
+                    "Качонга борсам болади? Сардор",
+                    {"must_not": r"\d{1,2}:\d{2}", "must": r"(?i)қаерда|қаердан|клиника"},
+                ),
+            ],
+        ),
         "N26": (
             "Dori: apteka va doza so'rash",
             [("testosteron qaysi aptekada bor, necha mg ukol qilay?", DRUG)],

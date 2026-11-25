@@ -65,6 +65,12 @@ what they want now), then answer with JSON only, no other text:
   Give it when the patient sent their number after paying, asks to be called,
   hesitates and leaves a number, or for the free prosthesis phone talk. Only with a
   real number the patient wrote.
+- "known": what the patient has told in the WHOLE conversation so far, this message included:
+  {"place": "<where they are, as they said it (Jizzax, chet el, Toshkent...)>" or null,
+   "visit": "clinic" or "online" or null (what THEY chose)}.
+  While place or visit is null you do not offer times or book: ask the missing one first
+  (one question), even when the patient asks "qachon kelsam bo'ladi?" -- answer that there
+  are free times and ask the missing step.
 - "handoff": true only when a person must take over now (an angry patient, a
   complaint about the clinic, a question the rules cannot answer). A lead is not a
   hand-over: false then.
@@ -92,6 +98,9 @@ class Answer:
     cards: list[str] = field(default_factory=list)
     lead: dict[str, str] | None = None
     handoff: bool = False
+    # What the model says the patient has told: {"place": ..., "visit": ...};
+    # None when the model did not say.
+    known: dict[str, str | None] | None = None
 
 
 @lru_cache
@@ -172,8 +181,20 @@ def parse(raw: str) -> Answer | None:
         lead = {k: str(lead.get(k) or "").strip() for k in ("phone", "note", "when")}
     else:
         lead = None
+    known = data.get("known")
+    if isinstance(known, dict):
+        known = {
+            k: (str(known.get(k)).strip() or None) if known.get(k) not in (None, "null") else None
+            for k in ("place", "visit")
+        }
+    else:
+        known = None
     return Answer(
-        messages=messages[:3], cards=cards, lead=lead, handoff=data.get("handoff") is True
+        messages=messages[:3],
+        cards=cards,
+        lead=lead,
+        handoff=data.get("handoff") is True,
+        known=known,
     )
 
 
@@ -342,6 +363,20 @@ def _drop_questions(message: str, keys: Sequence[str]) -> str:
     return " ".join(kept).strip()
 
 
+_A_TIME = re.compile(r"\b(?:[01]?\d|2[0-3])[:.][0-5]\d\b")
+
+
+def _too_early_for_times(answer: "Answer") -> list[str]:
+    """The steps still missing when the reply offers or books a time: the
+    place and the patient's own choice of clinic or online (the doctor,
+    2026-11-25: "qachon kelsam bo'ladi?" and the place was never asked)."""
+    if answer.known is None or answer.lead is not None:
+        return []
+    if not _A_TIME.search(" ".join(answer.messages)):
+        return []
+    return [k for k in ("place", "visit") if not answer.known.get(k)]
+
+
 def _said_before(answer: "Answer", own: Sequence[str]) -> list[str]:
     """Bubbles of the answer the bot already sent word for word earlier in
     the conversation (2026-11-25: the testosterone line three times running)."""
@@ -454,6 +489,26 @@ async def decide(
             ]
             if not answer.messages:
                 return None
+
+    missing = [] if is_emergency(user_message) else _too_early_for_times(answer)
+    if missing:
+        logger.warning("agent_times_too_early", extra={"missing": missing})
+        ask = {
+            "place": "where they are from (step 5)",
+            "visit": "whether they come to the clinic or talk online (step 7a)",
+        }
+        retry = parse(
+            await _ask(
+                provider,
+                system
+                + "\n\nYour draft offered or booked a time, but the patient has not yet told "
+                + " and ".join(ask[k] for k in missing)
+                + ". Do not give times yet: answer their message briefly and ask that, one question.",
+                conversation,
+            )
+        )
+        if retry is not None and not _too_early_for_times(retry):
+            answer = retry
 
     again_said = [] if asked_again else _said_before(answer, own)
     if again_said and len(again_said) < len(answer.messages):

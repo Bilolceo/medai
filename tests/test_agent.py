@@ -385,3 +385,34 @@ async def test_a_reply_that_only_repeats_is_written_again() -> None:
     model = Scripted({"messages": [line]}, {"messages": ["Sport bilan shug'ullanasizmi?"]})
     answer = await _decide(model, "sportchiman", history)
     assert answer is not None and answer.messages == ["Sport bilan shug'ullanasizmi?"]
+
+
+async def test_no_times_before_the_place_and_the_choice() -> None:
+    """2026-11-25, med.uz.ai: "Качонга борсам болади?" with the name, and the
+    times came before the place was ever asked."""
+    model = Scripted(
+        {
+            "messages": ["Sardor, ertaga 09:00 yoki 10:00 da bo'sh vaqt bor."],
+            "known": {"place": None, "visit": None},
+        },
+        {
+            "messages": ["Ertaga bo'sh vaqtlar bor. Sardor, qayerdansiz?"],
+            "known": {"place": None, "visit": None},
+        },
+    )
+    answer = await _decide(model, "Qachon borsam bo'ladi? Sardor")
+    assert answer is not None and answer.messages == [
+        "Ertaga bo'sh vaqtlar bor. Sardor, qayerdansiz?"
+    ]
+    assert "has not yet told where they are from" in model.systems[1]
+
+
+async def test_times_are_fine_once_place_and_choice_are_known() -> None:
+    model = Scripted(
+        {
+            "messages": ["Ertaga 09:00 yoki 10:00 da bo'sh vaqt bor."],
+            "known": {"place": "Jizzax", "visit": "online"},
+        }
+    )
+    answer = await _decide(model, "kunduzi")
+    assert answer is not None and answer.messages == ["Ertaga 09:00 yoki 10:00 da bo'sh vaqt bor."]
