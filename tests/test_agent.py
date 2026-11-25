@@ -416,3 +416,26 @@ async def test_times_are_fine_once_place_and_choice_are_known() -> None:
     )
     answer = await _decide(model, "kunduzi")
     assert answer is not None and answer.messages == ["Ertaga 09:00 yoki 10:00 da bo'sh vaqt bor."]
+
+
+async def test_one_retry_for_all_step_problems_and_no_new_one_taken() -> None:
+    """The checks run together: a retry that drops the times but asks the
+    name again is not taken, and the times and the known question both go."""
+    history = [
+        {"role": "assistant", "content": "Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?"},
+        {"role": "user", "content": "Sardor"},
+    ]
+    model = Scripted(
+        {
+            "messages": ["Ertaga 09:00 da bo'sh vaqt bor.", "Sardor, qayerdansiz?"],
+            "known": {"place": None, "visit": None},
+        },
+        {
+            "messages": ["Bo'sh vaqtlar bor.", "Ismingiz nima?"],
+            "known": {"place": None, "visit": None},
+        },
+    )
+    answer = await _decide(model, "qachon borsam bo'ladi", history)
+    assert len(model.systems) == 2  # one retry, not one per check
+    assert "has not yet told where they are from" in model.systems[1]
+    assert answer is not None and answer.messages == ["Sardor, qayerdansiz?"]

@@ -68,9 +68,7 @@ what they want now), then answer with JSON only, no other text:
 - "known": what the patient has told in the WHOLE conversation so far, this message included:
   {"place": "<where they are, as they said it (Jizzax, chet el, Toshkent...)>" or null,
    "visit": "clinic" or "online" or null (what THEY chose)}.
-  While place or visit is null you do not offer times or book: ask the missing one first
-  (one question), even when the patient asks "qachon kelsam bo'ladi?" -- answer that there
-  are free times and ask the missing step.
+  (The rules: no time before both are known.)
 - "handoff": true only when a person must take over now (an angry patient, a
   complaint about the clinic, a question the rules cannot answer). A lead is not a
   hand-over: false then.
@@ -389,6 +387,44 @@ def _said_before(answer: "Answer", own: Sequence[str]) -> list[str]:
     return [m for m in answer.messages if any(_same(m, b) for b in earlier)]
 
 
+_STEP = {
+    "place": "where they are from (step 5)",
+    "visit": "whether they come to the clinic or talk online (step 7a)",
+}
+
+
+def _step_problems(
+    answer: "Answer",
+    history: Sequence[ChatMessage] | None,
+    own: Sequence[str],
+    asked_again: bool,
+    no_times: bool,
+) -> dict[str, str]:
+    """Everything wrong with the reply's place in the conversation, checked
+    together: a known question asked again, a time before the place and the
+    clinic/online choice, a line already said."""
+    found: dict[str, str] = {}
+    asked = _asked_again(answer, history)
+    if asked:
+        found["asked_again"] = (
+            "It asks again what the patient already told (" + ", ".join(asked) + ")."
+        )
+    missing = [] if no_times else _too_early_for_times(answer)
+    if missing:
+        found["too_early"] = (
+            "It offers or books a time, but the patient has not yet told "
+            + " and ".join(_STEP[k] for k in missing)
+            + ". No times yet: say there are free times and ask that."
+        )
+    said = [] if asked_again else _said_before(answer, own)
+    if said and len(said) == len(answer.messages):
+        found["said_before"] = (
+            "It only repeats what you already wrote earlier. Do not say it again: take the"
+            " patient's new message as their answer and go on to the next step."
+        )
+    return found  # a part repeated is only cut out (below), no retry
+
+
 def _echoes(answer: "Answer", message: str) -> bool:
     """A message that only repeats the patient's own words back."""
     said = re.sub(r"\W+", " ", message).strip().lower()
@@ -467,69 +503,39 @@ async def decide(
         if answer is None:
             return None
 
-    again_asked = _asked_again(answer, history)
-    if again_asked:
-        logger.warning("agent_asked_known", extra={"asked": again_asked})
+    # One review of the conversation steps, one retry for all of it: a retry
+    # that fixes one problem must not bring back another.
+    no_times = is_emergency(user_message)
+    problems = _step_problems(answer, history, own, asked_again, no_times)
+    if problems:
+        logger.warning("agent_step_problems", extra={"problems": list(problems)})
         retry = parse(
             await _ask(
                 provider,
                 system
-                + "\n\nYour draft asked again what the patient already told in this conversation ("
-                + ", ".join(again_asked)
-                + "). Read the conversation: use what they said, answer their new message, and ask"
-                " only the next step still missing.",
-                conversation,
-            )
-        )
-        if retry is not None and not _asked_again(retry, history):
-            answer = retry
-        else:
-            answer.messages = [
-                m for m in (_drop_questions(m, again_asked) for m in answer.messages) if m
-            ]
-            if not answer.messages:
-                return None
-
-    missing = [] if is_emergency(user_message) else _too_early_for_times(answer)
-    if missing:
-        logger.warning("agent_times_too_early", extra={"missing": missing})
-        ask = {
-            "place": "where they are from (step 5)",
-            "visit": "whether they come to the clinic or talk online (step 7a)",
-        }
-        retry = parse(
-            await _ask(
-                provider,
-                system
-                + "\n\nYour draft offered or booked a time, but the patient has not yet told "
-                + " and ".join(ask[k] for k in missing)
-                + ". Do not give times yet: answer their message briefly and ask that,"
+                + "\n\nYour draft has these problems -- write it again without them:\n- "
+                + "\n- ".join(problems.values())
+                + "\nAnswer the patient's new message and ask only the next step still missing,"
                 " one question.",
                 conversation,
             )
         )
-        if retry is not None and not _too_early_for_times(retry):
+        if retry is not None and len(
+            _step_problems(retry, history, own, asked_again, no_times)
+        ) < len(problems):
             answer = retry
-
-    again_said = [] if asked_again else _said_before(answer, own)
-    if again_said and len(again_said) < len(answer.messages):
-        # Part of the reply is new: the old part goes, the new is sent.
-        logger.warning("agent_said_before_dropped")
-        answer.messages = [m for m in answer.messages if m not in again_said]
-    elif again_said:
-        logger.warning("agent_said_before")
-        retry = parse(
-            await _ask(
-                provider,
-                system + "\n\nYour draft only repeated what you already wrote earlier in this"
-                " conversation. Do not say it again: take the patient's new message as their"
-                " answer and go on to the next step.",
-                conversation,
-            )
-        )
-        if retry is not None and len(_said_before(retry, own)) < len(retry.messages):
-            answer = retry
-            answer.messages = [m for m in answer.messages if m not in _said_before(retry, own)]
+    # What is still wrong is cut out, not sent.
+    asked = _asked_again(answer, history)
+    if asked:
+        answer.messages = [m for m in (_drop_questions(m, asked) for m in answer.messages) if m]
+    if not no_times and _too_early_for_times(answer):
+        untimed = [m for m in answer.messages if not _A_TIME.search(m)]
+        answer.messages = untimed or answer.messages
+    said = [] if asked_again else _said_before(answer, own)
+    if said and len(said) < len(answer.messages):
+        answer.messages = [m for m in answer.messages if m not in said]
+    if not answer.messages:
+        return None
 
     # The patient's alphabet: a reply in the other one is written again, once.
     wrote = language.clear_script(" ".join(answer.messages))
