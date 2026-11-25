@@ -362,3 +362,26 @@ async def test_a_known_question_asked_twice_is_cut_out() -> None:
 async def test_a_placeholder_copied_from_the_rules_is_taken_out() -> None:
     answer = await _decide(Scripted({"messages": ["<Name>, qayerdansiz?"]}), "ayub")
     assert answer is not None and answer.messages == ["Qayerdansiz?"]
+
+
+async def test_a_line_already_said_is_not_said_again() -> None:
+    """2026-11-25, bilolceo: the testosterone line three replies running."""
+    line = "Testosteronni qayerdan va qanday olishni doktor konsultatsiyada tushuntirib beradi."
+    history = [
+        {"role": "user", "content": "Menga testesterton kerak szda bormi"},
+        {"role": "assistant", "content": f"{line}\n\nQanday masala bo'yicha yozyapsiz?"},
+    ]
+    model = Scripted({"messages": [line, "Bu holat qachondan beri bor?"]})
+    answer = await _decide(model, "Shu testesteron boyicha kerak", history)
+    assert answer is not None and answer.messages == ["Bu holat qachondan beri bor?"]
+
+
+async def test_a_reply_that_only_repeats_is_written_again() -> None:
+    line = "Testosteronni qayerdan va qanday olishni doktor konsultatsiyada tushuntirib beradi."
+    history = [
+        {"role": "user", "content": "testosteron kerak"},
+        {"role": "assistant", "content": line},
+    ]
+    model = Scripted({"messages": [line]}, {"messages": ["Sport bilan shug'ullanasizmi?"]})
+    answer = await _decide(model, "sportchiman", history)
+    assert answer is not None and answer.messages == ["Sport bilan shug'ullanasizmi?"]

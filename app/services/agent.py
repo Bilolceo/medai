@@ -342,6 +342,18 @@ def _drop_questions(message: str, keys: Sequence[str]) -> str:
     return " ".join(kept).strip()
 
 
+def _said_before(answer: "Answer", own: Sequence[str]) -> list[str]:
+    """Bubbles of the answer the bot already sent word for word earlier in
+    the conversation (2026-11-25: the testosterone line three times running)."""
+    earlier = [
+        b
+        for turn in own
+        for b in re.split(r"\n\s*\n|\s*\|\|\|\s*", promo_images.MARKER.sub("", turn))
+        if len(b.strip()) > 25 and "📎" not in b and not _CARD_NUMBER.search(b)
+    ]
+    return [m for m in answer.messages if any(_same(m, b) for b in earlier)]
+
+
 def _echoes(answer: "Answer", message: str) -> bool:
     """A message that only repeats the patient's own words back."""
     said = re.sub(r"\W+", " ", message).strip().lower()
@@ -442,6 +454,26 @@ async def decide(
             ]
             if not answer.messages:
                 return None
+
+    again_said = [] if asked_again else _said_before(answer, own)
+    if again_said and len(again_said) < len(answer.messages):
+        # Part of the reply is new: the old part goes, the new is sent.
+        logger.warning("agent_said_before_dropped")
+        answer.messages = [m for m in answer.messages if m not in again_said]
+    elif again_said:
+        logger.warning("agent_said_before")
+        retry = parse(
+            await _ask(
+                provider,
+                system + "\n\nYour draft only repeated what you already wrote earlier in this"
+                " conversation. Do not say it again: take the patient's new message as their"
+                " answer and go on to the next step.",
+                conversation,
+            )
+        )
+        if retry is not None and len(_said_before(retry, own)) < len(retry.messages):
+            answer = retry
+            answer.messages = [m for m in answer.messages if m not in _said_before(retry, own)]
 
     # The patient's alphabet: a reply in the other one is written again, once.
     wrote = language.clear_script(" ".join(answer.messages))
