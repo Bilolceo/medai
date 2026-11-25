@@ -503,7 +503,8 @@ async def decide(
                 system
                 + "\n\nYour draft offered or booked a time, but the patient has not yet told "
                 + " and ".join(ask[k] for k in missing)
-                + ". Do not give times yet: answer their message briefly and ask that, one question.",
+                + ". Do not give times yet: answer their message briefly and ask that,"
+                " one question.",
                 conversation,
             )
         )
