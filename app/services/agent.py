@@ -289,8 +289,11 @@ def _with_card(answer: "Answer", profile: str, own: Sequence[str], script: str |
     if any(_CARD_NUMBER.search(m) for m in own[-3:]):
         return
     line = _CARD_LINE.get(script or "uz-latn", _CARD_LINE["uz-latn"]).format(card=card)
+    # After the price, before the receipt is asked for when that is its own
+    # message; after the message that asks for it otherwise.
     at = next(i for i, m in enumerate(answer.messages) if _ASKS_RECEIPT.search(m))
-    answer.messages.insert(at, line)
+    priced = bool(price_guard.amounts(answer.messages[at]))
+    answer.messages.insert(at + 1 if priced else at, line)
 
 
 def _same(a: str, b: str) -> bool:
@@ -460,6 +463,11 @@ async def decide(
             answer = again
     if script == "ru":
         answer.messages = [re.sub(r"(?i)\bso['‘ʻ’`]m\b|\bсўм\b", "сум", m) for m in answer.messages]
+    # "<Name>, qayerdansiz?": the rules' placeholder copied, not filled.
+    answer.messages = [
+        re.sub(r"(^|[.!?]\s+)<(?:Name|Ism)>,?\s*(\w)", lambda g: g[1] + g[2].upper(), m)
+        for m in answer.messages
+    ]
     answer.messages = [
         m for m in (_without_card_text(_tidy_cyrillic(m)) for m in answer.messages) if m
     ]

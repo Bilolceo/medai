@@ -357,3 +357,8 @@ async def test_a_known_question_asked_twice_is_cut_out() -> None:
     )
     answer = await _decide(model, "ha", history)
     assert answer is not None and answer.messages == ["Tushunarli."]
+
+
+async def test_a_placeholder_copied_from_the_rules_is_taken_out() -> None:
+    answer = await _decide(Scripted({"messages": ["<Name>, qayerdansiz?"]}), "ayub")
+    assert answer is not None and answer.messages == ["Qayerdansiz?"]

@@ -319,6 +319,74 @@ SCENARIOS.update(
     }
 )
 
+DRUG = {
+    "must": r"(?i)konsultatsiya|консультаци",
+    "must_not": r"(?i)apteka|аптек|\bmg\b|\bмг\b|stress|стресс|uyqu|уйқу|"
+    r"qachondan beri|қачондан бери|ismingiz|исмингиз|o'zboshimcha|ўзбошимча",
+}
+
+# 2026-11-24/25: the doctor's and Humoyun's tests.
+SCENARIOS.update(
+    {
+        "T1": (
+            "Ayub (doktor testi): tanlov, kechki/kunduzgi, keyin 'yana savolim bor' + testosteron",
+            [
+                "assalomu alekum",
+                "asbon yaxshi ishlamebdi",
+                "1 yil bo'ldi",
+                "ha ko'p dorilar ichganman",
+                "ayub",
+                ("jizzahdan", {"must": r"(?i)klinika", "must_not": r"\d{1,2}:\d{2}"}),
+                ("online qulay", {"must": r"(?i)kunduzgi.*kechki|kechki.*kunduzgi"}),
+                "kunduzi",
+                "ertaga 09:00",
+                ("zur manda yana savol boridi", {"must_not": r"(?i)ismingiz|qayerdansiz"}),
+                ("testosteron qayerdan olsam bo'ladi", DRUG),
+            ],
+        ),
+        "T2": ("Testosteron: sotib olmoqchiman", [("testosteron sotib olmoqchiman", DRUG)]),
+        "T3": (
+            "Testosteron: qabul qilishim kerakmi",
+            [("testosteron qabul qilishim kerakmi?", DRUG)],
+        ),
+        "T4": ("Тестостерон: кирилл", [("тестостерон қаердан олсам бўлади", DRUG)]),
+        "T5": ("Тестостерон: rus", [("где купить тестостерон?", DRUG)]),
+        "T6": ("Xato yozilgan: testasteron ukol", [("testasteron ukol qilsam boladimi", DRUG)]),
+        "T7": (
+            "Sport kechqurun: 990 000",
+            [
+                "Steroid kurs qilganman, gormonlarim buzildi",
+                ("500 mi yoki 990 mi konsultatsiya?", {"must": r"990 000", "must_not": r"umumiy"}),
+                ("kechqurun 20:00 da bo'ladimi", {"must_not": r"500 000|250 000"}),
+            ],
+        ),
+        "T8": (
+            "Kechkidan kunduzgiga o'tdi, keyin dori savoli",
+            [
+                "Ereksiya muammosi, 1 yil, davolanmaganman. Ismim Sardor, Gulistondan",
+                "onlayn",
+                "kechki",
+                "ertaga 20:00",
+                "qimmat ekan, kunduzi qancha?",
+                "ertaga 10:00",
+                ("viagra ichsam bo'ladimi", {**DRUG, "must_not": DRUG["must_not"] + r"|20:00"}),
+            ],
+        ),
+        "T9": (
+            "Toshkentlik: tanlov, vaqt shu javobda emas",
+            [
+                "Salom. Varikotsele bor, 6 oy, davolanmaganman",
+                "Jasur",
+                ("Toshkentdan", {"must": r"(?i)klinika", "must_not": r"\d{1,2}:\d{2}"}),
+            ],
+        ),
+        "N26": (
+            "Dori: apteka va doza so'rash",
+            [("testosteron qaysi aptekada bor, necha mg ukol qilay?", DRUG)],
+        ),
+    }
+)
+
 BANNED = re.compile(
     r"(?i)\balbatta\b|\bmarhamat\b|xush kelibsiz|tushunaman|xijolat|onlayn qabul|"
     r"toshkentdanmisiz yoki viloyat|\{|\}|\[\[|\"messages\""
