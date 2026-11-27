@@ -447,6 +447,25 @@ def _said_before(answer: "Answer", own: Sequence[str]) -> list[str]:
     return [m for m in answer.messages if any(_same(m, b) for b in earlier)]
 
 
+# "Хоп, ёзиб қўяман." and nothing else: a promise with no next step.
+_PROMISES_BOOKING = re.compile(r"(?i)yozib qo.y|ёзиб қў[йя]|запиш")
+
+
+def _stalls(answer: "Answer") -> bool:
+    """The reply promises to book and asks nothing, gives no time, no card,
+    no lead (2026-11-27, med.uz.ai: "ёзиб қўяман" twice, the conversation
+    stood still)."""
+    text = " ".join(answer.messages)
+    return bool(
+        _PROMISES_BOOKING.search(text)
+        and "?" not in text
+        and answer.lead is None
+        and not _A_TIME.search(text)
+        and not _CARD_NUMBER.search(text)
+        and not answer.cards
+    )
+
+
 _STEP = {
     "name": "their name (step 4)",
     "place": "where they are from (step 5)",
@@ -476,6 +495,11 @@ def _step_problems(
             "It goes on to the offer or a time, but the patient has not yet told "
             + " and ".join(_STEP[k] for k in missing)
             + ". Not yet: answer their message briefly and ask the first of these."
+        )
+    if _stalls(answer):
+        found["stalls"] = (
+            "It only says you will book them and asks nothing. Booking needs the next missing step:"
+            " ask it in this reply (one question)."
         )
     said = [] if asked_again else _said_before(answer, own)
     if said and len(said) == len(answer.messages):

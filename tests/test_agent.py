@@ -521,3 +521,25 @@ async def test_no_second_introduction_later_in_the_conversation() -> None:
         Scripted({"messages": ["Bu holat qachondan beri bor?"]}), "og'riq", history
     )
     assert answer is not None and answer.messages == ["Bu holat qachondan beri bor?"]
+
+
+async def test_a_booking_promise_with_no_next_step_is_written_again() -> None:
+    """2026-11-27, med.uz.ai: "Хоп, ёзиб қўяман." and the conversation stood still."""
+    model = Scripted(
+        {"messages": ["Хоп, ёзиб қўяман."]},
+        {"messages": ["Хоп, ёзиб қўяман. Исмингиз нима, сизга қандай мурожаат қилсам бўлади?"]},
+    )
+    answer = await _decide(model, "Хоп йозиб койн", script="uz-cyrl")
+    assert answer is not None and answer.messages[0].endswith("бўлади?")
+    assert "book them and asks nothing" in model.systems[1]
+
+
+async def test_a_booking_with_the_time_and_card_is_not_a_stall() -> None:
+    model = Scripted(
+        {
+            "messages": ["Yaxshi, ertaga 09:00 ga yozib qo'yaman."],
+            "known": {"name": "Ayub", "place": "Jizzax", "visit": "online"},
+        }
+    )
+    answer = await _decide(model, "09:00")
+    assert answer is not None and len(model.systems) == 1
