@@ -66,9 +66,9 @@ what they want now), then answer with JSON only, no other text:
   hesitates and leaves a number, or for the free prosthesis phone talk. Only with a
   real number the patient wrote.
 - "known": what the patient has told in the WHOLE conversation so far, this message included:
-  {"place": "<where they are, as they said it (Jizzax, chet el, Toshkent...)>" or null,
+  {"name": "<the name they gave>" or null,
+   "place": "<where they are, as they said it (Jizzax, chet el, Toshkent...)>" or null,
    "visit": "clinic" or "online" or null (what THEY chose)}.
-  (The rules: no time before both are known.)
 - "handoff": true only when a person must take over now (an angry patient, a
   complaint about the clinic, a question the rules cannot answer). A lead is not a
   hand-over: false then.
@@ -183,7 +183,7 @@ def parse(raw: str) -> Answer | None:
     if isinstance(known, dict):
         known = {
             k: (str(known.get(k)).strip() or None) if known.get(k) not in (None, "null") else None
-            for k in ("place", "visit")
+            for k in ("name", "place", "visit")
         }
     else:
         known = None
@@ -361,18 +361,31 @@ def _drop_questions(message: str, keys: Sequence[str]) -> str:
     return " ".join(kept).strip()
 
 
-_A_TIME = re.compile(r"\b(?:[01]?\d|2[0-3])[:.][0-5]\d\b")
+# A time offered or booked ("ertaga 09:00 da") -- not a range like the
+# working hours "09:00–16:00", which may be told at any step.
+_A_TIME = re.compile(r"(?<![–-])(?<![–-] )\b(?:[01]?\d|2[0-3])[:.][0-5]\d\b(?! ?[–-])")
+# The offer question, steps 7a/7b: clinic or online, day or evening.
+_OFFER = re.compile(
+    r"(?i)klinikaga kel|onlayn maslahat|video qo.ng.iroq|kunduzgi .*kechki"
+    r"|клиникага кел|онлайн маслаҳат|видео қўнғироқ|кундузги .*кечки"
+    r"|в клинику|онлайн[- ]консультац|дневн.*вечерн"
+)
 
 
-def _too_early_for_times(answer: "Answer") -> list[str]:
-    """The steps still missing when the reply offers or books a time: the
-    place and the patient's own choice of clinic or online (the doctor,
-    2026-11-25: "qachon kelsam bo'ladi?" and the place was never asked)."""
+def _too_early(answer: "Answer") -> list[str]:
+    """The steps still missing for what the reply moves on to -- the order is
+    the doctor's: name and place before the offer (clinic or online), and the
+    patient's own choice before a time (2026-11-25: "qachon kelsam bo'ladi?";
+    2026-11-27: a parent's question and straight to "klinikaga kelasizmi")."""
     if answer.known is None or answer.lead is not None:
         return []
-    if not _A_TIME.search(" ".join(answer.messages)):
+    if any(_A_TIME.search(m) for m in answer.messages):
+        need: tuple[str, ...] = ("name", "place", "visit")
+    elif any(_OFFER.search(m) and "?" in m for m in answer.messages):
+        need = ("name", "place")
+    else:
         return []
-    return [k for k in ("place", "visit") if not answer.known.get(k)]
+    return [k for k in need if not answer.known.get(k)]
 
 
 def _said_before(answer: "Answer", own: Sequence[str]) -> list[str]:
@@ -388,6 +401,7 @@ def _said_before(answer: "Answer", own: Sequence[str]) -> list[str]:
 
 
 _STEP = {
+    "name": "their name (step 4)",
     "place": "where they are from (step 5)",
     "visit": "whether they come to the clinic or talk online (step 7a)",
 }
@@ -409,12 +423,12 @@ def _step_problems(
         found["asked_again"] = (
             "It asks again what the patient already told (" + ", ".join(asked) + ")."
         )
-    missing = [] if no_times else _too_early_for_times(answer)
+    missing = [] if no_times else _too_early(answer)
     if missing:
         found["too_early"] = (
-            "It offers or books a time, but the patient has not yet told "
+            "It goes on to the offer or a time, but the patient has not yet told "
             + " and ".join(_STEP[k] for k in missing)
-            + ". No times yet: say there are free times and ask that."
+            + ". Not yet: answer their message briefly and ask the first of these."
         )
     said = [] if asked_again else _said_before(answer, own)
     if said and len(said) == len(answer.messages):
@@ -528,7 +542,7 @@ async def decide(
     asked = _asked_again(answer, history)
     if asked:
         answer.messages = [m for m in (_drop_questions(m, asked) for m in answer.messages) if m]
-    if not no_times and _too_early_for_times(answer):
+    if not no_times and "visit" in _too_early(answer):
         untimed = [m for m in answer.messages if not _A_TIME.search(m)]
         answer.messages = untimed or answer.messages
     said = [] if asked_again else _said_before(answer, own)

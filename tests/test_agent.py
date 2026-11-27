@@ -393,11 +393,11 @@ async def test_no_times_before_the_place_and_the_choice() -> None:
     model = Scripted(
         {
             "messages": ["Sardor, ertaga 09:00 yoki 10:00 da bo'sh vaqt bor."],
-            "known": {"place": None, "visit": None},
+            "known": {"name": "Sardor", "place": None, "visit": None},
         },
         {
             "messages": ["Ertaga bo'sh vaqtlar bor. Sardor, qayerdansiz?"],
-            "known": {"place": None, "visit": None},
+            "known": {"name": "Sardor", "place": None, "visit": None},
         },
     )
     answer = await _decide(model, "Qachon borsam bo'ladi? Sardor")
@@ -411,7 +411,7 @@ async def test_times_are_fine_once_place_and_choice_are_known() -> None:
     model = Scripted(
         {
             "messages": ["Ertaga 09:00 yoki 10:00 da bo'sh vaqt bor."],
-            "known": {"place": "Jizzax", "visit": "online"},
+            "known": {"name": "Sardor", "place": "Jizzax", "visit": "online"},
         }
     )
     answer = await _decide(model, "kunduzi")
@@ -428,14 +428,49 @@ async def test_one_retry_for_all_step_problems_and_no_new_one_taken() -> None:
     model = Scripted(
         {
             "messages": ["Ertaga 09:00 da bo'sh vaqt bor.", "Sardor, qayerdansiz?"],
-            "known": {"place": None, "visit": None},
+            "known": {"name": "Sardor", "place": None, "visit": None},
         },
         {
             "messages": ["Bo'sh vaqtlar bor.", "Ismingiz nima?"],
-            "known": {"place": None, "visit": None},
+            "known": {"name": "Sardor", "place": None, "visit": None},
         },
     )
     answer = await _decide(model, "qachon borsam bo'ladi", history)
     assert len(model.systems) == 2  # one retry, not one per check
     assert "has not yet told where they are from" in model.systems[1]
     assert answer is not None and answer.messages == ["Sardor, qayerdansiz?"]
+
+
+async def test_no_offer_before_the_name_and_the_place() -> None:
+    """2026-11-27, docsultonbek: a parent about their son of 14, and straight
+    to "klinikaga kelasizmi yoki onlayn?" with no name and no place."""
+    model = Scripted(
+        {
+            "messages": [
+                "Aniq bahoni doktor ko'rikda aytadi.",
+                "Klinikaga kelasizmi yoki doktor bilan video qo'ng'iroq orqali maslahatlashasizmi?",
+            ],
+            "known": {"name": None, "place": None, "visit": None},
+        },
+        {
+            "messages": [
+                "Aniq bahoni doktor ko'rikda aytadi.",
+                "Ismingiz nima, sizga qanday murojaat qilsam bo'ladi?",
+            ],
+            "known": {"name": None, "place": None, "visit": None},
+        },
+    )
+    answer = await _decide(model, "ug'lim 14 yosh jinsiy olati 7cm normami?")
+    assert answer is not None and answer.messages[1].startswith("Ismingiz")
+    assert "their name (step 4)" in model.systems[1]
+
+
+async def test_working_hours_are_not_an_offered_time() -> None:
+    model = Scripted(
+        {
+            "messages": ["Doktor 09:00–16:00 da qabul qiladi. Ismingiz nima?"],
+            "known": {"name": None, "place": None, "visit": None},
+        }
+    )
+    answer = await _decide(model, "ish vaqtingiz qanaqa")
+    assert answer is not None and len(answer.messages) == 1
