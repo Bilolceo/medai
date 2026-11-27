@@ -36,7 +36,20 @@ class Scripted(LLMProvider):
         return answer if isinstance(answer, str) else json.dumps(answer, ensure_ascii=False)
 
 
-async def _decide(provider: LLMProvider, message: str, history: list[Any] | None = None) -> Any:
+async def _decide(
+    provider: LLMProvider,
+    message: str,
+    history: list[Any] | None = None,
+    script: str = "uz-latn",
+    first: bool = False,
+) -> Any:
+    # A test about a later reply starts after the introduction; first=True
+    # is a conversation's first reply.
+    if history is None and not first:
+        history = [
+            {"role": "user", "content": "salom"},
+            {"role": "assistant", "content": "Va alaykum assalom. Men administratorman."},
+        ]
     return await agent.decide(
         provider,
         profile="sultonbek",
@@ -45,7 +58,7 @@ async def _decide(provider: LLMProvider, message: str, history: list[Any] | None
         now_local=NOW,
         slots=SLOTS,
         images=IMAGES,
-        script="uz-latn",
+        script=script,
     )
 
 
@@ -276,7 +289,11 @@ async def test_a_reply_in_the_wrong_alphabet_is_written_again() -> None:
         images=IMAGES,
         script="uz-cyrl",
     )
-    assert answer is not None and answer.messages == ["Бу ҳолат қачондан бери бор?"]
+    # The conversation's first reply: the introduction in the patient's alphabet too.
+    assert answer is not None and answer.messages == [
+        "Ассалому алайкум. Мен доктор Султонбекнинг администраториман, исмим D.",
+        "Бу ҳолат қачондан бери бор?",
+    ]
 
 
 async def test_a_card_written_into_the_text_is_taken_out() -> None:
@@ -474,3 +491,33 @@ async def test_working_hours_are_not_an_offered_time() -> None:
     )
     answer = await _decide(model, "ish vaqtingiz qanaqa")
     assert answer is not None and len(answer.messages) == 1
+
+
+async def test_the_first_reply_introduces_even_without_a_greeting() -> None:
+    """2026-11-27, med.uz.ai: "Кабулга кемокчийдм" and no introduction."""
+    model = Scripted({"messages": ["Қандай масала ёки шикоят бўйича қабулга келмоқчисиз?"]})
+    answer = await _decide(model, "Кабулга кемокчийдм", script="uz-cyrl", first=True)
+    assert answer is not None and answer.messages == [
+        "Ассалому алайкум. Мен доктор Султонбекнинг администраториман, исмим D.",
+        "Қандай масала ёки шикоят бўйича қабулга келмоқчисиз?",
+    ]
+
+
+async def test_a_greeting_without_the_introduction_gets_it() -> None:
+    model = Scripted({"messages": ["Va alaykum assalom. Sizga qanday yordam bera olamiz?"]})
+    answer = await _decide(model, "assalomu alaykum", first=True)
+    assert answer is not None and answer.messages == [
+        "Va alaykum assalom. Men doktor Sultonbekning administratoriman, ismim D.",
+        "Sizga qanday yordam bera olamiz?",
+    ]
+
+
+async def test_no_second_introduction_later_in_the_conversation() -> None:
+    history = [
+        {"role": "user", "content": "salom"},
+        {"role": "assistant", "content": "Va alaykum assalom. Men doktor ... ismim D."},
+    ]
+    answer = await _decide(
+        Scripted({"messages": ["Bu holat qachondan beri bor?"]}), "og'riq", history
+    )
+    assert answer is not None and answer.messages == ["Bu holat qachondan beri bor?"]

@@ -295,6 +295,53 @@ def payment_card(profile: str) -> str | None:
     return found.group(1) if found else None
 
 
+# The introduction in the rules, per alphabet: "Men doktor ... ismim D."
+_INTRO_IN_RULES = {
+    "uz-latn": r"Men doktor [^\"]+?ismim \w+\.",
+    "uz-cyrl": r"Мен доктор [^\"]+?исмим \w+\.",
+    "ru": r"Я администратор [^\"]+?зовут \w+\.",
+}
+_INTRODUCED = re.compile(r"(?i)administratoriman|администраториман|я администратор")
+_GREETS = re.compile(r"(?i)\b(?:assalom|salom|ассалом|салом|здравств|привет)")
+_GREETING = {
+    "uz-latn": ("Va alaykum assalom.", "Assalomu alaykum."),
+    "uz-cyrl": ("Ва алайкум ассалом.", "Ассалому алайкум."),
+    "ru": ("Здравствуйте.", "Здравствуйте."),
+}
+_SAID_GREETING = re.compile(
+    r"(?i)^\s*(?:va alaykum assalom|assalomu alaykum|ва алайкум ассалом|ассалому алайкум"
+    r"|здравствуйте)[^.!?]*[.!?]\s*"
+)
+
+
+@lru_cache
+def introduction(profile: str, script: str) -> str | None:
+    found = re.search(_INTRO_IN_RULES[script], load_profile(profile)[0])
+    return re.sub(r"\s+", " ", found.group(0)) if found else None
+
+
+def _with_introduction(
+    answer: "Answer", profile: str, user_message: str, script: str | None
+) -> None:
+    """The first reply of a conversation introduces the administrator, the
+    patient greeted or not (2026-11-27: "Кабулга кемокчийдм" and no
+    introduction). Put in when the model left it out."""
+    if any(_INTRODUCED.search(m) for m in answer.messages):
+        return
+    alphabet = script if script in _INTRO_IN_RULES else "uz-latn"
+    intro = introduction(profile, alphabet)
+    if intro is None:
+        return
+    first = answer.messages[0] if answer.messages else ""
+    greeted = _SAID_GREETING.match(first)
+    if greeted:
+        rest = first[greeted.end() :].strip()
+        answer.messages[0:1] = [f"{greeted.group(0).strip()} {intro}", *([rest] if rest else [])]
+    else:
+        hello = _GREETING[alphabet][0 if _GREETS.search(user_message) else 1]
+        answer.messages.insert(0, f"{hello} {intro}")
+
+
 def _with_card(answer: "Answer", profile: str, own: Sequence[str], script: str | None) -> None:
     """A receipt asked for with no card to pay to: the card line is put in.
     2026-11-22: the second booking said "to'lab, chek yuboring" without the
@@ -569,6 +616,8 @@ async def decide(
         )
         if again is not None and language.clear_script(" ".join(again.messages)) in (None, script):
             answer = again
+    if not own:
+        _with_introduction(answer, profile, user_message, script)
     if script == "ru":
         answer.messages = [re.sub(r"(?i)\bso['‘ʻ’`]m\b|\bсўм\b", "сум", m) for m in answer.messages]
     # "<Name>, qayerdansiz?": the rules' placeholder copied, not filled.
