@@ -326,9 +326,14 @@ def _with_introduction(
     """The first reply of a conversation introduces the administrator, the
     patient greeted or not (2026-11-27: "Кабулга кемокчийдм" and no
     introduction). Put in when the model left it out."""
-    if any(_INTRODUCED.search(m) for m in answer.messages):
-        return
     alphabet = script if script in _INTRO_IN_RULES else "uz-latn"
+    hello = _GREETING[alphabet][0 if _GREETS.search(user_message) else 1]
+    if any(_INTRODUCED.search(m) for m in answer.messages):
+        # Introduced, but "Мен доктор…" with no greeting before it.
+        first = answer.messages[0]
+        if _INTRODUCED.search(first) and not _SAID_GREETING.match(first):
+            answer.messages[0] = f"{hello} {first}"
+        return
     intro = introduction(profile, alphabet)
     if intro is None:
         return
@@ -338,7 +343,6 @@ def _with_introduction(
         rest = first[greeted.end() :].strip()
         answer.messages[0:1] = [f"{greeted.group(0).strip()} {intro}", *([rest] if rest else [])]
     else:
-        hello = _GREETING[alphabet][0 if _GREETS.search(user_message) else 1]
         answer.messages.insert(0, f"{hello} {intro}")
 
 

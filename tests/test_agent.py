@@ -543,3 +543,13 @@ async def test_a_booking_with_the_time_and_card_is_not_a_stall() -> None:
     )
     answer = await _decide(model, "09:00")
     assert answer is not None and len(model.systems) == 1
+
+
+async def test_an_introduction_without_a_greeting_gets_the_greeting() -> None:
+    model = Scripted(
+        {"messages": ["Мен доктор Султонбекнинг администраториман, исмим D.", "Қандай масала?"]}
+    )
+    answer = await _decide(model, "Кабулга кемокчийдм", script="uz-cyrl", first=True)
+    assert answer is not None and answer.messages[0] == (
+        "Ассалому алайкум. Мен доктор Султонбекнинг администраториман, исмим D."
+    )

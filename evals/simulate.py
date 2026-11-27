@@ -451,6 +451,22 @@ SCENARIOS.update(
                 ("Кабулга йозиб кой", {"must_not": r"администраториман"}),
             ],
         ),
+        "T15": (
+            "med.uz.ai 11-27: 'yozib qo'y' — savol takrorlanmaydi",
+            [
+                "Кабулга кемокчийдм",
+                ("Кабулга йозиб кой", {"must_not": r"(?i)қандай масала"}),
+            ],
+        ),
+        "T16": (
+            "med.uz.ai 11-27: Micro-TESE, 'o'zlari bilan gaplashsam' — to'xtab qolmaydi",
+            [
+                "Ассалом алейкум",
+                "Микротезе нечпул",
+                ("Озлари блан гаплашсам боладими", {"must": r"\?"}),
+                ("Хоп йозиб койн", {"must": r"\?"}),
+            ],
+        ),
         "N26": (
             "Dori: apteka va doza so'rash",
             [("testosteron qaysi aptekada bor, necha mg ukol qilay?", DRUG)],
